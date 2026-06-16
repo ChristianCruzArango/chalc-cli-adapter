@@ -1254,11 +1254,12 @@ function handoffCommand(specPath, skills = [], specLang = '') {
   const code = String(specLang).toLowerCase();
   const isEs = /espa|spanish|castell/.test(code) || code === 'es' || (!specLang && lang === 'es');
   const en = !isEs;
-  const skillsLine = skills.length
-    ? (en ? `Use the project's skills when relevant: ${skills.join(', ')}.`
-          : `Usa las skills del proyecto cuando apliquen: ${skills.join(', ')}.`)
-    : (en ? `Use the skills installed in the project (.claude/skills or .chalc/skills).`
-          : `Usa las skills instaladas en el proyecto (.claude/skills o .chalc/skills).`);
+  // Skills bajo demanda: no volcamos la lista completa (eso dispersa el foco). Decimos dónde están
+  // y que abra solo la que necesita la tarea activa. `skills` se conserva por compatibilidad de firma.
+  void skills;
+  const skillsLine = en
+    ? `Use the project's skills when a task needs one (they live in .claude/skills or .chalc/skills) — open only the one the current task needs, don't preload them all.`
+    : `Usa las skills del proyecto cuando una tarea lo pida (están en .claude/skills o .chalc/skills); abre solo la que necesita la tarea activa, no las pre-cargues todas.`;
   // Una rama por spec, con convención estándar: feature/<NNN-nombre> (kebab-case). El número liga la rama al spec.
   const branch = 'feature/' + specPath.replace(/^specs[/\\]/, '');
   if (en) {
@@ -1267,11 +1268,12 @@ function handoffCommand(specPath, skills = [], specLang = '') {
       ``,
       `1. Create a branch for this feature (one branch per spec): \`git checkout -b ${branch}\`.`,
       `2. First read \`specs/constitution.md\` (non-negotiable principles) and \`${specPath}/spec.md\` (the EARS requirements R1, R2…).`,
-      `3. Follow \`${specPath}/plan.md\` (architecture & decisions) and execute \`${specPath}/tasks.md\` in order.`,
+      `3. Follow \`${specPath}/plan.md\` (architecture & decisions) and execute \`${specPath}/tasks.md\` in order, ONE task at a time: before each task state which R# it implements; when it's done, stop and wait for my OK before the next.`,
       `4. For each task, strict TDD: write the failing test first (Red) → minimum code to pass (Green) → refactor. Never write code without a failing test first.`,
       `5. Every test and file traces to its requirement (R#).`,
       `6. ${skillsLine} Respect "one thing per file" (interfaces / DTOs / types each in its own file).`,
-      `7. If a requirement is marked [NEEDS CLARIFICATION], ask me before implementing it.`,
+      `7. Tooling/tests: use the test framework the project ALREADY has; don't invent config. If tooling is missing, the registry is private, or something won't compile, report it as a blocker and ask me — don't improvise or switch tools on your own.`,
+      `8. If a requirement is marked [NEEDS CLARIFICATION], ask me before implementing it.`,
       `The spec is the source of truth: if scope changes, update the spec first.`
     ].join('\n');
   }
@@ -1280,11 +1282,12 @@ function handoffCommand(specPath, skills = [], specLang = '') {
     ``,
     `1. Crea una rama para esta feature (una rama por spec): \`git checkout -b ${branch}\`.`,
     `2. Lee primero \`specs/constitution.md\` (principios no negociables) y \`${specPath}/spec.md\` (los requisitos R1, R2… en EARS).`,
-    `3. Sigue \`${specPath}/plan.md\` (arquitectura y decisiones) y ejecuta \`${specPath}/tasks.md\` en orden.`,
+    `3. Sigue \`${specPath}/plan.md\` (arquitectura y decisiones) y ejecuta \`${specPath}/tasks.md\` en orden, UNA tarea a la vez: antes de cada tarea di qué R# implementa; al terminarla, párate y espera mi OK antes de la siguiente.`,
     `4. Por cada tarea, TDD estricto: escribe el test que falla primero (Red) → el mínimo código para pasarlo (Green) → refactoriza. Nunca escribas código sin un test que falle primero.`,
     `5. Cada test y cada archivo traza a su requisito (R#).`,
     `6. ${skillsLine} Respeta "una cosa por archivo" (interfaces / DTOs / types cada uno en su archivo).`,
-    `7. Si un requisito está marcado [NEEDS CLARIFICATION], pregúntame antes de implementarlo.`,
+    `7. Herramientas/tests: usa el framework de pruebas que el proyecto YA tiene; no inventes configuración. Si falta tooling, el registro es privado o algo no compila, repórtalo como blocker y pregúntame — no improvises ni cambies de herramienta por tu cuenta.`,
+    `8. Si un requisito está marcado [NEEDS CLARIFICATION], pregúntame antes de implementarlo.`,
     `La spec es la fuente de verdad: si cambia el alcance, actualiza la spec primero.`
   ].join('\n');
 }

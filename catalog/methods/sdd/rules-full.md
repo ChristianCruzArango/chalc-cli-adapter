@@ -21,5 +21,11 @@ de tener tests que **fallen** (Red).
 - **Spec viva:** si el alcance cambia, se actualiza la spec (y data-model/contracts) primero.
 - **Una cosa por archivo:** interfaces, DTOs, types y cada contrato en su propio archivo.
 
+### Cómo trabajar (mantén el foco)
+- **Una tarea a la vez:** antes de cada tarea di qué `R#` implementa; al terminarla, párate y espera OK.
+- **Skills bajo demanda:** abre solo la skill que la tarea activa necesita (`.claude/skills` o `.chalc/skills`); no las pre-cargues todas.
+- **Lectura acotada:** lee la constitución, esta spec/plan/tasks (y data-model/contracts) y los archivos que toca la tarea; no explores todo el repo.
+- **Herramientas del proyecto:** usa el framework de pruebas y la config que el proyecto **ya** tiene; no inventes config. Si falta tooling, el registro es privado o algo no compila, repórtalo como blocker y pregunta — no improvises ni cambies de herramienta por tu cuenta.
+
 Para una feature nueva: copia `specs/_template/` a `specs/NNN-nombre/`.
 La carpeta oficial siempre es `specs/` en plural. Si está disponible, usa `chalc spec` solo para preparar la carpeta y archivos vacíos; no redacta la spec.

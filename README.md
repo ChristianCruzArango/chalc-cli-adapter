@@ -1,14 +1,22 @@
 # ⚙️ Chalc
 
-Equipa cualquier proyecto con las skills y servidores MCP correctos — **el núcleo es sin IA, sin tokens, sin CLI pesado**.
+Chalc es una CLI local para detectar el stack de un proyecto y generar la configuración de asistentes de desarrollo: skills, servidores MCP, reglas y métodos de trabajo.
 
-Surtes tu Chalc **una vez** con las herramientas que te gustan; él lee el proyecto y *apareja* solo lo que aplica, en el formato del asistente que elijas (Claude, Copilot, Cursor, Gemini…).
+El flujo principal no llama a modelos de IA: lee señales del proyecto (`package.json`, archivos raíz, globs), aplica reglas del catálogo y escribe los archivos que necesita el target elegido (Claude Code, GitHub Copilot, Cursor o Gemini CLI).
 
-Además trae una **capa de IA opcional** (`chalc spec-ia`) que, con TU API key, convierte una historia de usuario (Word, Azure DevOps, Jira, Drive…) en una especificación **SDD** lista para implementar. La IA es opt-in: el núcleo nunca la necesita.
+La parte con IA existe solo en `chalc spec-ia`: usa la API key configurada por el usuario para transformar una historia de usuario o documento fuente en archivos SDD (`spec.md`, `plan.md`, `tasks.md`). Si no usas `spec-ia`, Chalc no necesita proveedor de IA ni tokens.
 
 ## Idea en una frase
 
-> Chalc no adivina lo que el proyecto necesita: **aplica reglas que tú escribes una vez**. La curación del catálogo es el producto. La IA es opcional y la pone quien lo use.
+> Chalc no analiza el código con IA: detecta señales simples del proyecto y aplica reglas explícitas del catálogo.
+
+## Por qué existe
+
+La idea nació de una necesidad práctica: hoy muchas configuraciones de asistentes se resuelven dentro de un CLI o una sesión con tokens, y cada proyecto termina dependiendo de lo que se configure o recuerde en ese momento.
+
+Chalc busca separar esas dos cosas. La IA puede ayudar cuando hace falta, pero las herramientas, reglas, skills, MCP y métodos de trabajo deberían poder viajar con los proyectos de forma explícita y repetible. En vez de configurar todo a mano una y otra vez, Chalc permite mantener un catálogo propio y aplicar esa “herencia” a cada proyecto según su stack.
+
+Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reglas de backend, todos pueden heredar reglas globales como mutation testing, y cada asistente recibe la configuración en su propio formato. La intención no es reemplazar al asistente, sino preparar bien el terreno para que trabaje con el contexto correcto.
 
 ## Comandos (referencia rápida)
 

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { parseArgs } from '../lib/cli/args.mjs';
 
 test('parseArgs keeps positional values after boolean flags', () => {
-  const { flags, positional } = parseArgs(['inspect', '--yes', 'prueba/angular']);
+  const { flags, positional } = parseArgs(['inspect', '--yes', 'test/fixtures/angular']);
 
   assert.equal(flags.yes, true);
-  assert.deepEqual(positional, ['inspect', 'prueba/angular']);
+  assert.deepEqual(positional, ['inspect', 'test/fixtures/angular']);
 });
 
 test('parseArgs supports repeated value flags', () => {

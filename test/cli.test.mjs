@@ -21,15 +21,23 @@ function runChalc(args) {
 }
 
 test('inspect keeps positional path after boolean --yes', async () => {
-  const result = await runChalc(['inspect', '--yes', 'prueba/angular']);
+  const result = await runChalc(['inspect', '--yes', 'test/fixtures/angular']);
 
   assert.equal(result.code, 0, result.output);
-  assert.match(result.output, /prueba\/angular/);
+  assert.match(result.output, /test\/fixtures\/angular/);
   assert.match(result.output, /Stack detectado: .*Angular/s);
 });
 
+test('inspect detects NestJS fixture from package dependencies', async () => {
+  const result = await runChalc(['inspect', 'test/fixtures/nestjs', '--yes']);
+
+  assert.equal(result.code, 0, result.output);
+  assert.match(result.output, /test\/fixtures\/nestjs/);
+  assert.match(result.output, /Stack detectado: .*NestJS/s);
+});
+
 test('unsafe target ids are rejected before import', async () => {
-  const result = await runChalc(['prueba/angular', '--target', '../claude', '--dry-run', '--yes']);
+  const result = await runChalc(['test/fixtures/angular', '--target', '../claude', '--dry-run', '--yes']);
 
   assert.equal(result.code, 1);
   assert.match(result.output, /target inválido/);

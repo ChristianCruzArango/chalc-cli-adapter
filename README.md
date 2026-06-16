@@ -61,7 +61,8 @@ chalc --yes                 # usa los valores por defecto, sin preguntar
 chalc --method sdd          # activa el método SDD sin preguntar
 chalc --dry-run             # muestra el plan sin escribir nada
 chalc --target claude       # elige el asistente destino
-chalc install <fuente> --force  # reemplaza un skill existente sin preguntar
+chalc install <fuente> --allow-exec  # permite Git/npx si confías en la fuente
+chalc install <fuente> --force       # reemplaza un skill existente sin preguntar
 ```
 
 ### Entender antes de aplicar
@@ -80,8 +81,9 @@ chalc doctor
 ```
 
 `doctor` es interactivo por defecto y valida que el catálogo esté consistente: reglas JSON,
-referencias a skills/MCP, frontmatter básico de skills, métodos y targets cargables. En modo
-no interactivo (`chalc doctor --yes`) sale con código `1` si encuentra errores, útil para CI.
+referencias a skills/MCP, frontmatter básico de skills, ids seguros, `implies`, definición de
+MCP, métodos y targets cargables. En modo no interactivo (`chalc doctor --yes`) sale con código
+`1` si encuentra errores, útil para CI.
 
 ### Preparar una plantilla de spec
 ```bash
@@ -110,9 +112,12 @@ proyecto  ──►  detecta señales        ──►  aplica reglas      ─�
 chalc/
 ├── bin/chalc.mjs          el motor / CLI (Node puro, sin dependencias)
 ├── lib/                 módulos del motor
+│   ├── cli/args.mjs     parser de banderas/argumentos testeable
 │   ├── i18n.mjs         textos bilingües (es/en)
 │   ├── install.mjs      instalar/vendorizar skills (Git/skills.sh/local)
 │   ├── targetkit.mjs    utilidades compartidas por los targets
+│   ├── ids.mjs          validación de ids seguros (kebab-case)
+│   ├── net.mjs          fetch con timeout/límites y validación de URLs externas
 │   ├── ai.mjs           cliente multi-proveedor de IA (fetch) + config ~/.chalc
 │   ├── docread.mjs      extrae texto de Word/PDF/CSV/…
 │   ├── sources.mjs      trae la HU de Azure DevOps / Jira / Drive
@@ -204,13 +209,19 @@ Si el skill ya existe, Chalc pregunta antes de reemplazarlo. En modo directo/no 
 
 ```bash
 chalc install <fuente> --stack angular
+chalc install <fuente> --stack angular --allow-exec
 chalc install <fuente> --stack angular --force
 ```
+
+Las fuentes Git/GitHub y `skills.sh` requieren ejecutar herramientas externas (`git clone` o
+`npx --yes skills add`). En modo interactivo Chalc pide confirmación antes de ejecutarlas. En modo
+no interactivo debes pasar `--allow-exec` explícitamente si confías en la fuente. Las rutas locales
+no necesitan ese permiso.
 
 También puedes pegar comandos completos del nuevo CLI de skills:
 
 ```bash
-chalc install "npx skills add https://github.com/wshobson/agents --skill angular-migration"
+chalc install "npx skills add https://github.com/wshobson/agents --skill angular-migration" --allow-exec
 ```
 
 ### Flujo típico: agregar un MCP
@@ -255,13 +266,16 @@ Por eso Chalc los instala en un temporal, lo **copia al catálogo** (dereferenci
 **cablea a una regla** preguntándote a qué stack pertenece. Así las reglas se llenan con el uso.
 
 ```bash
-chalc install <fuente> [--stack <id>]
+chalc install <fuente> [--stack <id>] [--allow-exec]
 ```
 
 `<fuente>` puede ser:
 - **URL de Git/GitHub** — `https://github.com/owner/repo`, `.../tree/<rama>/<subcarpeta>`, o `*.git`.
 - **skills.sh** — un nombre/URL; Chalc usa `npx skills add` por dentro y vendoriza el resultado.
 - **Ruta local / carpeta** — copia directa al catálogo.
+
+Por seguridad, Git/GitHub y `skills.sh` no se ejecutan automáticamente en modo no interactivo:
+usa `--allow-exec` cuando la fuente sea confiable. En interactivo, Chalc pregunta antes de ejecutar.
 
 Tras instalar, Chalc pregunta **a qué stack pertenece** (Angular, Nest, … o *Global* = todos los proyectos)
 y escribe el skill en `rules/<stack>.json`. Desde ese momento, todo proyecto de ese stack lo recibe.
@@ -380,9 +394,30 @@ producción); audítalas con `npm audit` / `dotnet list package --vulnerable` / 
 ## Seguridad
 
 - La **API key** vive en `~/.chalc/config.json` (permisos `600`), **nunca** en el proyecto ni en `.chalc.json`; entrada enmascarada.
+- Las fuentes remotas para `spec-ia` usan timeout, límite de tamaño y validación de redirects; se bloquean protocolos no HTTP(S), `localhost` e IPs privadas/locales.
+- Las llamadas a proveedores de IA tienen timeout para evitar procesos colgados.
+- Los ids de targets, skills, MCP, rules y métodos se validan como kebab-case seguro antes de usarse como rutas o imports.
+- Instalar skills desde Git/GitHub o `skills.sh` requiere confirmación interactiva o `--allow-exec` en modo no interactivo.
 - Las **herramientas de mutación** se instalan **project-local** (dev-dependency / tool-manifest), nunca `-g` global.
 - Chalc **no sobrescribe** tu `CLAUDE.md`: solo edita su bloque entre `<!-- chalc:start -->` y `<!-- chalc:end -->`; el resto se conserva.
 - Las skills se **vendorizan** (contenido real, sin symlinks) y traen `.chalc-skill.json` con fuente, fecha y hash.
+
+## Tests y CI
+
+Chalc usa el runner nativo de Node:
+
+```bash
+npm test
+```
+
+La suite cubre parser de argumentos, detección de stacks con fixtures versionados en `test/fixtures/`,
+bloqueos de seguridad (`target` inseguro, instalación externa sin `--allow-exec`, URLs locales) y
+`doctor`. Para CI, el mínimo recomendado es:
+
+```bash
+npm test
+npm run doctor -- --yes
+```
 
 ## Targets (asistentes) soportados
 

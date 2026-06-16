@@ -1,0 +1,12 @@
+{
+  "id": "java",
+  "name": "Java",
+  "language": "Java",
+  "detect": {
+    "anyFile": ["pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"],
+    "anyGlob": ["*.java"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

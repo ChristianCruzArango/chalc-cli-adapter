@@ -1,0 +1,12 @@
+{
+  "id": "shell",
+  "name": "Shell",
+  "language": "Shell",
+  "detect": {
+    "anyFile": [".shellcheckrc"],
+    "anyGlob": ["*.sh", "*.bash", "*.zsh", "*.fish"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

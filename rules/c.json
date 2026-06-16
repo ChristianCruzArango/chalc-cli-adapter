@@ -1,0 +1,12 @@
+{
+  "id": "c",
+  "name": "C",
+  "language": "C",
+  "detect": {
+    "anyFile": ["Makefile", "CMakeLists.txt", "configure.ac"],
+    "anyGlob": ["*.c", "*.h"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

@@ -1,0 +1,12 @@
+{
+  "id": "erlang",
+  "name": "Erlang",
+  "language": "Erlang",
+  "detect": {
+    "anyFile": ["rebar.config", "erlang.mk"],
+    "anyGlob": ["*.erl", "*.hrl"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

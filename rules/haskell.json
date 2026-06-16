@@ -1,0 +1,12 @@
+{
+  "id": "haskell",
+  "name": "Haskell",
+  "language": "Haskell",
+  "detect": {
+    "anyFile": ["stack.yaml", "cabal.project"],
+    "anyGlob": ["*.hs", "*.lhs", "*.cabal"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

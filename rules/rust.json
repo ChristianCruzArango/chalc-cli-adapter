@@ -1,0 +1,12 @@
+{
+  "id": "rust",
+  "name": "Rust",
+  "language": "Rust",
+  "detect": {
+    "anyFile": ["Cargo.toml", "Cargo.lock"],
+    "anyGlob": ["*.rs"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

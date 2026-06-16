@@ -1,0 +1,12 @@
+{
+  "id": "ruby",
+  "name": "Ruby",
+  "language": "Ruby",
+  "detect": {
+    "anyFile": ["Gemfile", "Gemfile.lock", ".ruby-version"],
+    "anyGlob": ["*.rb"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

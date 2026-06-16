@@ -1,0 +1,12 @@
+{
+  "id": "clojure",
+  "name": "Clojure",
+  "language": "Clojure",
+  "detect": {
+    "anyFile": ["deps.edn", "project.clj", "build.boot"],
+    "anyGlob": ["*.clj", "*.cljs", "*.cljc", "*.edn"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

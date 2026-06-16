@@ -1,0 +1,12 @@
+{
+  "id": "perl",
+  "name": "Perl",
+  "language": "Perl",
+  "detect": {
+    "anyFile": ["cpanfile", "Makefile.PL", "Build.PL"],
+    "anyGlob": ["*.pl", "*.pm", "*.t"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

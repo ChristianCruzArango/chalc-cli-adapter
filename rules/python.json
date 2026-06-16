@@ -1,0 +1,12 @@
+{
+  "id": "python",
+  "name": "Python",
+  "language": "Python",
+  "detect": {
+    "anyFile": ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile", "manage.py"],
+    "anyGlob": ["*.py"]
+  },
+  "skills": ["python-best-practices", "python-testing"],
+  "mcp": [],
+  "optionalMcp": []
+}

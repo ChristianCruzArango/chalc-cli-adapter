@@ -1,0 +1,12 @@
+{
+  "id": "elixir",
+  "name": "Elixir",
+  "language": "Elixir",
+  "detect": {
+    "anyFile": ["mix.exs", "mix.lock"],
+    "anyGlob": ["*.ex", "*.exs"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

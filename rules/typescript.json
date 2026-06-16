@@ -1,0 +1,13 @@
+{
+  "id": "typescript",
+  "name": "TypeScript",
+  "language": "TypeScript",
+  "detect": {
+    "anyDependency": ["typescript", "ts-node", "tsx"],
+    "anyFile": ["tsconfig.json", "tsconfig.base.json"],
+    "anyGlob": ["*.ts", "*.tsx", "*.mts", "*.cts"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

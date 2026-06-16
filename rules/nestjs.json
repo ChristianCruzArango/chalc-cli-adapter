@@ -1,0 +1,13 @@
+{
+  "id": "nestjs",
+  "name": "NestJS",
+  "language": "TypeScript",
+  "implies": ["javascript", "typescript"],
+  "detect": {
+    "anyDependency": ["@nestjs/core"],
+    "anyFile": ["nest-cli.json"]
+  },
+  "skills": ["nestjs-best-practices"],
+  "mcp": [],
+  "optionalMcp": ["postgres"]
+}

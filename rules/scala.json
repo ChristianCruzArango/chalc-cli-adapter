@@ -1,0 +1,12 @@
+{
+  "id": "scala",
+  "name": "Scala",
+  "language": "Scala",
+  "detect": {
+    "anyFile": ["build.sbt"],
+    "anyGlob": ["*.scala", "*.sc"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

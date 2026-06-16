@@ -1,0 +1,12 @@
+{
+  "id": "swift",
+  "name": "Swift",
+  "language": "Swift",
+  "detect": {
+    "anyFile": ["Package.swift"],
+    "anyGlob": ["*.swift", "*.xcodeproj", "*.xcworkspace"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

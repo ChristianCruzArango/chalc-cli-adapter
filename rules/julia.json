@@ -1,0 +1,12 @@
+{
+  "id": "julia",
+  "name": "Julia",
+  "language": "Julia",
+  "detect": {
+    "anyFile": ["Project.toml", "Manifest.toml"],
+    "anyGlob": ["*.jl"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

@@ -1,0 +1,12 @@
+{
+  "id": "kotlin",
+  "name": "Kotlin",
+  "language": "Kotlin",
+  "detect": {
+    "anyFile": ["build.gradle.kts", "settings.gradle.kts"],
+    "anyGlob": ["*.kt", "*.kts"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

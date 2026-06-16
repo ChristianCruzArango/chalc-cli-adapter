@@ -1,0 +1,37 @@
+{
+  "id": "angular",
+  "name": "Angular",
+  "language": "TypeScript",
+  "implies": [
+    "javascript",
+    "typescript"
+  ],
+  "detect": {
+    "anyDependency": [
+      "@angular/core"
+    ],
+    "anyFile": [
+      "angular.json"
+    ]
+  },
+  "skills": [
+    "angular-component",
+    "angular-di",
+    "angular-directives",
+    "angular-forms",
+    "angular-http",
+    "angular-routing",
+    "angular-signals",
+    "angular-ssr",
+    "angular-testing",
+    "angular-tooling",
+    "tailwind-best-practices",
+    "responsive-design",
+    "interface-design",
+    "angular-migration"
+  ],
+  "mcp": [
+    "angular-cli"
+  ],
+  "optionalMcp": []
+}

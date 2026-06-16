@@ -1,0 +1,7 @@
+{
+  "id": "angular-migration",
+  "source": "npx skills add https://github.com/wshobson/agents --skill angular-migration",
+  "sourceType": "skillssh",
+  "contentSha256": "2f41a44d3053194b3a884f3f40606ebea58e96698efbfcdd7628f256f72e1665",
+  "installedAt": "2026-06-15T20:30:49.440Z"
+}

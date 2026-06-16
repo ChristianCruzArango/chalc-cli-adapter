@@ -1,0 +1,8 @@
+{
+  "id": "global",
+  "name": "Global",
+  "always": true,
+  "skills": ["mutation-testing"],
+  "mcp": [],
+  "optionalMcp": []
+}

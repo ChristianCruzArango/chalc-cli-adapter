@@ -1,0 +1,22 @@
+{
+  "name": "chalc",
+  "version": "0.1.0",
+  "description": "Equipa cualquier proyecto con las skills/MCP/métodos correctos. Interactivo, sin IA, sin tokens.",
+  "type": "module",
+  "bin": {
+    "chalc": "bin/chalc.mjs"
+  },
+  "scripts": {
+    "start": "node bin/chalc.mjs",
+    "inspect": "node bin/chalc.mjs inspect",
+    "doctor": "node bin/chalc.mjs doctor",
+    "configure": "node bin/chalc.mjs configure",
+    "spec": "node bin/chalc.mjs spec",
+    "config-ia": "node bin/chalc.mjs config-ia",
+    "spec-ia": "node bin/chalc.mjs spec-ia",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

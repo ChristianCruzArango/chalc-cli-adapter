@@ -1,0 +1,12 @@
+{
+  "id": "lua",
+  "name": "Lua",
+  "language": "Lua",
+  "detect": {
+    "anyFile": [".luarc.json", "stylua.toml", "selene.toml"],
+    "anyGlob": ["*.lua"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

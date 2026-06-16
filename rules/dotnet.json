@@ -1,0 +1,12 @@
+{
+  "id": "dotnet",
+  "name": ".NET",
+  "language": "C#",
+  "detect": {
+    "anyFile": ["global.json", "Directory.Build.props", "Directory.Build.targets", "NuGet.config"],
+    "anyGlob": ["*.csproj", "*.sln", "*.fsproj", "*.vbproj"]
+  },
+  "skills": ["dotnet-best-practices", "dotnet-testing"],
+  "mcp": [],
+  "optionalMcp": []
+}

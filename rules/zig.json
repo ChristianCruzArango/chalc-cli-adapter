@@ -1,0 +1,12 @@
+{
+  "id": "zig",
+  "name": "Zig",
+  "language": "Zig",
+  "detect": {
+    "anyFile": ["build.zig", "build.zig.zon"],
+    "anyGlob": ["*.zig"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

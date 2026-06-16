@@ -1,0 +1,19 @@
+# dependencias
+node_modules/
+
+# secretos / config local (nunca subir)
+.env
+.env.*
+*.key
+.chalc.json
+.rig.json
+
+# sistema
+.DS_Store
+
+# sandbox de pruebas (no subir)
+prueba/
+
+# logs / temporales
+*.log
+tmp/

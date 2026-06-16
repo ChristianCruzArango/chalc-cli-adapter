@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "angular-migration": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/framework-migration/skills/angular-migration/SKILL.md",
+      "computedHash": "ca92d5713fdc25121a329a4d9ee034f546d30889b9d132f6391deea6898d6fd7"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "php",
+  "name": "PHP",
+  "language": "PHP",
+  "detect": {
+    "anyFile": ["composer.json", "composer.lock"],
+    "anyGlob": ["*.php"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

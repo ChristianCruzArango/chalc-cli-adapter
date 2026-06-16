@@ -1,0 +1,12 @@
+{
+  "id": "cpp",
+  "name": "C++",
+  "language": "C++",
+  "detect": {
+    "anyFile": ["CMakeLists.txt", "conanfile.txt", "conanfile.py", "vcpkg.json"],
+    "anyGlob": ["*.cpp", "*.cc", "*.cxx", "*.hpp", "*.hh", "*.hxx"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

@@ -1,0 +1,12 @@
+{
+  "id": "go",
+  "name": "Go",
+  "language": "Go",
+  "detect": {
+    "anyFile": ["go.mod", "go.sum", "go.work"],
+    "anyGlob": ["*.go"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

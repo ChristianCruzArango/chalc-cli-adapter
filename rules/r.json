@@ -1,0 +1,12 @@
+{
+  "id": "r",
+  "name": "R",
+  "language": "R",
+  "detect": {
+    "anyFile": ["DESCRIPTION", "renv.lock"],
+    "anyGlob": ["*.R", "*.r", "*.Rmd"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

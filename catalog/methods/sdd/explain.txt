@@ -1,0 +1,16 @@
+
+  ━━ Spec-Driven Development (SDD), en 20 segundos ━━
+
+    Primero el QUÉ, luego el CÓMO, y el código de último:
+
+       spec  ──►  plan  ──►  tasks  ──►  test  ──►  code
+       (qué)     (cómo)     (pasos)   (que falla) (que pasa)
+
+    • Manda la spec, no el código.
+    • El test se escribe ANTES que el código.
+    • Cada test y cada tarea sale de un requisito.
+
+    Chalc crea la estructura specs/ (constitución + plantillas vacías) y le
+    indica al asistente que trabaje en ese orden. No redacta la spec por ti.
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

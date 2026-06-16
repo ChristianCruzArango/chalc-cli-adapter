@@ -1,0 +1,12 @@
+{
+  "id": "terraform",
+  "name": "Terraform",
+  "language": "HCL",
+  "detect": {
+    "anyFile": [".terraform.lock.hcl"],
+    "anyGlob": ["*.tf", "*.tfvars"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

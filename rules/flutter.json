@@ -1,0 +1,13 @@
+{
+  "id": "flutter",
+  "name": "Flutter",
+  "language": "Dart",
+  "implies": ["dart"],
+  "detect": {
+    "allFile": ["pubspec.yaml"],
+    "anyFile": ["android", "ios", "macos", "linux", "windows", "web"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

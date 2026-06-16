@@ -1,0 +1,12 @@
+{
+  "id": "dart",
+  "name": "Dart",
+  "language": "Dart",
+  "detect": {
+    "anyFile": ["pubspec.yaml", "analysis_options.yaml"],
+    "anyGlob": ["*.dart"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

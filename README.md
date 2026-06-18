@@ -360,7 +360,7 @@ Flujo:
 
    | Fuente | Qué te pide |
    |---|---|
-   | Archivo local | ruta a Word / PDF / Excel→CSV / md / txt |
+   | Archivo local | ruta a `.md` / `.txt` (recomendado: se leen directo, sin herramientas extra) / Word / PDF / Excel→CSV |
    | **Azure DevOps** | URL del work item + PAT → trae título + descripción + criterios |
    | **Jira** | URL del issue + email + token |
    | **Google Drive / URL** | la URL (export a texto) |

@@ -20,3 +20,8 @@ test('parseArgs rejects unknown flags and missing values', () => {
   assert.throws(() => parseArgs(['--wat']), /Flag desconocida/);
   assert.throws(() => parseArgs(['--target']), /necesita un valor/);
 });
+
+test('parseArgs maps --no-ccr to the ccr capability flag', () => {
+  const { flags } = parseArgs(['--no-ccr']);
+  assert.equal(flags.ccr, false);
+});

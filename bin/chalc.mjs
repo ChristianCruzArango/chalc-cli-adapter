@@ -23,6 +23,7 @@ import { join, dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline/promises';
 import { emitKeypressEvents } from 'node:readline';
+import { spawn } from 'node:child_process';
 import { stdin, stdout } from 'node:process';
 import { installSkill } from '../lib/install.mjs';
 import { t, lang } from '../lib/i18n.mjs';
@@ -32,6 +33,8 @@ import { fetchAzureDevOps, fetchJira, fetchUrl } from '../lib/sources.mjs';
 import { buildPrompt, generateSpec } from '../lib/specgen.mjs';
 import { assertSafeId, isSafeId } from '../lib/ids.mjs';
 import { parseArgs } from '../lib/cli/args.mjs';
+import { buildStartCommand, detectAuth, detectSurface, findEnvironmentOptions, guessBaseUrls, listSpecs, normalizeQaUrl, probeDocker, probePlaywright, qaAgentTestPath, qaComposeProjectName, qaPlanPath, qaResultsPath, readQaInputs, readSpecContext, requirements, selectEnvironment, writeBrowserTests, writeQaInputs, writeQaPlan } from '../lib/qa.mjs';
+import { buildAgentReplaySpec, buildResultsMarkdown, createBrowserExecutor, httpExecutor, runQaAgent } from '../lib/qaagent.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHALC_ROOT = resolve(HERE, '..');
@@ -57,12 +60,13 @@ const verb = ['install', 'add'].includes(first) ? 'install'
         : ['config-ia', 'config-ai', 'configia', 'ai', 'provider'].includes(first) ? 'ai'
           : ['spec-ia', 'spec-ai', 'spec-gen', 'specgen', 'gen'].includes(first) ? 'specgen'
       : ['spec', 'specs', 'feature'].includes(first) ? 'spec'
+        : ['qa', 'quality'].includes(first) ? 'qa'
     : 'apply';
 const installSource = verb === 'install' ? positional[1] : null;
 const specArgs = verb === 'spec' ? positional.slice(1) : [];
 const specLastArg = specArgs.at(-1);
 const specProjectArg = specArgs.length > 1 && specLastArg && (existsSync(resolve(cleanPath(specLastArg))) || looksLikePath(specLastArg)) ? specLastArg : null;
-const projectArg = verb === 'install' ? positional[2] : verb === 'inspect' ? positional[1] : verb === 'doctor' ? positional[1] : verb === 'spec' ? specProjectArg : positional[0];
+const projectArg = verb === 'install' ? positional[2] : verb === 'inspect' ? positional[1] : verb === 'doctor' ? positional[1] : verb === 'spec' ? specProjectArg : verb === 'qa' ? positional[1] : positional[0];
 const projectPath = resolve(projectArg || process.cwd());
 const dryRun = !!flags['dry-run'];
 const assumeYes = !!flags.yes || !!flags.y;
@@ -627,6 +631,50 @@ function makePrompter() {
     }
   }
 
+  // Selector con buscador: escribe para filtrar por substring, ↑/↓ se mueve por lo filtrado, Enter elige.
+  // Devuelve el índice ORIGINAL (en `options`), no el de la vista filtrada.
+  function searchSelect(q, options) {
+    return new Promise((resolve) => {
+      let query = '';
+      let idx = 0;
+      const match = () => options.map((o, i) => ({ o, i })).filter(({ o }) => o.label.toLowerCase().includes(query.toLowerCase()));
+      let view = match();
+      let prevLines = 0;
+      const render = () => {
+        if (prevLines) stdout.write(`\x1b[${prevLines}A`);
+        stdout.write('\x1b[J');
+        stdout.write(`${c.cyan('?')} ${q}  ${c.dim('escribe para filtrar · ↑/↓ · enter')}\n`);
+        stdout.write(`  ${c.dim('buscar:')} ${query}${c.dim('▏')}\n`);
+        if (!view.length) stdout.write('  ' + c.dim('(sin coincidencias)') + '\n');
+        else view.forEach(({ o }, i) => stdout.write((i === idx ? c.cyan(`❯ ${o.label}`) : `  ${c.dim(o.label)}`) + '\n'));
+        prevLines = 2 + (view.length || 1);
+      };
+      render();
+      emitKeypressEvents(stdin);
+      const wasRaw = !!stdin.isRaw;
+      if (stdin.isTTY) stdin.setRawMode(true);
+      stdin.resume();
+      const done = (result) => {
+        stdin.removeListener('keypress', onKey);
+        if (stdin.isTTY) stdin.setRawMode(wasRaw);
+        stdin.pause();
+        resolve(result);
+      };
+      const onKey = (ch, key) => {
+        if (!key) return;
+        if (key.name === 'up') idx = view.length ? (idx - 1 + view.length) % view.length : 0;
+        else if (key.name === 'down') idx = view.length ? (idx + 1) % view.length : 0;
+        else if (key.name === 'return' || key.name === 'enter') { if (view.length) return done(view[idx].i); return; }
+        else if (key.ctrl && key.name === 'c') { done(view.length ? view[idx].i : 0); stdout.write('\n'); process.exit(0); }
+        else if (key.name === 'backspace') { query = query.slice(0, -1); view = match(); idx = 0; }
+        else if (ch && !key.ctrl && ch >= ' ') { query += ch; view = match(); idx = 0; }
+        else return;
+        render();
+      };
+      stdin.on('keypress', onKey);
+    });
+  }
+
   return {
     async text(q) { return (await ask(`${c.cyan('?')} ${q} `)).trim(); },
     async yesno(q, def = false) {
@@ -634,8 +682,9 @@ function makePrompter() {
       if (!ans) return def;
       return yes.has(ans);
     },
-    async select(q, options, def = 0) {
-      return stdin.isTTY ? arrowSelect(q, options, def) : numberedSelect(q, options, def);
+    async select(q, options, def = 0, opts = {}) {
+      if (!stdin.isTTY) return numberedSelect(q, options, def);
+      return opts.search ? searchSelect(q, options) : arrowSelect(q, options, def);
     },
     async multi(q, options, def = []) {
       console.log(`${c.cyan('?')} ${q} ${c.dim('(núms con coma, "a"=todos, enter=por defecto)')}`);
@@ -1002,6 +1051,371 @@ async function runSpec() {
   console.log(c.dim('  Ruta oficial: specs/NNN-nombre/'));
   console.log(c.dim('  Chalc no redacta la spec: solo prepara archivos vacíos con placeholders.'));
   console.log(c.dim('  La spec real se escribe en spec.md; luego plan.md y tasks.md.\n'));
+}
+
+// Pide al SO un puerto libre (bind a :0). Así forzamos el dev server ahí y evitamos choques y adivinanzas.
+// Levanta el entorno y espera a que la URL responda. Devuelve { health, stop }: el caller decide cuándo bajarlo.
+// NO fuerza el puerto: lee la URL que el propio dev server anuncia (ng/vite/next la imprimen), así respeta
+// la config de la app — forzar un puerto random rompe Module Federation (el remoteEntry queda apuntando al viejo).
+async function startEnvironment(env, proj, healthUrls) {
+  const candidates = (Array.isArray(healthUrls) ? healthUrls : [healthUrls]).filter(Boolean);
+  const start = buildStartCommand(env);   // lanza si el entorno no es arrancable
+  const runToEnd = (cmd, args) => new Promise((res) => {
+    const p = spawn(cmd, args, { cwd: proj, stdio: 'ignore' });
+    p.on('error', () => res(-1));
+    p.on('exit', (code) => res(code ?? -1));
+  });
+
+  console.log(`\n▶ Levantando: ${c.bold(`${start.command} ${start.args.join(' ')}`)}  ${c.dim('· descubriendo la URL que anuncia (puede tardar al compilar)')}`);
+  let spawnError = null;
+  let childExited = false;
+  let discovered = null;   // la URL que el propio dev server reporta en su salida
+  const onData = (buf) => {
+    const text = buf.toString();
+    if (!discovered) {
+      const m = text.match(/https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d+)/i) || text.match(/listening on\s+(?:localhost|127\.0\.0\.1):(\d+)/i);
+      if (m) { discovered = `http://localhost:${m[1]}`; console.log(c.dim(`  │ URL detectada: ${discovered}`)); }
+    }
+    for (const line of text.split('\n')) if (/error|failed|cannot|compiled|Port \d+ is already/i.test(line)) { const t = line.trim(); if (t) console.log(c.dim(`  │ ${t.slice(0, 160)}`)); }
+  };
+  // NG_CLI_ANALYTICS=false evita el prompt de analytics de Angular que cuelga en modo no interactivo.
+  const child = spawn(start.command, start.args, { cwd: proj, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32', env: { ...process.env, NG_CLI_ANALYTICS: 'false' } });
+  child.stdout?.on('data', onData);
+  child.stderr?.on('data', onData);
+  child.on('error', (e) => { spawnError = e; childExited = true; });
+  child.on('exit', () => { childExited = true; });
+
+  // Prioriza la URL anunciada por el server; cae a los candidatos del guess. Hasta 120s (MFE grande compila lento).
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  let health = { ok: false, attempts: 0 };
+  for (let attempt = 1; attempt <= 120; attempt++) {
+    if (start.down === null && childExited) { health = { ok: false, aborted: true, attempts: attempt - 1 }; break; }
+    for (const url of [discovered, ...candidates].filter(Boolean)) {
+      try { const res = await fetch(url, { method: 'GET' }); health = { ok: true, status: res.status, attempts: attempt, url }; break; } catch { /* siguiente candidato */ }
+    }
+    if (health.ok) break;
+    await sleep(1000);
+  }
+  if (spawnError) console.log(c.red(`✗ No se pudo ejecutar "${start.command}": ${spawnError.code || spawnError.message}`));
+  else if (health.ok) console.log(c.green(`✓ ${health.url} responde (HTTP ${health.status}) tras ${health.attempts} intento(s).`));
+  else if (health.aborted) console.log(c.red('✗ El proceso terminó antes de responder.'));
+  else console.log(c.red(`✗ No respondió ninguna URL (anunciada: ${discovered || 'ninguna'}; candidatas: ${candidates.join(' | ') || '—'}).`));
+
+  const stop = async () => {
+    console.log(c.dim('  Bajando el entorno...'));
+    if (start.down) await runToEnd(start.down.command, start.down.args);
+    else if (!childExited && !child.killed) {
+      if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGTERM');
+      else child.kill('SIGTERM');
+    }
+  };
+  return { health, stop };
+}
+
+// Bring-up de un solo tiro (para --up): levanta, verifica salud y baja inmediatamente.
+async function bringUpEnvironment(env, proj, healthUrl) {
+  const { health, stop } = await startEnvironment(env, proj, healthUrl);
+  await stop();
+  return health;
+}
+
+// Detecta si la app exige autenticación y, de ser así, le PIDE al usuario la sesión (no falla en silencio).
+// Devuelve { headers?, storage? } para inyectar en el navegador, o null si no hace falta / se omite.
+async function promptAuthIfNeeded(prompter, proj) {
+  const det = await detectAuth(proj);
+  if (!det.needsAuth) return null;
+  console.log(c.yellow(`\n⚠ Esta app parece requerir autenticación (${det.signals.join(', ')}).`));
+  if (!prompter) {
+    console.log(c.dim('  Modo no interactivo: no puedo pedirte la sesión → lo privado quedará BLOCKED. Usa --url a un entorno con sesión o corre interactivo.'));
+    return null;
+  }
+  const methods = [
+    { label: 'Token en localStorage/sessionStorage', value: 'storage' },
+    { label: 'Header Authorization: Bearer <token>', value: 'header' },
+    { label: 'Omitir (probar sin sesión; lo privado quedará BLOCKED)', value: 'skip' }
+  ];
+  const method = methods[await prompter.select('¿Cómo te proporciono la sesión para QA?', methods, det.storageKeys.length ? 0 : 1)].value;
+  if (method === 'skip') return null;
+  if (method === 'header') {
+    const token = (await prompter.secret('Pega el token (sin la palabra "Bearer"):')).trim();
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : null;
+  }
+  const hint = det.storageKeys.length ? ` (detectadas: ${det.storageKeys.join(', ')})` : '';
+  const key = (await prompter.text(`Clave de storage${hint}:`)).trim();
+  const type = (await prompter.yesno('¿Es sessionStorage? (no = localStorage)', false)) ? 'session' : 'local';
+  const value = (await prompter.secret('Pega el valor (token):')).trim();
+  return key && value ? { storage: [{ type, key, value }] } : null;
+}
+
+// Ejecuta un spec con el CLI de Playwright del proyecto (la app debe estar viva). Devuelve el exit code.
+function runPlaywrightSpec(proj, testFile, baseUrl) {
+  return new Promise((resolve) => {
+    const child = spawn('npx', ['playwright', 'test', testFile, '--reporter=line'], {
+      cwd: proj,
+      stdio: 'inherit',
+      env: { ...process.env, PLAYWRIGHT_BASE_URL: baseUrl, BASE_URL: baseUrl }
+    });
+    child.on('error', () => resolve(-1));
+    child.on('exit', (code) => resolve(code ?? -1));
+  });
+}
+
+// Corre el agente QA contra la app ya viva: detecta/usa superficie, ejecuta el loop y escribe results.md.
+async function runAgentAgainstLiveApp(context, proj, baseUrl, surfaceOverride, auth) {
+  const cfg = await loadConfig();
+  if (!isConfigured(cfg)) throw new Error('El agente QA usa IA. Configúrala primero con: chalc config-ia');
+
+  const detected = await detectSurface(proj);
+  const surface = (surfaceOverride || detected.surface);
+  if (surface !== 'web' && surface !== 'api') {
+    throw new Error(`No pude determinar la superficie (web/api). Indícala con --surface web|api. Señales: ${JSON.stringify(detected.signals)}`);
+  }
+  console.log(`  Superficie QA: ${c.bold(surface)}${surfaceOverride ? c.dim(' (forzada)') : c.dim(` (detectada: ${detected.signals[surface]?.join(', ') || '—'})`)}`);
+  if (auth) console.log(c.dim(`  Sesión QA inyectada: ${auth.headers ? 'header Authorization' : `storage[${auth.storage?.[0]?.key}]`}`));
+
+  const inputs = await readQaInputs(proj, context.id);
+  let executor;
+  if (surface === 'web') {
+    try { executor = await createBrowserExecutor(baseUrl, { auth }); }   // lanza un error guía si falta Playwright
+    catch (e) { throw new Error(e.message); }
+  } else {
+    executor = httpExecutor(baseUrl, {
+      headers: auth?.headers || {},   // en api, la sesión va como header en cada petición
+      allowedMethods: inputs?.allowWriteMethods ? ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH'] : undefined,
+      allowedPaths: inputs?.allowedPaths || []
+    });
+  }
+
+  try {
+    console.log(c.dim('  Ejecutando agente QA (esto consume tokens del proveedor configurado)...'));
+    const plan = existsSync(qaPlanPath(proj, context.id)) ? await readFile(qaPlanPath(proj, context.id), 'utf8') : context.files['spec.md'];
+    // Presupuesto de pasos según cantidad de requisitos: cada R# necesita 1-3 acciones + el veredicto final.
+    // Override con --max-steps. Tope de seguridad para no disparar tokens sin querer.
+    const reqCount = context.requirements.length || 1;
+    const maxSteps = Math.min(Number(flags['max-steps']) || Math.max(12, reqCount * 3 + 4), 60);
+    console.log(c.dim(`    · presupuesto: ${maxSteps} pasos para ${reqCount} requisitos`));
+    const result = await runQaAgent({
+      cfg, surface, baseUrl, plan,
+      requirementIds: context.requirements,
+      executor,
+      maxSteps,
+      ccr: flags.ccr === false ? false : undefined,   // CCR (compresión reversible) activo por defecto
+      onStep: (r) => console.log(c.dim(`    · paso ${r.step}: ${r.observation?.ok ? 'ok' : 'sin éxito'}`))
+    });
+    if (result.ccr) console.log(c.dim(`    · CCR: ${result.ccr.entries} ref(s), ~${result.ccr.charsSaved} caracteres diferidos`));
+    const evidencePaths = [];
+    const evidenceDir = join(proj, 'specs', context.id, 'qa', 'evidence');
+    for (const step of result.steps || []) {
+      const raw = step.observation?.screenshotBase64;
+      if (!raw) continue;
+      await mkdir(evidenceDir, { recursive: true });
+      const file = join(evidenceDir, `step-${step.step}-failure.png`);
+      await writeFile(file, Buffer.from(raw, 'base64'));
+      evidencePaths.push(`evidence/${basename(file)}`);
+    }
+    const md = buildResultsMarkdown(context.id, { surface, baseUrl, result, evidencePaths });
+    const resultsPath = qaResultsPath(proj, context.id);
+    await mkdir(dirname(resultsPath), { recursive: true });   // el directorio qa/ puede no existir si no se creó plan
+    await writeFile(resultsPath, md, 'utf8');
+    const pass = result.verdicts.filter((v) => v.status === 'PASS').length;
+    console.log(c.green(`\n✓ Resultados QA: ${qaResultsPath(proj, context.id)}`));
+    console.log(`  ${pass}/${result.verdicts.length} requisitos en PASS.` + (result.error ? c.yellow(`  (${result.error})`) : ''));
+
+    // Web: escribe los pasos verificados como spec Playwright ejecutable y, si hay CLI, los corre (app aún viva).
+    if (surface === 'web') {
+      const specPath = qaAgentTestPath(proj, context.id);
+      await mkdir(dirname(specPath), { recursive: true });
+      const reqTexts = Object.fromEntries(requirements(context.files['spec.md']).map((r) => [r.id.toUpperCase(), r.text]));
+      await writeFile(specPath, buildAgentReplaySpec(context.id, baseUrl, result.steps, reqTexts), 'utf8');
+      console.log(c.green(`✓ Spec Playwright (réplica de lo verificado): ${specPath}`));
+      const pw = await probePlaywright(proj);
+      if (pw.available) {
+        console.log(c.dim(`  Ejecutando con Playwright CLI (${pw.version})...`));
+        const code = await runPlaywrightSpec(proj, specPath, baseUrl);
+        if (code === 0) console.log(c.green('  ✓ Playwright CLI: todas las pruebas pasaron.'));
+        else {
+          console.log(c.yellow(`  ! Playwright CLI terminó con código ${code} (revisa la salida arriba).`));
+          console.log(c.dim('    Si falta el navegador: npx playwright install chromium'));
+        }
+      } else {
+        console.log(c.dim(`  ${pw.detail}`));
+      }
+    }
+  } finally {
+    if (typeof executor?.close === 'function') await executor.close();
+  }
+}
+
+// ---------- comando: chalc qa ----------
+// Preflight QA: specs/documentación y capacidades locales. Con --up levanta el entorno y verifica salud (luego lo baja).
+async function runQa() {
+  // Un solo prompter para todo el flujo interactivo (igual que spec-ia).
+  const prompter = interactive ? makePrompter() : null;
+  let proj = projectPath;
+
+  // 0) Ruta del proyecto: en interactivo se pregunta (default = cwd o el argumento) y se valida.
+  if (prompter && !projectArg) {
+    const ans = await prompter.text(`Ruta del proyecto ${c.dim(`[${proj}]`)}:`);
+    if (ans) proj = resolve(cleanPath(ans));
+  }
+  if (!existsSync(proj)) { if (prompter) prompter.close(); throw new Error(`La ruta no existe: ${proj}`); }
+
+  console.log('\n' + c.bold('⚙️  chalc qa') + c.dim(`  ·  ${proj}`) + '\n');
+
+  // 1) Verificar specs disponibles.
+  const specs = await listSpecs(proj);
+  if (!specs.length) { if (prompter) prompter.close(); throw new Error('No encontré specs con spec.md en specs/. Crea o genera una spec antes de ejecutar QA.'); }
+
+  console.log(c.bold('Specs disponibles:'));
+  specs.forEach((id, index) => console.log(`  ${index + 1}. ${id}`));
+
+  const docker = await probeDocker();
+  const mark = docker.installed && docker.daemon && docker.compose ? c.green('✓') : c.yellow('!');
+  console.log(`\n${mark} Docker: ${docker.detail}`);
+
+  // 2) Spec: por bandera o elegida con buscador (escribe para filtrar, ↑/↓ para moverte).
+  let specId = String(flags.spec || flags.feature || '').trim();
+  if (specId && !specs.includes(specId)) { if (prompter) prompter.close(); throw new Error(`La spec "${specId}" no existe. Usa uno de los ids listados.`); }
+  if (prompter && !specId) {
+    specId = specs[await prompter.select('¿Qué spec quieres validar?', specs.map((id) => ({ label: id })), 0, { search: true })];
+  }
+  if (!specId) {
+    if (prompter) prompter.close();
+    console.log(c.dim('\n  Elige una con --spec <NNN-feature> para leer su contexto QA.\n'));
+    return;
+  }
+
+  const context = await readSpecContext(proj, specId);
+  if (context.duplicateRequirements.length) {
+    if (prompter) prompter.close();
+    throw new Error(`La spec repite ids de requisito: ${context.duplicateRequirements.join(', ')}. Corrige los R# antes de generar QA.`);
+  }
+  console.log('\n' + c.bold(`Spec seleccionada: ${context.id}`));
+  console.log(`  Documentos QA: ${Object.keys(context.files).join(', ')}`);
+  console.log(`  Requisitos: ${context.requirements.length ? context.requirements.join(', ') : c.yellow('ninguno detectado')}`);
+  const environments = await findEnvironmentOptions(proj);
+  console.log(`  Entornos detectados: ${environments.length ? environments.map((item) => item.label).join(', ') : c.yellow('ninguno')}`);
+
+  // Menú principal: el uso normal es guiado; flags solo automatizan CI.
+  let qaAction = 'prepare';
+  if (prompter && !flags.plan && !flags.up && !flags.agent) {
+    const actions = [
+      { label: 'Preparar plan, datos y pruebas QA', value: 'prepare' },
+      { label: 'Preparar y ejecutar QA completo', value: 'run' },
+      { label: 'Ver el último reporte QA', value: 'report' }
+    ];
+    qaAction = actions[await prompter.select('¿Qué quieres hacer con esta spec?', actions, 0)].value;
+    if (qaAction === 'report') {
+      const report = qaResultsPath(proj, context.id);
+      if (existsSync(report)) console.log('\n' + await readFile(report, 'utf8'));
+      else console.log(c.yellow('\n! Aún no existe un reporte QA para esta spec.'));
+      prompter.close();
+      return;
+    }
+  }
+
+  // 3) Entorno: por bandera (--env, valida) o preguntado. "Decidir luego" deja el plan sin arranque fijado.
+  let selectedEnv = null;
+  try { selectedEnv = selectEnvironment(environments, flags.env); }   // lanza con las opciones válidas si --env no existe
+  catch (e) { if (prompter) prompter.close(); throw e; }
+  if (prompter && !flags.env && environments.length) {
+    const choices = [...environments.map((item) => ({ label: item.label })), { label: c.dim('Decidir luego') }];
+    const picked = await prompter.select('¿Qué entorno de arranque usará QA?', choices, choices.length - 1);
+    selectedEnv = environments[picked] || null;
+  }
+  if (selectedEnv) console.log(`  Entorno elegido: ${c.bold(selectedEnv.label)}`);
+  if (selectedEnv?.type === 'compose') selectedEnv = { ...selectedEnv, projectName: qaComposeProjectName(context.id) };
+
+  // 4) Plan: por bandera (--plan) o preguntado.
+  let createPlan = !!flags.plan || qaAction === 'prepare' || qaAction === 'run';
+  if (prompter && !flags.plan && qaAction !== 'prepare' && qaAction !== 'run') createPlan = await prompter.yesno('¿Crear o actualizar el plan QA desde esta spec?', true);
+
+  // 4b) Si el plan ya existe, no se machaca sin permiso (preguntado en interactivo, --force en CI).
+  let overwrite = !!flags.force;
+  if (createPlan && !overwrite && existsSync(qaPlanPath(proj, context.id))) {
+    if (prompter) overwrite = await prompter.yesno(`Ya existe specs/${context.id}/qa/test-plan.md. ¿Sobrescribirlo?`, false);
+  }
+
+  // 4c) Datos QA: se preguntan sin leer código. Secretos solo por NOMBRE de variable de entorno.
+  let qaInputs = await readQaInputs(proj, context.id);
+  if (prompter && (createPlan || !qaInputs)) {
+    // Default NO: el agente ya prueba con el plan. Esto es opcional y solo afina rutas/credenciales.
+    const capture = await prompter.yesno(`¿Registrar datos QA opcionales (rutas/credenciales) para los ${context.requirements.length} requisitos?`, false);
+    if (capture) {
+      const perCase = await prompter.yesno('¿Definir ruta y resultado por cada requisito? (no = dejarlos pendientes)', false);
+      const cases = [];
+      for (const id of context.requirements) {
+        if (perCase) {
+          const path = await prompter.text(`${id}: ruta visible o endpoint público (Enter = pendiente):`);
+          const expected = await prompter.text(`${id}: texto/resultado observable esperado (Enter = pendiente):`);
+          cases.push({ id, path, expected });
+        } else {
+          cases.push({ id, path: '', expected: '' });
+        }
+      }
+      const allowedPaths = (await prompter.text('Rutas públicas permitidas, separadas por coma (Enter = todas):')).split(',').map((s) => s.trim()).filter(Boolean);
+      const allowWriteMethods = await prompter.yesno('¿Autorizar POST/PUT/PATCH en este entorno QA?', false);
+      const secretVars = (await prompter.text('Variables de entorno con credenciales QA (nombres, sin valores; opcional):')).split(',').map((s) => s.trim()).filter(Boolean);
+      qaInputs = { version: 1, cases, allowedPaths, allowWriteMethods, secretVars };
+    }
+  }
+
+  // 5) Bring-up (--up) o además agente QA (--agent). Ejecuta comandos/IA: explícito. El agente necesita la app viva.
+  let doAgent = !!flags.agent;
+  let doUp = !!flags.up || doAgent;
+  if (prompter && !flags.up && !flags.agent && selectedEnv) {
+    doUp = await prompter.yesno(`¿Levantar "${selectedEnv.label}" y verificar que responda?`, qaAction === 'run');
+    if (doUp) doAgent = await prompter.yesno('¿Correr el agente QA contra la app (usa IA/tokens)?', false);
+  }
+  // Si vamos a correr el agente y la app exige auth, se la PEDIMOS aquí (no fallamos en silencio).
+  const qaAuth = doAgent ? await promptAuthIfNeeded(prompter, proj) : null;
+  // URL de salud: con --url manda el usuario; si no, chalc LEE la URL que el server anuncia (y guess como respaldo).
+  let healthCandidates = [];
+  if (doUp) {
+    const urlFlag = String(flags.url || '').trim();
+    healthCandidates = urlFlag ? [normalizeQaUrl(urlFlag)] : await guessBaseUrls(proj);
+  }
+  if (!interactive && doUp && !allowExternalExec) throw new Error('QA va a ejecutar comandos del proyecto. En modo no interactivo usa --allow-exec.');
+  if (prompter) prompter.close();
+
+  if (qaInputs) {
+    const inputsPath = await writeQaInputs(proj, context.id, qaInputs);
+    console.log(c.green(`✓ Datos QA guardados: ${inputsPath}`));
+    const testsPath = await writeBrowserTests(proj, context, qaInputs);
+    console.log(c.green(`✓ Pruebas Playwright generadas: ${testsPath}`));
+  }
+
+  // Plan (sin early-return: el bring-up debe poder ejecutarse después).
+  if (createPlan) {
+    const { path, written } = await writeQaPlan(proj, context, selectedEnv, { overwrite });
+    if (written) {
+      console.log(c.green(`\n✓ Plan QA creado: ${path}`));
+      console.log(c.dim('  Contiene un caso pendiente por cada R#. Aún no se levantó ningún servicio ni se generaron pasos de navegador inventados.'));
+    } else {
+      console.log(c.yellow(`\n! El plan QA ya existe y no se sobrescribió: ${path}`));
+      console.log(c.dim('  Usa --force (o responde sí) para regenerarlo; perderás las ediciones manuales.'));
+    }
+  } else {
+    console.log(c.dim('\n  Preflight completado. Usa --plan para crear el plan QA desde los requisitos.'));
+  }
+
+  // 6) Ejecuta el bring-up (y, si se pidió, el agente) al final, con stdin ya liberado.
+  if (doUp) {
+    if (!selectedEnv) console.log(c.yellow('\n! No hay entorno seleccionado (elige uno con --env) — omito el bring-up.'));
+    else if (doAgent) {
+      const { health, stop } = await startEnvironment(selectedEnv, proj, healthCandidates);
+      try {
+        if (health.ok) await runAgentAgainstLiveApp(context, proj, health.url, String(flags.surface || '').trim() || null, qaAuth);
+        else console.log(c.yellow('  La app no respondió; no ejecuto el agente. Pasa --url si usa un puerto fijo.'));
+      } finally {
+        await stop();
+      }
+    } else {
+      await bringUpEnvironment(selectedEnv, proj, healthCandidates);
+      console.log(c.dim('  Para probar de verdad, agrega --agent (levanta, prueba con IA y baja).'));
+    }
+  }
+  console.log('');
 }
 
 // ---------- comando: chalc configure ----------
@@ -1439,5 +1853,5 @@ async function runSpecGen() {
   console.log(c.cyan(handoffCommand(rel, equippedSkills, specLang)) + '\n');
 }
 
-(verb === 'install' ? runInstall() : verb === 'inspect' ? runInspect() : verb === 'doctor' ? runDoctor() : verb === 'configure' ? runConfigure() : verb === 'ai' ? runAi() : verb === 'specgen' ? runSpecGen() : verb === 'spec' ? runSpec() : runApply())
+(verb === 'install' ? runInstall() : verb === 'inspect' ? runInspect() : verb === 'doctor' ? runDoctor() : verb === 'configure' ? runConfigure() : verb === 'ai' ? runAi() : verb === 'specgen' ? runSpecGen() : verb === 'spec' ? runSpec() : verb === 'qa' ? runQa() : runApply())
   .catch((err) => { console.error(c.red('✗ ' + err.message)); process.exit(1); });

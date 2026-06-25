@@ -30,6 +30,12 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 | `chalc spec` | Crea una carpeta/plantilla vacía `specs/NNN-feature` | no |
 | `chalc config-ia` | Configura el proveedor de IA + API key (una vez) | sí (setup) |
 | `chalc spec-ia` | HU (Azure DevOps/Jira/Drive/Word/pegar) → spec/plan/tasks | sí |
+| `chalc qa <ruta>` | Lista specs y valida el preflight QA (Docker + documentación) | no |
+| `chalc qa <ruta> --spec 004-login --plan` | Genera el plan QA trazable a los requisitos de una spec | no |
+| `chalc qa <ruta> --spec 004-login --env qa:up --plan` | Registra en el plan el entorno de arranque elegido (sin ejecutarlo aún) | no |
+| `chalc qa <ruta> --spec 004-login --env serve --url http://localhost:3000 --up` | Levanta el entorno, espera a que la URL responda y luego lo baja | no |
+| `chalc qa <ruta> --spec 004-login --env serve --url http://localhost:3000 --agent` | Levanta la app, corre el agente QA (verifica cada R# contra la app viva), escribe `qa/results.md` y baja | sí |
+| `chalc qa <ruta> ... --agent --surface web\|api` | Fuerza la superficie (navegador vs HTTP) si la autodetección no acierta | sí |
 
 Cada comando tiene su equivalente `npm run <comando>` (ej. `npm run spec-ia`) por si no haces `npm link`.
 Todo el CLI es **bilingüe (es/en)** según el idioma del sistema operativo.
@@ -82,6 +88,46 @@ chalc inspect /ruta/al/proyecto
 lista las reglas que aplican, las señales que las activaron (`package.json`, archivos raíz o globs
 como `*.csproj`) y el plan base que `chalc --yes` montaría. En entornos no interactivos imprime el
 diagnóstico completo.
+
+### Agente QA: probar la app de verdad (`chalc qa --agent`)
+Con `--agent`, chalc **levanta tu app, la prueba como una persona y reporta** cada requisito `R#`:
+
+1. **Levanta el entorno** sin forzar puerto y **lee la URL que el dev server anuncia** (`ng serve` → `:4201`,
+   Vite → `:5173`…), respetando la config de la app (forzar puerto rompe Module Federation). `--url` la fija.
+2. **Detecta la superficie** (web vs API) por stack; `--surface web|api` la fuerza.
+3. **Si la app exige autenticación, te la PIDE** (no falla en silencio): detecta guards/MSAL/interceptor Bearer
+   y te pregunta cómo inyectar la sesión (token en localStorage/sessionStorage o header `Authorization: Bearer`).
+4. **Explora y verifica con un agente IA** (provider-agnóstico): el veredicto se ancla en hechos observados
+   (status HTTP, texto/elemento visible), nunca en suposiciones — un requisito sin evidencia queda `BLOCKED`,
+   nunca un `PASS` inventado. El presupuesto de pasos escala con los `R#` (`--max-steps` lo ajusta).
+5. **Escribe `qa/results.md`** (veredicto + evidencia por `R#`) y un **spec Playwright ejecutable**
+   (`qa/e2e/<spec>.agent.spec.mjs`, un test por `R#`); si tienes `@playwright/test`, lo **corre con `npx playwright test`**.
+6. **Baja el entorno** al terminar (siempre).
+
+```bash
+chalc qa . --spec 004-login --env start --agent           # interactivo: pregunta superficie/auth si hace falta
+chalc qa . --spec 004-login --env start --agent --url http://localhost:3000 --surface web --max-steps 24 --allow-exec
+```
+
+### Manejo de tokens en el agente QA (CCR, integrado)
+El agente (`qa --agent`) trae **CCR (Compresión Reversible)** propia, inspirada en Headroom pero **sin
+dependencias y provider-agnóstica** (funciona igual con Anthropic, OpenRouter, OpenAI, Gemini u Ollama):
+
+- Las salidas voluminosas (respuestas HTTP, DOM, logs) se reemplazan en el prompt por una referencia
+  compacta `[CCR ref=... chars=N preview="..."]`.
+- El original queda en una caché local con TTL; si el modelo necesita el contenido completo, pide
+  `{"type":"recall","ref":"..."}` y se le devuelve entero durante el siguiente turno; luego vuelve a diferirse.
+  **Reversible mientras la referencia viva dentro de su TTL.**
+- **El plan y los requisitos R# nunca se comprimen** (fidelidad). Solo se difieren las observaciones.
+- Está activo por defecto; desactívalo con `--no-ccr`. El reporte `qa/results.md` muestra cuánto difirió.
+
+Opcionalmente puedes **además** apuntar a un proxy externo (Headroom u otro OpenAI-compatible) vía
+`CHALC_BASE_URL`, sin tocar código:
+```bash
+headroom proxy --port 8787
+CHALC_BASE_URL=http://localhost:8787/v1 CHALC_PROVIDER=openai CHALC_API_KEY=$TU_KEY \
+  chalc qa . --spec 004-login --env serve --url http://localhost:3000 --agent
+```
 
 ### Revisar la salud del Chalc
 ```bash

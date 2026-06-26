@@ -1151,7 +1151,7 @@ async function startEnvironment(env, proj, healthUrls) {
     p.on('exit', (code) => res(code ?? -1));
   });
 
-  console.log(`\n▶ Levantando: ${c.bold(`${start.command} ${start.args.join(' ')}`)}  ${c.dim('· descubriendo la URL que anuncia (puede tardar al compilar)')}`);
+  console.log('\n▶ ' + t('qaStarting', c.bold(`${start.command} ${start.args.join(' ')}`)) + '  ' + c.dim('· ' + t('qaDiscoveringUrl')));
   let spawnError = null;
   let childExited = false;
   let discovered = null;   // la URL que el propio dev server reporta en su salida
@@ -1159,7 +1159,7 @@ async function startEnvironment(env, proj, healthUrls) {
     const text = buf.toString();
     if (!discovered) {
       const m = text.match(/https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d+)/i) || text.match(/listening on\s+(?:localhost|127\.0\.0\.1):(\d+)/i);
-      if (m) { discovered = `http://localhost:${m[1]}`; console.log(c.dim(`  │ URL detectada: ${discovered}`)); }
+      if (m) { discovered = `http://localhost:${m[1]}`; console.log(c.dim('  │ ' + t('qaUrlDetected', discovered))); }
     }
     for (const line of text.split('\n')) if (/error|failed|cannot|compiled|Port \d+ is already/i.test(line)) { const t = line.trim(); if (t) console.log(c.dim(`  │ ${t.slice(0, 160)}`)); }
   };
@@ -1181,13 +1181,13 @@ async function startEnvironment(env, proj, healthUrls) {
     if (health.ok) break;
     await sleep(1000);
   }
-  if (spawnError) console.log(c.red(`✗ No se pudo ejecutar "${start.command}": ${spawnError.code || spawnError.message}`));
-  else if (health.ok) console.log(c.green(`✓ ${health.url} responde (HTTP ${health.status}) tras ${health.attempts} intento(s).`));
-  else if (health.aborted) console.log(c.red('✗ El proceso terminó antes de responder.'));
-  else console.log(c.red(`✗ No respondió ninguna URL (anunciada: ${discovered || 'ninguna'}; candidatas: ${candidates.join(' | ') || '—'}).`));
+  if (spawnError) console.log(c.red('✗ ' + t('qaCannotRun', start.command, spawnError.code || spawnError.message)));
+  else if (health.ok) console.log(c.green('✓ ' + t('qaResponds', health.url, health.status, health.attempts)));
+  else if (health.aborted) console.log(c.red('✗ ' + t('qaProcessEnded')));
+  else console.log(c.red('✗ ' + t('qaNoUrlResponded', discovered || t('qaNoneFem'), candidates.join(' | ') || '—')));
 
   const stop = async () => {
-    console.log(c.dim('  Bajando el entorno...'));
+    console.log(c.dim('  ' + t('qaStoppingEnv')));
     if (start.down) await runToEnd(start.down.command, start.down.args);
     else if (!childExited && !child.killed) {
       if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGTERM');
@@ -1209,26 +1209,26 @@ async function bringUpEnvironment(env, proj, healthUrl) {
 async function promptAuthIfNeeded(prompter, proj) {
   const det = await detectAuth(proj);
   if (!det.needsAuth) return null;
-  console.log(c.yellow(`\n⚠ Esta app parece requerir autenticación (${det.signals.join(', ')}).`));
+  console.log(c.yellow('\n⚠ ' + t('qaAuthRequired', det.signals.join(', '))));
   if (!prompter) {
-    console.log(c.dim('  Modo no interactivo: no puedo pedirte la sesión → lo privado quedará BLOCKED. Usa --url a un entorno con sesión o corre interactivo.'));
+    console.log(c.dim('  ' + t('qaAuthNonInteractive')));
     return null;
   }
   const methods = [
-    { label: 'Token en localStorage/sessionStorage', value: 'storage' },
-    { label: 'Header Authorization: Bearer <token>', value: 'header' },
-    { label: 'Omitir (probar sin sesión; lo privado quedará BLOCKED)', value: 'skip' }
+    { label: t('qaAuthStorage'), value: 'storage' },
+    { label: t('qaAuthHeader'), value: 'header' },
+    { label: t('qaAuthSkip'), value: 'skip' }
   ];
-  const method = methods[await prompter.select('¿Cómo te proporciono la sesión para QA?', methods, det.storageKeys.length ? 0 : 1)].value;
+  const method = methods[await prompter.select(t('qaAuthMethodQ'), methods, det.storageKeys.length ? 0 : 1)].value;
   if (method === 'skip') return null;
   if (method === 'header') {
-    const token = (await prompter.secret('Pega el token (sin la palabra "Bearer"):')).trim();
+    const token = (await prompter.secret(t('qaAuthTokenQ'))).trim();
     return token ? { headers: { Authorization: `Bearer ${token}` } } : null;
   }
-  const hint = det.storageKeys.length ? ` (detectadas: ${det.storageKeys.join(', ')})` : '';
-  const key = (await prompter.text(`Clave de storage${hint}:`)).trim();
-  const type = (await prompter.yesno('¿Es sessionStorage? (no = localStorage)', false)) ? 'session' : 'local';
-  const value = (await prompter.secret('Pega el valor (token):')).trim();
+  const hint = det.storageKeys.length ? t('qaAuthDetected', det.storageKeys.join(', ')) : '';
+  const key = (await prompter.text(t('qaAuthStorageKeyQ', hint))).trim();
+  const type = (await prompter.yesno(t('qaAuthIsSessionQ'), false)) ? 'session' : 'local';
+  const value = (await prompter.secret(t('qaAuthValueQ'))).trim();
   return key && value ? { storage: [{ type, key, value }] } : null;
 }
 
@@ -1248,15 +1248,15 @@ function runPlaywrightSpec(proj, testFile, baseUrl) {
 // Corre el agente QA contra la app ya viva: detecta/usa superficie, ejecuta el loop y escribe results.md.
 async function runAgentAgainstLiveApp(context, proj, baseUrl, surfaceOverride, auth) {
   const cfg = await resolveAiTaskConfig('qa');
-  if (!isConfigured(cfg)) throw new Error('El agente QA usa IA. Configúrala primero con: chalc config-ia');
+  if (!isConfigured(cfg)) throw new Error(t('qaAgentNeedsAi'));
 
   const detected = await detectSurface(proj);
   const surface = (surfaceOverride || detected.surface);
   if (surface !== 'web' && surface !== 'api') {
-    throw new Error(`No pude determinar la superficie (web/api). Indícala con --surface web|api. Señales: ${JSON.stringify(detected.signals)}`);
+    throw new Error(t('qaSurfaceUnknown', JSON.stringify(detected.signals)));
   }
-  console.log(`  Superficie QA: ${c.bold(surface)}${surfaceOverride ? c.dim(' (forzada)') : c.dim(` (detectada: ${detected.signals[surface]?.join(', ') || '—'})`)}`);
-  if (auth) console.log(c.dim(`  Sesión QA inyectada: ${auth.headers ? 'header Authorization' : `storage[${auth.storage?.[0]?.key}]`}`));
+  console.log('  ' + t('qaSurface', c.bold(surface)) + (surfaceOverride ? c.dim(' ' + t('qaSurfaceForced')) : c.dim(' ' + t('qaSurfaceDetected', detected.signals[surface]?.join(', ') || '—'))));
+  if (auth) console.log(c.dim('  ' + t('qaSessionInjected', auth.headers ? t('qaSessionHeader') : t('qaSessionStorage', auth.storage?.[0]?.key))));
 
   const inputs = await readQaInputs(proj, context.id);
   let executor;
@@ -1272,22 +1272,23 @@ async function runAgentAgainstLiveApp(context, proj, baseUrl, surfaceOverride, a
   }
 
   try {
-    console.log(c.dim('  Ejecutando agente QA (esto consume tokens del proveedor configurado)...'));
+    console.log(c.dim('  ' + t('qaRunningAgent')));
     const plan = existsSync(qaPlanPath(proj, context.id)) ? await readFile(qaPlanPath(proj, context.id), 'utf8') : context.files['spec.md'];
     // Presupuesto de pasos según cantidad de requisitos: cada R# necesita 1-3 acciones + el veredicto final.
     // Override con --max-steps. Tope de seguridad para no disparar tokens sin querer.
     const reqCount = context.requirements.length || 1;
     const maxSteps = Math.min(Number(flags['max-steps']) || Math.max(12, reqCount * 3 + 4), 60);
-    console.log(c.dim(`    · presupuesto: ${maxSteps} pasos para ${reqCount} requisitos`));
+    console.log(c.dim('    ' + t('qaBudget', maxSteps, reqCount)));
     const result = await runQaAgent({
       cfg, surface, baseUrl, plan,
       requirementIds: context.requirements,
       executor,
       maxSteps,
+      language: lang === 'en' ? 'English' : 'español',
       ccr: flags.ccr === false ? false : undefined,   // CCR (compresión reversible) activo por defecto
-      onStep: (r) => console.log(c.dim(`    · paso ${r.step}: ${r.observation?.ok ? 'ok' : 'sin éxito'}`))
+      onStep: (r) => console.log(c.dim('    ' + t('qaStepLine', r.step, r.observation?.ok ? t('qaStepOk') : t('qaStepFail'))))
     });
-    if (result.ccr) console.log(c.dim(`    · CCR: ${result.ccr.entries} ref(s), ~${result.ccr.charsSaved} caracteres diferidos`));
+    if (result.ccr) console.log(c.dim('    ' + t('qaCcrLine', result.ccr.entries, result.ccr.charsSaved)));
     const evidencePaths = [];
     const evidenceDir = join(proj, 'specs', context.id, 'qa', 'evidence');
     for (const step of result.steps || []) {
@@ -1312,8 +1313,8 @@ async function runAgentAgainstLiveApp(context, proj, baseUrl, surfaceOverride, a
       extra: { steps: result.steps?.length || 0, ccr: result.ccr || null }
     }));
     const pass = result.verdicts.filter((v) => v.status === 'PASS').length;
-    console.log(c.green(`\n✓ Resultados QA: ${qaResultsPath(proj, context.id)}`));
-    console.log(`  ${pass}/${result.verdicts.length} requisitos en PASS.` + (result.error ? c.yellow(`  (${result.error})`) : ''));
+    console.log(c.green('\n✓ ' + t('qaResultsSaved', qaResultsPath(proj, context.id))));
+    console.log('  ' + t('qaPassSummary', pass, result.verdicts.length) + (result.error ? c.yellow(`  (${result.error})`) : ''));
     if (flags['repair-plan']) {
       const repairCfg = await resolveAiTaskConfig('repair');
       const reqTexts = Object.fromEntries(requirements(context.files['spec.md']).map((r) => [r.id.toUpperCase(), r.text]));
@@ -1328,7 +1329,7 @@ async function runAgentAgainstLiveApp(context, proj, baseUrl, surfaceOverride, a
         output: repairPath,
         extra: { source: 'deterministic' }
       }));
-      console.log(c.green(`✓ Plan de reparación: ${repairPath}`));
+      console.log(c.green('✓ ' + t('qaRepairPlanSaved', repairPath)));
     }
 
     // Web: escribe los pasos verificados como spec Playwright ejecutable y, si hay CLI, los corre (app aún viva).
@@ -1337,15 +1338,15 @@ async function runAgentAgainstLiveApp(context, proj, baseUrl, surfaceOverride, a
       await mkdir(dirname(specPath), { recursive: true });
       const reqTexts = Object.fromEntries(requirements(context.files['spec.md']).map((r) => [r.id.toUpperCase(), r.text]));
       await writeFile(specPath, buildAgentReplaySpec(context.id, baseUrl, result.steps, reqTexts), 'utf8');
-      console.log(c.green(`✓ Spec Playwright (réplica de lo verificado): ${specPath}`));
+      console.log(c.green('✓ ' + t('qaReplaySpecSaved', specPath)));
       const pw = await probePlaywright(proj);
       if (pw.available) {
-        console.log(c.dim(`  Ejecutando con Playwright CLI (${pw.version})...`));
+        console.log(c.dim('  ' + t('qaRunningPlaywright', pw.version)));
         const code = await runPlaywrightSpec(proj, specPath, baseUrl);
-        if (code === 0) console.log(c.green('  ✓ Playwright CLI: todas las pruebas pasaron.'));
+        if (code === 0) console.log(c.green('  ✓ ' + t('qaPlaywrightPass')));
         else {
-          console.log(c.yellow(`  ! Playwright CLI terminó con código ${code} (revisa la salida arriba).`));
-          console.log(c.dim('    Si falta el navegador: npx playwright install chromium'));
+          console.log(c.yellow('  ! ' + t('qaPlaywrightFail', code)));
+          console.log(c.dim('    ' + t('qaPlaywrightInstallHint')));
         }
       } else {
         console.log(c.dim(`  ${pw.detail}`));
@@ -1365,18 +1366,18 @@ async function runQa() {
 
   // 0) Ruta del proyecto: en interactivo se pregunta (default = cwd o el argumento) y se valida.
   if (prompter && !projectArg) {
-    const ans = await prompter.text(`Ruta del proyecto ${c.dim(`[${proj}]`)}:`);
+    const ans = await prompter.text(t('qaPathQ', c.dim(`[${proj}]`)));
     if (ans) proj = resolve(cleanPath(ans));
   }
-  if (!existsSync(proj)) { if (prompter) prompter.close(); throw new Error(`La ruta no existe: ${proj}`); }
+  if (!existsSync(proj)) { if (prompter) prompter.close(); throw new Error(t('pathMissing', proj)); }
 
   console.log('\n' + c.bold('⚙️  chalc qa') + c.dim(`  ·  ${proj}`) + '\n');
 
   // 1) Verificar specs disponibles.
   const specs = await listSpecs(proj);
-  if (!specs.length) { if (prompter) prompter.close(); throw new Error('No encontré specs con spec.md en specs/. Crea o genera una spec antes de ejecutar QA.'); }
+  if (!specs.length) { if (prompter) prompter.close(); throw new Error(t('qaNoSpecs')); }
 
-  console.log(c.bold('Specs disponibles:'));
+  console.log(c.bold(t('qaSpecsAvailable')));
   specs.forEach((id, index) => console.log(`  ${index + 1}. ${id}`));
 
   const docker = await probeDocker();
@@ -1385,40 +1386,40 @@ async function runQa() {
 
   // 2) Spec: por bandera o elegida con buscador (escribe para filtrar, ↑/↓ para moverte).
   let specId = String(flags.spec || flags.feature || '').trim();
-  if (specId && !specs.includes(specId)) { if (prompter) prompter.close(); throw new Error(`La spec "${specId}" no existe. Usa uno de los ids listados.`); }
+  if (specId && !specs.includes(specId)) { if (prompter) prompter.close(); throw new Error(t('qaSpecNotFound', specId)); }
   if (prompter && !specId) {
-    specId = specs[await prompter.select('¿Qué spec quieres validar?', specs.map((id) => ({ label: id })), 0, { search: true })];
+    specId = specs[await prompter.select(t('qaWhichSpecQ'), specs.map((id) => ({ label: id })), 0, { search: true })];
   }
   if (!specId) {
     if (prompter) prompter.close();
-    console.log(c.dim('\n  Elige una con --spec <NNN-feature> para leer su contexto QA.\n'));
+    console.log(c.dim('\n  ' + t('qaPickSpecHint') + '\n'));
     return;
   }
 
   const context = await readSpecContext(proj, specId);
   if (context.duplicateRequirements.length) {
     if (prompter) prompter.close();
-    throw new Error(`La spec repite ids de requisito: ${context.duplicateRequirements.join(', ')}. Corrige los R# antes de generar QA.`);
+    throw new Error(t('qaDupRequirements', context.duplicateRequirements.join(', ')));
   }
-  console.log('\n' + c.bold(`Spec seleccionada: ${context.id}`));
-  console.log(`  Documentos QA: ${Object.keys(context.files).join(', ')}`);
-  console.log(`  Requisitos: ${context.requirements.length ? context.requirements.join(', ') : c.yellow('ninguno detectado')}`);
+  console.log('\n' + c.bold(t('qaSpecSelected', context.id)));
+  console.log('  ' + t('qaDocs', Object.keys(context.files).join(', ')));
+  console.log('  ' + t('qaRequirements', context.requirements.length ? context.requirements.join(', ') : c.yellow(t('qaNoneDetected'))));
   const environments = await findEnvironmentOptions(proj);
-  console.log(`  Entornos detectados: ${environments.length ? environments.map((item) => item.label).join(', ') : c.yellow('ninguno')}`);
+  console.log('  ' + t('qaEnvsDetected', environments.length ? environments.map((item) => item.label).join(', ') : c.yellow(t('qaNone'))));
 
   // Menú principal: el uso normal es guiado; flags solo automatizan CI.
   let qaAction = 'prepare';
   if (prompter && !flags.plan && !flags.up && !flags.agent) {
     const actions = [
-      { label: 'Preparar plan, datos y pruebas QA', value: 'prepare' },
-      { label: 'Preparar y ejecutar QA completo', value: 'run' },
-      { label: 'Ver el último reporte QA', value: 'report' }
+      { label: t('qaActionPrepare'), value: 'prepare' },
+      { label: t('qaActionRun'), value: 'run' },
+      { label: t('qaActionReport'), value: 'report' }
     ];
-    qaAction = actions[await prompter.select('¿Qué quieres hacer con esta spec?', actions, 0)].value;
+    qaAction = actions[await prompter.select(t('qaWhatToDoQ'), actions, 0)].value;
     if (qaAction === 'report') {
       const report = qaResultsPath(proj, context.id);
       if (existsSync(report)) console.log('\n' + await readFile(report, 'utf8'));
-      else console.log(c.yellow('\n! Aún no existe un reporte QA para esta spec.'));
+      else console.log(c.yellow('\n! ' + t('qaNoReportYet')));
       prompter.close();
       return;
     }
@@ -1429,43 +1430,43 @@ async function runQa() {
   try { selectedEnv = selectEnvironment(environments, flags.env); }   // lanza con las opciones válidas si --env no existe
   catch (e) { if (prompter) prompter.close(); throw e; }
   if (prompter && !flags.env && environments.length) {
-    const choices = [...environments.map((item) => ({ label: item.label })), { label: c.dim('Decidir luego') }];
-    const picked = await prompter.select('¿Qué entorno de arranque usará QA?', choices, choices.length - 1);
+    const choices = [...environments.map((item) => ({ label: item.label })), { label: c.dim(t('qaDecideLater')) }];
+    const picked = await prompter.select(t('qaWhichEnvQ'), choices, choices.length - 1);
     selectedEnv = environments[picked] || null;
   }
-  if (selectedEnv) console.log(`  Entorno elegido: ${c.bold(selectedEnv.label)}`);
+  if (selectedEnv) console.log('  ' + t('qaEnvChosen', c.bold(selectedEnv.label)));
   if (selectedEnv?.type === 'compose') selectedEnv = { ...selectedEnv, projectName: qaComposeProjectName(context.id) };
 
   // 4) Plan: por bandera (--plan) o preguntado.
   let createPlan = !!flags.plan || qaAction === 'prepare' || qaAction === 'run';
-  if (prompter && !flags.plan && qaAction !== 'prepare' && qaAction !== 'run') createPlan = await prompter.yesno('¿Crear o actualizar el plan QA desde esta spec?', true);
+  if (prompter && !flags.plan && qaAction !== 'prepare' && qaAction !== 'run') createPlan = await prompter.yesno(t('qaCreatePlanQ'), true);
 
   // 4b) Si el plan ya existe, no se machaca sin permiso (preguntado en interactivo, --force en CI).
   let overwrite = !!flags.force;
   if (createPlan && !overwrite && existsSync(qaPlanPath(proj, context.id))) {
-    if (prompter) overwrite = await prompter.yesno(`Ya existe specs/${context.id}/qa/test-plan.md. ¿Sobrescribirlo?`, false);
+    if (prompter) overwrite = await prompter.yesno(t('qaPlanExistsQ', context.id), false);
   }
 
   // 4c) Datos QA: se preguntan sin leer código. Secretos solo por NOMBRE de variable de entorno.
   let qaInputs = await readQaInputs(proj, context.id);
   if (prompter && (createPlan || !qaInputs)) {
     // Default NO: el agente ya prueba con el plan. Esto es opcional y solo afina rutas/credenciales.
-    const capture = await prompter.yesno(`¿Registrar datos QA opcionales (rutas/credenciales) para los ${context.requirements.length} requisitos?`, false);
+    const capture = await prompter.yesno(t('qaCaptureDataQ', context.requirements.length), false);
     if (capture) {
-      const perCase = await prompter.yesno('¿Definir ruta y resultado por cada requisito? (no = dejarlos pendientes)', false);
+      const perCase = await prompter.yesno(t('qaPerCaseQ'), false);
       const cases = [];
       for (const id of context.requirements) {
         if (perCase) {
-          const path = await prompter.text(`${id}: ruta visible o endpoint público (Enter = pendiente):`);
-          const expected = await prompter.text(`${id}: texto/resultado observable esperado (Enter = pendiente):`);
+          const path = await prompter.text(t('qaCasePathQ', id));
+          const expected = await prompter.text(t('qaCaseExpectedQ', id));
           cases.push({ id, path, expected });
         } else {
           cases.push({ id, path: '', expected: '' });
         }
       }
-      const allowedPaths = (await prompter.text('Rutas públicas permitidas, separadas por coma (Enter = todas):')).split(',').map((s) => s.trim()).filter(Boolean);
-      const allowWriteMethods = await prompter.yesno('¿Autorizar POST/PUT/PATCH en este entorno QA?', false);
-      const secretVars = (await prompter.text('Variables de entorno con credenciales QA (nombres, sin valores; opcional):')).split(',').map((s) => s.trim()).filter(Boolean);
+      const allowedPaths = (await prompter.text(t('qaAllowedPathsQ'))).split(',').map((s) => s.trim()).filter(Boolean);
+      const allowWriteMethods = await prompter.yesno(t('qaAuthorizeWritesQ'), false);
+      const secretVars = (await prompter.text(t('qaSecretVarsQ'))).split(',').map((s) => s.trim()).filter(Boolean);
       qaInputs = { version: 1, cases, allowedPaths, allowWriteMethods, secretVars };
     }
   }
@@ -1474,8 +1475,8 @@ async function runQa() {
   let doAgent = !!flags.agent;
   let doUp = !!flags.up || doAgent;
   if (prompter && !flags.up && !flags.agent && selectedEnv) {
-    doUp = await prompter.yesno(`¿Levantar "${selectedEnv.label}" y verificar que responda?`, qaAction === 'run');
-    if (doUp) doAgent = await prompter.yesno('¿Correr el agente QA contra la app (usa IA/tokens)?', false);
+    doUp = await prompter.yesno(t('qaBringUpQ', selectedEnv.label), qaAction === 'run');
+    if (doUp) doAgent = await prompter.yesno(t('qaRunAgentQ'), false);
   }
   // Si vamos a correr el agente y la app exige auth, se la PEDIMOS aquí (no fallamos en silencio).
   const qaAuth = doAgent ? await promptAuthIfNeeded(prompter, proj) : null;
@@ -1485,54 +1486,54 @@ async function runQa() {
     const urlFlag = String(flags.url || '').trim();
     healthCandidates = urlFlag ? [normalizeQaUrl(urlFlag)] : await guessBaseUrls(proj);
   }
-  if (!interactive && doUp && !allowExternalExec) throw new Error('QA va a ejecutar comandos del proyecto. En modo no interactivo usa --allow-exec.');
+  if (!interactive && doUp && !allowExternalExec) throw new Error(t('qaNeedsExec'));
   if (prompter) prompter.close();
 
   if (qaInputs) {
     const inputsPath = await writeQaInputs(proj, context.id, qaInputs);
-    console.log(c.green(`✓ Datos QA guardados: ${inputsPath}`));
+    console.log(c.green('✓ ' + t('qaInputsSaved', inputsPath)));
     const testsPath = await writeBrowserTests(proj, context, qaInputs);
-    console.log(c.green(`✓ Pruebas Playwright generadas: ${testsPath}`));
+    console.log(c.green('✓ ' + t('qaTestsGenerated', testsPath)));
   }
 
   // Plan (sin early-return: el bring-up debe poder ejecutarse después).
   if (createPlan) {
     const { path, written } = await writeQaPlan(proj, context, selectedEnv, { overwrite });
     if (written) {
-      console.log(c.green(`\n✓ Plan QA creado: ${path}`));
-      console.log(c.dim('  Contiene un caso pendiente por cada R#. Aún no se levantó ningún servicio ni se generaron pasos de navegador inventados.'));
+      console.log(c.green('\n✓ ' + t('qaPlanCreated', path)));
+      console.log(c.dim('  ' + t('qaPendingNote')));
     } else {
-      console.log(c.yellow(`\n! El plan QA ya existe y no se sobrescribió: ${path}`));
-      console.log(c.dim('  Usa --force (o responde sí) para regenerarlo; perderás las ediciones manuales.'));
+      console.log(c.yellow('\n! ' + t('qaPlanExists', path)));
+      console.log(c.dim('  ' + t('qaForceHint')));
     }
   } else {
-    console.log(c.dim('\n  Preflight completado. Usa --plan para crear el plan QA desde los requisitos.'));
+    console.log(c.dim('\n  ' + t('qaPreflightDone')));
   }
 
   if (flags['repair-plan'] && !doAgent) {
     const report = qaResultsPath(proj, context.id);
-    if (!existsSync(report)) throw new Error('No existe qa/results.md para generar repair-plan. Ejecuta primero `chalc qa ... --agent --repair-plan` o genera resultados QA.');
+    if (!existsSync(report)) throw new Error(t('qaNoResults'));
     const result = parseResultsMarkdown(await readFile(report, 'utf8'));
     const reqTexts = Object.fromEntries(requirements(context.files['spec.md']).map((r) => [r.id.toUpperCase(), r.text]));
     const repairPath = join(proj, 'specs', context.id, 'qa', 'repair-plan.md');
     await writeFile(repairPath, buildRepairPlanMarkdown(context.id, { result, requirementTexts: reqTexts }), 'utf8');
-    console.log(c.green(`✓ Plan de reparación: ${repairPath}`));
+    console.log(c.green('✓ ' + t('qaRepairPlanSaved', repairPath)));
   }
 
   // 6) Ejecuta el bring-up (y, si se pidió, el agente) al final, con stdin ya liberado.
   if (doUp) {
-    if (!selectedEnv) console.log(c.yellow('\n! No hay entorno seleccionado (elige uno con --env) — omito el bring-up.'));
+    if (!selectedEnv) console.log(c.yellow('\n! ' + t('qaNoEnvSelected')));
     else if (doAgent) {
       const { health, stop } = await startEnvironment(selectedEnv, proj, healthCandidates);
       try {
         if (health.ok) await runAgentAgainstLiveApp(context, proj, health.url, String(flags.surface || '').trim() || null, qaAuth);
-        else console.log(c.yellow('  La app no respondió; no ejecuto el agente. Pasa --url si usa un puerto fijo.'));
+        else console.log(c.yellow('  ' + t('qaAppNoResponse')));
       } finally {
         await stop();
       }
     } else {
       await bringUpEnvironment(selectedEnv, proj, healthCandidates);
-      console.log(c.dim('  Para probar de verdad, agrega --agent (levanta, prueba con IA y baja).'));
+      console.log(c.dim('  ' + t('qaUpHint')));
     }
   }
   console.log('');

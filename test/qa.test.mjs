@@ -134,7 +134,7 @@ test('QA selects an environment by its key or label, and fails loudly on an unkn
   assert.equal(selectEnvironment(options, 'qa:up'), options[1]);
   assert.equal(selectEnvironment(options, 'compose.yaml'), options[0]);
   assert.equal(selectEnvironment(options, 'npm run qa:up'), options[1]);
-  assert.throws(() => selectEnvironment(options, 'nope'), /no detectado.*compose\.yaml, qa:up/s);
+  assert.throws(() => selectEnvironment(options, 'nope'), /(no detectado|not detected).*compose\.yaml, qa:up/s);
 });
 
 test('QA plan records the chosen launch entry point only when one is selected', () => {
@@ -249,8 +249,8 @@ test('QA derives start and teardown commands from an environment without running
     command: 'docker', args: ['compose', '--project-name', 'chalc-qa', '-f', 'compose.yaml', 'up', '-d'],
     down: { command: 'docker', args: ['compose', '--project-name', 'chalc-qa', '-f', 'compose.yaml', 'down'] }
   });
-  assert.throws(() => buildStartCommand(null), /No hay entorno/);
-  assert.throws(() => buildStartCommand({ type: 'command', command: 'make serve' }), /No sé cómo levantar/);
+  assert.throws(() => buildStartCommand(null), /No hay entorno|No environment selected/);
+  assert.throws(() => buildStartCommand({ type: 'command', command: 'make serve' }), /No sé cómo levantar|don't know how to start/);
 });
 
 test('buildStartCommand forces a known port so chalc knows the exact URL', () => {

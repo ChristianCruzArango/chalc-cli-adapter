@@ -28,11 +28,14 @@ test('parseAgentMessage strips fences and extracts the JSON object', () => {
 
 test('normalizeVerdicts guarantees one verdict per requirement and normalizes status/id', () => {
   const out = normalizeVerdicts([{ id: 'r1', status: 'pass', evidence: 'ok' }, { id: 'R2', status: 'weird' }], ['R1', 'R2', 'R3']);
-  assert.deepEqual(out, [
-    { id: 'R1', status: 'PASS', evidence: 'ok' },
-    { id: 'R2', status: 'BLOCKED', evidence: '' },
-    { id: 'R3', status: 'BLOCKED', evidence: 'El agente no emitió veredicto para este requisito.' }
+  assert.deepEqual(out.map(({ id, status }) => ({ id, status })), [
+    { id: 'R1', status: 'PASS' },
+    { id: 'R2', status: 'BLOCKED' },
+    { id: 'R3', status: 'BLOCKED' }
   ]);
+  assert.equal(out[0].evidence, 'ok');
+  assert.equal(out[1].evidence, '');
+  assert.match(out[2].evidence, /no emitió veredicto|did not issue a verdict/);
 });
 
 test('normalizeVerdicts accepts NOT_APPLICABLE only when explicitly emitted', () => {
@@ -97,10 +100,12 @@ test('runQaAgent loops: executes proposed actions, then returns normalized verdi
 
   assert.equal(executed.length, 1);
   assert.equal(executed[0].path, '/health');
-  assert.deepEqual(result.verdicts, [
-    { id: 'R1', status: 'PASS', evidence: 'GET /health 200' },
-    { id: 'R2', status: 'BLOCKED', evidence: 'El agente no emitió veredicto para este requisito.' }
+  assert.deepEqual(result.verdicts.map(({ id, status }) => ({ id, status })), [
+    { id: 'R1', status: 'PASS' },
+    { id: 'R2', status: 'BLOCKED' }
   ]);
+  assert.equal(result.verdicts[0].evidence, 'GET /health 200');
+  assert.match(result.verdicts[1].evidence, /no emitió veredicto|did not issue a verdict/);
 });
 
 test('buildResultsMarkdown renders one traceable row per verdict and escapes pipes', () => {
@@ -108,8 +113,8 @@ test('buildResultsMarkdown renders one traceable row per verdict and escapes pip
     surface: 'api', baseUrl: 'http://localhost:3000',
     result: { steps: [{}], error: null, verdicts: [{ id: 'R1', status: 'PASS', evidence: 'a | b' }] }
   });
-  assert.match(md, /# Resultados QA — 001-login/);
-  assert.match(md, /Superficie: \*\*api\*\*/);
+  assert.match(md, /# (Resultados QA|QA results) — 001-login/);
+  assert.match(md, /(Superficie|Surface): \*\*api\*\*/);
   assert.match(md, /\| R1 \| PASS \| a \\\| b \|/);
 });
 
@@ -161,12 +166,12 @@ test('runQaAgent compacts bulky observations with CCR and serves recall from cac
 
 test('runQaAgent stops on invalid JSON and on step exhaustion, never fabricating a PASS', async () => {
   const bad = await runQaAgent({ surface: 'api', baseUrl: 'x', plan: 'p', requirementIds: ['R1'], chatImpl: async () => 'not json', executor: async () => ({}) });
-  assert.match(bad.error, /JSON inválido/);
+  assert.match(bad.error, /JSON inválido|invalid JSON/);
   assert.equal(bad.verdicts[0].status, 'BLOCKED');
 
   const looping = '{"done":false,"thought":"otra vez","action":{"type":"http","path":"/x"}}';
   const exhausted = await runQaAgent({ surface: 'api', baseUrl: 'x', plan: 'p', requirementIds: ['R1'], chatImpl: async () => looping, executor: async () => ({ ok: true }), maxSteps: 3 });
-  assert.match(exhausted.error, /agotaron los 3 pasos/);
+  assert.match(exhausted.error, /agotaron los 3 pasos|Ran out of the 3 steps/);
   assert.equal(exhausted.steps.length, 3);
   assert.equal(exhausted.verdicts[0].status, 'BLOCKED');
 });

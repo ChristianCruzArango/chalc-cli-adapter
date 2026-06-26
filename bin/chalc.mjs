@@ -27,18 +27,22 @@ import { spawn } from 'node:child_process';
 import { stdin, stdout } from 'node:process';
 import { installSkill } from '../lib/install.mjs';
 import { t, lang } from '../lib/i18n.mjs';
-import { PROVIDERS, loadConfig, saveConfig, isConfigured, CONFIG_PATH } from '../lib/ai.mjs';
+import { PROVIDERS, configForTask, loadConfig, modelForTask, saveConfig, isConfigured, CONFIG_PATH } from '../lib/ai.mjs';
 import { readDocument } from '../lib/docread.mjs';
 import { fetchAzureDevOps, fetchJira, fetchUrl } from '../lib/sources.mjs';
 import { buildPrompt, generateSpec } from '../lib/specgen.mjs';
 import { assertSafeId, isSafeId } from '../lib/ids.mjs';
 import { parseArgs } from '../lib/cli/args.mjs';
 import { buildStartCommand, detectAuth, detectSurface, findEnvironmentOptions, guessBaseUrls, listSpecs, normalizeQaUrl, probeDocker, probePlaywright, qaAgentTestPath, qaComposeProjectName, qaPlanPath, qaResultsPath, readQaInputs, readSpecContext, requirements, selectEnvironment, writeBrowserTests, writeQaInputs, writeQaPlan } from '../lib/qa.mjs';
-import { buildAgentReplaySpec, buildResultsMarkdown, createBrowserExecutor, httpExecutor, runQaAgent } from '../lib/qaagent.mjs';
+import { buildAgentReplaySpec, buildRepairPlanMarkdown, buildResultsMarkdown, createBrowserExecutor, httpExecutor, parseResultsMarkdown, runQaAgent } from '../lib/qaagent.mjs';
+import { appendAiTrace, makeAiTrace } from '../lib/aitrace.mjs';
+import { runLocalAiEvals } from '../lib/aieval.mjs';
+import { summarizeValidation } from '../lib/specvalidate.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHALC_ROOT = resolve(HERE, '..');
 const CATALOG = join(CHALC_ROOT, 'catalog');
+const PROFILES_DIR = join(CATALOG, 'profiles');
 const RULES_DIR = join(CHALC_ROOT, 'rules');
 const METHODS_DIR = join(CATALOG, 'methods');
 const TARGETS_DIR = join(CHALC_ROOT, 'targets');
@@ -58,6 +62,8 @@ const verb = ['install', 'add'].includes(first) ? 'install'
     : ['doctor', 'check'].includes(first) ? 'doctor'
       : ['configure', 'config', 'setup'].includes(first) ? 'configure'
         : ['config-ia', 'config-ai', 'configia', 'ai', 'provider'].includes(first) ? 'ai'
+          : ['ai-doctor', 'doctor-ia'].includes(first) ? 'aidoctor'
+            : ['eval-ia', 'eval-ai', 'ai-eval'].includes(first) ? 'aieval'
           : ['spec-ia', 'spec-ai', 'spec-gen', 'specgen', 'gen'].includes(first) ? 'specgen'
       : ['spec', 'specs', 'feature'].includes(first) ? 'spec'
         : ['qa', 'quality'].includes(first) ? 'qa'
@@ -177,6 +183,39 @@ async function loadTargets() {
     const mod = await import(join(TARGETS_DIR, file));
     return { id, label: mod.label || id };
   }));
+}
+
+async function loadAiProfile(id = 'chalc-default') {
+  const safe = assertSafeId(id || 'chalc-default', 'profile id');
+  const file = join(PROFILES_DIR, `${safe}.json`);
+  if (!existsSync(file)) return null;
+  const profile = JSON.parse(await readFile(file, 'utf8'));
+  profile.id = assertSafeId(profile.id || safe, 'profile id');
+  return profile;
+}
+
+async function listAiProfiles() {
+  if (!existsSync(PROFILES_DIR)) return [];
+  const files = (await readdir(PROFILES_DIR)).filter((f) => f.endsWith('.json'));
+  return Promise.all(files.map(async (file) => JSON.parse(await readFile(join(PROFILES_DIR, file), 'utf8'))));
+}
+
+function applyProfileModels(cfg, profile) {
+  if (!profile?.models || !cfg?.provider) return cfg;
+  const models = { ...(cfg.models || {}) };
+  for (const task of ['spec', 'qa', 'repair']) {
+    if (!models[task] && profile.models?.[task]?.[cfg.provider]) models[task] = profile.models[task][cfg.provider];
+  }
+  return { ...cfg, profile: profile.id, models };
+}
+
+async function resolveAiTaskConfig(task) {
+  let cfg = await loadConfig();
+  const profile = await loadAiProfile(String(flags.profile || cfg.profile || 'chalc-default'));
+  cfg = applyProfileModels(cfg, profile);
+  const flagName = `${task}-model`;
+  if (flags[flagName]) cfg.models = { ...(cfg.models || {}), [task]: String(flags[flagName]) };
+  return configForTask(cfg, task);
 }
 
 // Cablea un skill a una regla (esto es lo que llena el sistema con el uso).
@@ -847,6 +886,7 @@ async function runDoctor() {
     : [];
   const skillSet = new Set(skillIds);
   const mcpFiles = await loadJsonFiles(join(CATALOG, 'mcp'));
+  const profileFiles = await loadJsonFiles(PROFILES_DIR);
   const mcpIds = mcpFiles.filter((m) => m.json?.id).map((m) => m.json.id);
   const mcpSet = new Set(mcpIds);
   for (const id of duplicates(rules.map((r) => r.id).filter(Boolean))) issues.push(makeIssue('error', 'rules', `id duplicado "${id}"`));
@@ -935,6 +975,23 @@ async function runDoctor() {
         }
       }
     }
+    for (const p of profileFiles) {
+      if (p.error) {
+        issues.push(makeIssue('error', 'profiles', `${p.file} no es JSON válido`, p.error.message));
+        continue;
+      }
+      const profile = p.json;
+      if (!profile.id) issues.push(makeIssue('error', 'profiles', `${p.file} no tiene id`));
+      else if (!isSafeId(profile.id)) issues.push(makeIssue('error', 'profiles', `${p.file} tiene id inseguro "${profile.id}"`));
+      if (profile.id && p.file !== `${profile.id}.json`) issues.push(makeIssue('warn', 'profiles', `${p.file} no coincide con id "${profile.id}"`));
+      for (const task of ['spec', 'qa', 'repair']) {
+        const entry = profile.models?.[task];
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) issues.push(makeIssue('error', 'profiles', `${profile.id || p.file}.models.${task} debe mapear proveedor→modelo`));
+        else {
+          for (const provider of Object.keys(entry)) if (!PROVIDERS[provider]) issues.push(makeIssue('warn', 'profiles', `${profile.id}.models.${task} usa proveedor desconocido "${provider}"`));
+        }
+      }
+    }
   }
 
   if (runMethods) {
@@ -1000,6 +1057,7 @@ async function runDoctor() {
   console.log(`  rules   : ${ruleFiles.filter((r) => r.json).length}`);
   console.log(`  skills  : ${skillIds.length}`);
   console.log(`  mcp     : ${mcpIds.length}`);
+  console.log(`  profiles: ${profileFiles.filter((p) => p.json).length}`);
   console.log(`  targets : ${existsSync(TARGETS_DIR) ? (await readdir(TARGETS_DIR)).filter((f) => f.endsWith('.mjs')).length : 0}`);
   console.log(`  errores : ${errors.length}`);
   console.log(`  avisos  : ${warnings.length}\n`);
@@ -1162,7 +1220,7 @@ function runPlaywrightSpec(proj, testFile, baseUrl) {
 
 // Corre el agente QA contra la app ya viva: detecta/usa superficie, ejecuta el loop y escribe results.md.
 async function runAgentAgainstLiveApp(context, proj, baseUrl, surfaceOverride, auth) {
-  const cfg = await loadConfig();
+  const cfg = await resolveAiTaskConfig('qa');
   if (!isConfigured(cfg)) throw new Error('El agente QA usa IA. Configúrala primero con: chalc config-ia');
 
   const detected = await detectSurface(proj);
@@ -1217,9 +1275,34 @@ async function runAgentAgainstLiveApp(context, proj, baseUrl, surfaceOverride, a
     const resultsPath = qaResultsPath(proj, context.id);
     await mkdir(dirname(resultsPath), { recursive: true });   // el directorio qa/ puede no existir si no se creó plan
     await writeFile(resultsPath, md, 'utf8');
+    await appendAiTrace(proj, context.id, makeAiTrace({
+      task: 'qa',
+      provider: cfg.provider,
+      model: cfg.model,
+      system: plan,
+      user: `${surface} ${baseUrl}`,
+      output: JSON.stringify(result.verdicts || []),
+      extra: { steps: result.steps?.length || 0, ccr: result.ccr || null }
+    }));
     const pass = result.verdicts.filter((v) => v.status === 'PASS').length;
     console.log(c.green(`\n✓ Resultados QA: ${qaResultsPath(proj, context.id)}`));
     console.log(`  ${pass}/${result.verdicts.length} requisitos en PASS.` + (result.error ? c.yellow(`  (${result.error})`) : ''));
+    if (flags['repair-plan']) {
+      const repairCfg = await resolveAiTaskConfig('repair');
+      const reqTexts = Object.fromEntries(requirements(context.files['spec.md']).map((r) => [r.id.toUpperCase(), r.text]));
+      const repairPath = join(proj, 'specs', context.id, 'qa', 'repair-plan.md');
+      await writeFile(repairPath, buildRepairPlanMarkdown(context.id, { result, requirementTexts: reqTexts }), 'utf8');
+      await appendAiTrace(proj, context.id, makeAiTrace({
+        task: 'repair',
+        provider: repairCfg.provider,
+        model: repairCfg.model,
+        system: md,
+        user: 'build repair plan from QA results',
+        output: repairPath,
+        extra: { source: 'deterministic' }
+      }));
+      console.log(c.green(`✓ Plan de reparación: ${repairPath}`));
+    }
 
     // Web: escribe los pasos verificados como spec Playwright ejecutable y, si hay CLI, los corre (app aún viva).
     if (surface === 'web') {
@@ -1397,6 +1480,16 @@ async function runQa() {
     }
   } else {
     console.log(c.dim('\n  Preflight completado. Usa --plan para crear el plan QA desde los requisitos.'));
+  }
+
+  if (flags['repair-plan'] && !doAgent) {
+    const report = qaResultsPath(proj, context.id);
+    if (!existsSync(report)) throw new Error('No existe qa/results.md para generar repair-plan. Ejecuta primero `chalc qa ... --agent --repair-plan` o genera resultados QA.');
+    const result = parseResultsMarkdown(await readFile(report, 'utf8'));
+    const reqTexts = Object.fromEntries(requirements(context.files['spec.md']).map((r) => [r.id.toUpperCase(), r.text]));
+    const repairPath = join(proj, 'specs', context.id, 'qa', 'repair-plan.md');
+    await writeFile(repairPath, buildRepairPlanMarkdown(context.id, { result, requirementTexts: reqTexts }), 'utf8');
+    console.log(c.green(`✓ Plan de reparación: ${repairPath}`));
   }
 
   // 6) Ejecuta el bring-up (y, si se pidió, el agente) al final, con stdin ya liberado.
@@ -1610,30 +1703,79 @@ async function runApply() {
 async function configureAi(prompter) {
   console.log(c.dim('  ' + t('aiIntro')) + '\n');
   const cfg = await loadConfig();
+  const profiles = await listAiProfiles();
   const ids = Object.keys(PROVIDERS);
   const di = Math.max(0, ids.indexOf(cfg.provider));
   const provider = ids[await prompter.select(t('aiProviderQ'), ids.map((id) => ({ label: `${id} — ${PROVIDERS[id].label}` })), di)];
   const prov = PROVIDERS[provider];
   const out = { provider };
+  if (profiles.length) {
+    const profileIds = profiles.map((p) => p.id);
+    const defaultProfile = String(flags.profile || cfg.profile || 'chalc-default');
+    const pIndex = Math.max(0, profileIds.indexOf(defaultProfile));
+    const picked = profiles[await prompter.select('Perfil de IA por tarea', profiles.map((p) => ({ label: `${p.id} — ${p.description || 'sin descripción'}` })), pIndex)];
+    out.profile = picked.id;
+  }
   if (prov.needsBaseURL) out.baseURL = (await prompter.text(t('aiBaseUrlQ') + ':')).trim() || cfg.baseURL || '';
   if (prov.needsKey) out.apiKey = (await prompter.secret(t('aiKeyQ') + ':')) || cfg.apiKey || '';
   else console.log(c.dim('  ' + t('aiNoKeyNeeded')));
   const modelQ = prov.needsDeployment ? t('aiDeploymentQ') : t('aiModelQ', prov.defaultModel);
   out.model = (await prompter.text(modelQ + ':')).trim() || cfg.model || prov.defaultModel;
+  const profile = await loadAiProfile(out.profile || 'chalc-default');
+  const profiled = applyProfileModels({ ...out, models: cfg.models || {} }, profile);
+  const askPerTask = await prompter.yesno('¿Personalizar modelos por tarea (spec/qa/repair)?', false);
+  out.models = { ...(profiled.models || {}) };
+  if (askPerTask) {
+    out.models.spec = (await prompter.text(`Modelo para spec-ia [${out.models.spec || out.model}]:`)).trim() || out.models.spec || out.model;
+    out.models.qa = (await prompter.text(`Modelo para qa --agent [${out.models.qa || out.model}]:`)).trim() || out.models.qa || out.model;
+    out.models.repair = (await prompter.text(`Modelo para repair-plan [${out.models.repair || out.model}]:`)).trim() || out.models.repair || out.model;
+  }
   if (provider === 'azure') out.apiVersion = (await prompter.text(t('aiVersionQ', '2024-10-21') + ':')).trim() || cfg.apiVersion || '2024-10-21';
   const path = await saveConfig(out);
   console.log('\n' + c.green('✓ ' + t('aiSaved', path)));
-  console.log(c.dim(`  ${provider} · ${out.model}${out.apiKey ? ' · key ' + out.apiKey.slice(0, 4) + '…' : ''}\n`));
+  console.log(c.dim(`  ${provider} · default ${out.model} · spec ${out.models?.spec || out.model} · qa ${out.models?.qa || out.model}${out.apiKey ? ' · key ' + out.apiKey.slice(0, 4) + '…' : ''}\n`));
   return out;
 }
 
 // ---------- comando: chalc config-ia (configurar el cerebro: proveedor + key) ----------
 async function runAi() {
   console.log('\n' + c.bold('⚙️  chalc config-ia') + '\n');
+  if (flags.doctor || positional[1] === 'doctor') return runAiDoctor();
   if (!interactive) { console.error(c.red('✗ ' + t('aiNeedsTty'))); process.exit(1); }
   const prompter = makePrompter();
   await configureAi(prompter);
   prompter.close();
+}
+
+async function runAiDoctor() {
+  console.log('\n' + c.bold('⚙️  chalc ai-doctor') + '\n');
+  let cfg = await loadConfig();
+  const profile = await loadAiProfile(String(flags.profile || cfg.profile || 'chalc-default'));
+  cfg = applyProfileModels(cfg, profile);
+  if (!isConfigured(cfg)) {
+    console.log(c.red('✗ IA no configurada. Ejecuta `chalc config-ia` o define CHALC_PROVIDER/CHALC_API_KEY.'));
+    process.exit(1);
+  }
+  const prov = PROVIDERS[cfg.provider];
+  console.log(`  Proveedor : ${cfg.provider} — ${prov.label}`);
+  console.log(`  Base URL  : ${cfg.baseURL || prov.baseURL}`);
+  console.log(`  Perfil    : ${cfg.profile || '—'}`);
+  console.log(`  Modelos   : spec=${modelForTask(cfg, 'spec')} · qa=${modelForTask(cfg, 'qa')} · repair=${modelForTask(cfg, 'repair')}`);
+  if (prov.needsKey && cfg.apiKey) console.log(`  API key   : ${cfg.apiKey.slice(0, 4)}…${cfg.apiKey.slice(-2)}`);
+  console.log(c.green('\n✓ Configuración local consistente.'));
+  console.log(c.dim('  Para una prueba live, ejecuta un comando real con --dry-run primero y luego sin --dry-run.\n'));
+}
+
+async function runAiEval() {
+  console.log('\n' + c.bold('⚙️  chalc eval-ia') + c.dim('  ·  local') + '\n');
+  const checks = runLocalAiEvals();
+  for (const check of checks) {
+    const mark = check.ok ? c.green('✓') : c.red('✗');
+    console.log(`  ${mark} ${check.name}${check.error ? c.dim(` — ${check.error}`) : ''}`);
+  }
+  const failed = checks.filter((x) => !x.ok);
+  console.log(`\n  ${checks.length - failed.length}/${checks.length} evals pasaron.\n`);
+  if (failed.length) process.exit(1);
 }
 
 // ---------- comando: chalc spec-gen (documento → SDD con IA) ----------
@@ -1721,10 +1863,10 @@ function stopSpinner(id) {
 async function runSpecGen() {
   console.log('\n' + c.bold('⚙️  chalc spec-ia') + (dryRun ? c.dim('  (dry-run)') : '') + '\n');
   const prompter = interactive ? makePrompter() : null;
-  let cfg = await loadConfig();
+  let cfg = await resolveAiTaskConfig('spec');
   if (!dryRun && !isConfigured(cfg)) {
     if (!prompter) { console.error(c.red('✗ ' + t('aiNotConfigured'))); process.exit(1); }
-    cfg = await configureAi(prompter);   // primera vez: configura la IA aquí mismo
+    cfg = configForTask(await configureAi(prompter), 'spec');   // primera vez: configura la IA aquí mismo
   }
 
   let proj = positional[1] ? resolve(cleanPath(positional[1])) : process.cwd();
@@ -1835,6 +1977,15 @@ async function runSpecGen() {
   let result;
   try { result = await generateSpec(cfg, opts); }
   finally { stopSpinner(spin); }
+  const validation = summarizeValidation(result.validation || []);
+  if (result.validation?.length) {
+    console.log(c.yellow(`\n! Validación SDD: ${validation.errors} error(es), ${validation.warnings} aviso(s)`));
+    for (const issue of result.validation.slice(0, 8)) {
+      const mark = issue.level === 'error' ? c.red('✗') : c.yellow('!');
+      console.log(`  ${mark} ${issue.message}`);
+    }
+    if (validation.errors) throw new Error('La spec generada no pasó validación. Ajusta el documento fuente o reintenta con más contexto.');
+  }
 
   const feat = (feature || result.feature || 'feature').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'feature';
   const num = await nextFeatureNumber(specsDir);
@@ -1848,10 +1999,19 @@ async function runSpecGen() {
   for (const [name, content] of Object.entries(result.files)) {
     await writeFile(join(dest, name), String(content).replace(/\s*$/, '') + '\n');
   }
+  await appendAiTrace(proj, `${num}-${feat}`, makeAiTrace({
+    task: 'spec',
+    provider: cfg.provider,
+    model: cfg.model,
+    system: result.trace?.system,
+    user: result.trace?.user,
+    output: result.trace?.raw,
+    extra: { validation }
+  }));
   console.log('\n' + c.green('✓ ' + t('specWritten', rel)));
   console.log('\n' + c.bold(t('handoff')) + '\n');
   console.log(c.cyan(handoffCommand(rel, equippedSkills, specLang)) + '\n');
 }
 
-(verb === 'install' ? runInstall() : verb === 'inspect' ? runInspect() : verb === 'doctor' ? runDoctor() : verb === 'configure' ? runConfigure() : verb === 'ai' ? runAi() : verb === 'specgen' ? runSpecGen() : verb === 'spec' ? runSpec() : verb === 'qa' ? runQa() : runApply())
+(verb === 'install' ? runInstall() : verb === 'inspect' ? runInspect() : verb === 'doctor' ? runDoctor() : verb === 'configure' ? runConfigure() : verb === 'ai' ? runAi() : verb === 'aidoctor' ? runAiDoctor() : verb === 'aieval' ? runAiEval() : verb === 'specgen' ? runSpecGen() : verb === 'spec' ? runSpec() : verb === 'qa' ? runQa() : runApply())
   .catch((err) => { console.error(c.red('✗ ' + err.message)); process.exit(1); });

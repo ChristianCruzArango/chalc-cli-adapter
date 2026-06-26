@@ -25,3 +25,12 @@ test('parseArgs maps --no-ccr to the ccr capability flag', () => {
   const { flags } = parseArgs(['--no-ccr']);
   assert.equal(flags.ccr, false);
 });
+
+test('parseArgs accepts AI workflow flags', () => {
+  const { flags } = parseArgs(['qa', '--repair-plan', '--profile', 'chalc-default', '--spec-model', 'gpt-x', '--qa-model', 'fast-x', '--repair-model', 'repair-x']);
+  assert.equal(flags['repair-plan'], true);
+  assert.equal(flags.profile, 'chalc-default');
+  assert.equal(flags['spec-model'], 'gpt-x');
+  assert.equal(flags['qa-model'], 'fast-x');
+  assert.equal(flags['repair-model'], 'repair-x');
+});

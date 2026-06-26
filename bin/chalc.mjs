@@ -38,6 +38,9 @@ import { buildAgentReplaySpec, buildRepairPlanMarkdown, buildResultsMarkdown, cr
 import { appendAiTrace, makeAiTrace } from '../lib/aitrace.mjs';
 import { runLocalAiEvals } from '../lib/aieval.mjs';
 import { summarizeValidation } from '../lib/specvalidate.mjs';
+import { analyzeProjectProposal, architectureSkills, buildArchitectureDecision, getStack, listStacks, MANDATORY_DESIGN_PRINCIPLES, scaffoldSteps, slugifyProjectName, suggestArchitectures, verifySteps } from '../lib/init.mjs';
+import { reshapeProject } from '../lib/init-scaffold.mjs';
+import { analyzeArchitectureWithAi } from '../lib/initai.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHALC_ROOT = resolve(HERE, '..');
@@ -57,7 +60,8 @@ const DETECT_SKIP_DIRS = new Set([
 const argv = process.argv.slice(2);
 const { flags, positional } = parseArgs(argv);
 const first = (positional[0] || '').toLowerCase();
-const verb = ['install', 'add'].includes(first) ? 'install'
+const verb = ['init', 'new', 'create'].includes(first) ? 'init'
+  : ['install', 'add'].includes(first) ? 'install'
   : ['inspect', 'explain'].includes(first) ? 'inspect'
     : ['doctor', 'check'].includes(first) ? 'doctor'
       : ['configure', 'config', 'setup'].includes(first) ? 'configure'
@@ -550,6 +554,28 @@ async function equipForSpec(proj, mode, targetName, specLang) {
   const target = existsSync(targetFile) ? await import(targetFile) : await import(join(TARGETS_DIR, 'claude.mjs'));
   await target.apply({ projectPath: proj, CATALOG, skills, mcps, methods, stacks, dryRun: false });
   return skills;
+}
+
+async function equipCreatedProject(proj, { targetName = 'claude', methodMode = 'lite', extraSkills = [] } = {}) {
+  targetName = assertSafeId(targetName, 'target');
+  const ctx = await detectContext(proj);
+  const rules = await loadJsonDir(RULES_DIR);
+  const matched = matchRules(rules, ctx);
+  const stacks = matched.filter((r) => !r.always);
+  const skills = [...new Set([...matched.flatMap((r) => r.skills || []), ...extraSkills])];
+  const mcpIds = [...new Set(matched.flatMap((r) => r.mcp || []))];
+  const mcps = await Promise.all(mcpIds.map(async (id) => {
+    const def = await loadMcp(id);
+    return { id: def.id, description: def.description, server: deepSub(def.server, { PROJECT: proj }) };
+  }));
+  const sdd = (await loadMethods()).find((x) => x.id === 'sdd');
+  const m = sdd && (sdd.modes.find((x) => x.id === methodMode) || sdd.modes[0]);
+  const methods = m ? [{ id: sdd.id, label: sdd.label, mode: m.id, scaffoldDir: m.scaffoldDir, rulesText: m.rulesText }] : [];
+  const targetFile = join(TARGETS_DIR, `${targetName}.mjs`);
+  if (!existsSync(targetFile)) throw new Error(`Target no existe: ${targetName}`);
+  const target = await import(targetFile);
+  const applied = await target.apply({ projectPath: proj, CATALOG, skills, mcps, methods, stacks, dryRun: false });
+  return { skills, mcps, methods, stacks, plan: applied.plan };
 }
 
 function makeIssue(level, area, message, detail = '') {
@@ -1511,6 +1537,170 @@ async function runQa() {
   console.log('');
 }
 
+// ---------- comando: chalc init ----------
+// Crea un proyecto desde cero con decisión arquitectónica guiada y luego lo equipa con Chalc.
+// Corre un paso del scaffolder/verify con salida visible. cwd: 'project' = dentro de <dest>; si no, en el padre.
+function runInitStep(step, { parentDir, projectDir }) {
+  return new Promise((res) => {
+    const cwd = step.cwd === 'project' ? projectDir : parentDir;
+    const child = spawn(step.command, step.args, { cwd, stdio: 'inherit', env: { ...process.env, NG_CLI_ANALYTICS: 'false' } });
+    child.on('error', (e) => res({ code: -1, error: e }));
+    child.on('exit', (code) => res({ code: code ?? -1 }));
+  });
+}
+
+async function runInit() {
+  console.log('\n' + c.bold('⚙️  chalc init') + (dryRun ? c.dim('  (dry-run)') : '') + '\n');
+  const prompter = interactive ? makePrompter() : null;
+  const stacks = listStacks();
+
+  // 1) Stack (lenguaje/framework).
+  let stackId = String(positional[1] || flags.stack || '').trim().toLowerCase();
+  if (prompter && !stackId) {
+    stackId = stacks[await prompter.select('¿Qué lenguaje/framework quieres usar?', stacks.map((s) => ({ label: s.label })), 0)].id;
+  }
+  if (!stackId) stackId = 'angular';
+  if (!getStack(stackId)) {
+    if (prompter) prompter.close();
+    throw new Error(`Stack no soportado: ${stackId}. Disponibles: ${stacks.map((s) => s.id).join(', ')}`);
+  }
+
+  // 2) Nombre del proyecto.
+  let projectName = slugifyProjectName(flags.name || positional[2] || '');
+  if (prompter && (!projectName || projectName === 'chalc-app')) {
+    projectName = slugifyProjectName(await prompter.text('Nombre del proyecto:'));
+  }
+  if (!projectName) projectName = 'chalc-app';
+
+  // 3) Propuesta: texto o documento (Word/PDF/MD/TXT) → reusa la ingesta de spec-ia.
+  let proposal = String(flags.description || '').trim();
+  if (flags.doc) proposal = await readDocument(resolve(cleanPath(String(flags.doc))));
+  if (prompter && !proposal) {
+    const sources = [
+      { label: 'Describir aquí la idea', value: 'text' },
+      { label: 'Leer Word/PDF/Markdown/TXT', value: 'file' }
+    ];
+    const source = sources[await prompter.select('¿Cómo quieres darle contexto a Chalc?', sources, 0)].value;
+    if (source === 'file') proposal = await readDocument(resolve(cleanPath(await prompter.text('Ruta del archivo:'))));
+    else proposal = await prompter.text('¿Qué proyecto quieres construir?');
+  }
+  if (!proposal) proposal = projectName;
+
+  // 4) Arquitectura: chalc sugiere (calibrada), el usuario decide.
+  const analysis = analyzeProjectProposal(proposal);
+  const suggestions = suggestArchitectures(stackId, analysis);
+  let recommendedIndex = Math.max(0, suggestions.findIndex((item) => item.recommended));
+  let architectureId = String(flags.architecture || '').trim();
+
+  // 4b) Opt-in IA: lee la propuesta a fondo y sugiere (modelo económico + CCR para no quemar tokens en docs grandes).
+  let aiHint = null;
+  let useAi = !!flags.ai;
+  if (!architectureId && prompter && !flags.ai) useAi = await prompter.yesno('¿Que la IA analice la propuesta para sugerir arquitectura? (usa tokens, con CCR)', false);
+  if (!architectureId && useAi) {
+    const cfg = await loadConfig();
+    if (!isConfigured(cfg)) console.log(c.yellow('  ! IA no configurada (chalc config-ia) — uso el análisis determinista.'));
+    else {
+      console.log(c.dim('  Analizando la propuesta con IA (CCR activo)...'));
+      try {
+        aiHint = await analyzeArchitectureWithAi({ cfg, stackId, proposal, principles: MANDATORY_DESIGN_PRINCIPLES });
+        const idx = suggestions.findIndex((s) => s.id === aiHint.architectureId);
+        if (idx >= 0) recommendedIndex = idx;
+        console.log('\n' + c.bold('Sugerencia de la IA') + c.dim(aiHint.source === 'fallback' ? '  (cayó a determinista)' : ''));
+        console.log(`  Arquitectura: ${c.bold(aiHint.architectureId)}`);
+        if (aiHint.reasoning) console.log(`  Porqué: ${aiHint.reasoning}`);
+        if (aiHint.clarifications?.length) console.log(c.dim(`  A confirmar: ${aiHint.clarifications.join(' · ')}`));
+        if (aiHint.ccr) console.log(c.dim(`  CCR: ${aiHint.ccr.entries} ref(s), ~${aiHint.ccr.charsSaved} caracteres diferidos`));
+      } catch (e) { console.log(c.yellow(`  ! La IA falló (${e.message}); uso el análisis determinista.`)); }
+    }
+  }
+
+  if (prompter && !architectureId) {
+    console.log('\n' + c.bold('Lectura de la propuesta'));
+    console.log(`  Tipo: ${analysis.type}`);
+    console.log(`  Complejidad: ${analysis.complexity}`);
+    console.log(`  Señales: ${analysis.signals.length ? analysis.signals.join(', ') : 'sin señales fuertes'}`);
+    if (analysis.missing.length) console.log(c.dim(`  Por confirmar más adelante: ${analysis.missing.join(', ')}`));
+    console.log(c.dim('\n  Clean Code, SOLID y arquitectura modular se aplican siempre.\n'));
+    const idx = await prompter.select('¿Qué arquitectura quieres usar?', suggestions.map((item) => ({
+      label: `${item.label}${item.recommended ? ' (recomendada)' : ''}${aiHint && aiHint.architectureId === item.id ? ' ★ IA' : ''} — ${item.fit}`
+    })), recommendedIndex);
+    architectureId = suggestions[idx].id;
+  }
+  if (!architectureId) architectureId = suggestions[recommendedIndex].id;
+  const decision = buildArchitectureDecision({ stack: stackId, proposal, architectureId: architectureId || suggestions[recommendedIndex].id });
+
+  // 5) Target (asistente de IA).
+  let targetName = String(flags.target || 'claude');
+  const targetOptions = (await loadTargets()).map((tgt) => ({ label: tgt.label, value: tgt.id }));
+  if (prompter) {
+    const di = Math.max(0, targetOptions.findIndex((o) => o.value === targetName));
+    targetName = targetOptions[await prompter.select('¿Para qué asistente quieres dejarlo equipado?', targetOptions, di)].value;
+  }
+  targetName = assertSafeId(targetName, 'target');
+
+  const dest = resolve(projectName);
+  const parentDir = dirname(dest);
+  const steps = scaffoldSteps(stackId, decision.architecture.id, projectName);
+  const doVerify = !!flags.verify;
+
+  console.log('\n' + c.bold('Resumen'));
+  console.log(`  Proyecto      : ${dest}`);
+  console.log(`  Stack         : ${decision.stackLabel}`);
+  console.log(`  Arquitectura  : ${decision.architecture.label}`);
+  console.log(`  Scaffolder    : ${steps.map((s) => `${s.command} ${s.args.slice(0, 4).join(' ')}…`).join(' · ')}`);
+  console.log(`  Principios    : ${decision.mandatoryPrinciples.slice(0, 3).join(', ')} (siempre)`);
+  console.log(`  Target IA     : ${targetName}${doVerify ? c.dim('  · con build check (--verify)') : ''}`);
+  if (prompter) {
+    const ok = await prompter.yesno(dryRun ? '¿Mostrar el plan sin crear nada?' : '¿Crear el proyecto con esta configuración?', true);
+    prompter.close();
+    if (!ok) { console.log(c.dim('\nCancelado.\n')); return; }
+  }
+
+  if (dryRun) {
+    console.log(c.dim('\nDry-run: no se ejecutó nada. Se haría:'));
+    steps.forEach((s) => console.log(c.dim(`  ▶ ${s.command} ${s.args.join(' ')}`)));
+    console.log(c.dim(`  ▶ carpetas de arquitectura + docs/architecture.md`));
+    console.log(c.dim(`  ▶ equipar (skills/MCP/método SDD) para ${targetName}${doVerify ? ' + verify (install/build)' : ''}\n`));
+    return;
+  }
+
+  if (existsSync(dest)) throw new Error(`La ruta ya existe: ${dest}. Usa otro nombre o borra la carpeta.`);
+  if (!interactive && !allowExternalExec) throw new Error('chalc init ejecuta el scaffolder oficial del lenguaje. En modo no interactivo usa --allow-exec.');
+
+  // 6) Scaffolder oficial (ng new / nest new / dotnet new). Los pasos 'project' corren dentro de <dest>.
+  if (steps.some((s) => s.cwd === 'project')) await mkdir(dest, { recursive: true });
+  for (const step of steps) {
+    console.log('\n▶ ' + c.bold(step.label) + c.dim(`  · ${step.command} ${step.args.join(' ')}`));
+    const r = await runInitStep(step, { parentDir, projectDir: dest });
+    if (r.code !== 0) throw new Error(`Falló el scaffolder en "${step.label}" (${r.error?.code || r.error?.message || `código ${r.code}`}). ¿Está instalado ${step.command}?`);
+  }
+  if (!existsSync(dest)) throw new Error(`El scaffolder no creó el proyecto en ${dest}.`);
+
+  // 7) Re-moldear a la arquitectura + documentar la decisión.
+  const reshaped = await reshapeProject(dest, decision);
+
+  // 8) Equipar (mismo motor que `apply`): stack + principios globales + skills propias de la arquitectura.
+  const extraSkills = architectureSkills(stackId, decision.architecture.id);
+  const equipped = await equipCreatedProject(dest, { targetName, methodMode: 'lite', extraSkills });
+
+  console.log('\n' + c.green(`✓ Proyecto creado y equipado: ${dest}`));
+  console.log(c.dim(`  Carpetas de arquitectura: ${reshaped.folders.join(', ') || '(las del scaffolder)'}`));
+  console.log(c.green(`✓ Equipado: ${equipped.skills.length} skills, ${equipped.mcps.length} MCP, ${equipped.methods.length} método(s) — para ${targetName}.`));
+  console.log(c.dim('  Clean Code + SOLID + modular ya vienen equipados (regla global). Revisa docs/architecture.md y specs/.'));
+
+  // 9) Build check opcional.
+  if (doVerify) {
+    for (const step of verifySteps(stackId)) {
+      console.log('\n▶ ' + c.bold(`verify: ${step.label}`) + c.dim(`  · ${step.command} ${step.args.join(' ')}`));
+      const r = await runInitStep({ ...step, cwd: 'project' }, { parentDir, projectDir: dest });
+      if (r.code !== 0) { console.log(c.yellow(`  ! "${step.label}" terminó con código ${r.code}. Revisa la salida.`)); break; }
+    }
+    console.log(c.green('\n✓ Verificación completada.'));
+  } else {
+    console.log(c.dim(`\n  Siguiente: cd ${projectName} && (instalar/compilar). Usa --verify para que chalc lo valide.\n`));
+  }
+}
+
 // ---------- comando: chalc configure ----------
 async function runConfigure() {
   console.log('\n' + c.bold('⚙️  chalc configure') + c.dim('  ·  catálogo local') + '\n');
@@ -2013,5 +2203,5 @@ async function runSpecGen() {
   console.log(c.cyan(handoffCommand(rel, equippedSkills, specLang)) + '\n');
 }
 
-(verb === 'install' ? runInstall() : verb === 'inspect' ? runInspect() : verb === 'doctor' ? runDoctor() : verb === 'configure' ? runConfigure() : verb === 'ai' ? runAi() : verb === 'aidoctor' ? runAiDoctor() : verb === 'aieval' ? runAiEval() : verb === 'specgen' ? runSpecGen() : verb === 'spec' ? runSpec() : verb === 'qa' ? runQa() : runApply())
+(verb === 'init' ? runInit() : verb === 'install' ? runInstall() : verb === 'inspect' ? runInspect() : verb === 'doctor' ? runDoctor() : verb === 'configure' ? runConfigure() : verb === 'ai' ? runAi() : verb === 'aidoctor' ? runAiDoctor() : verb === 'aieval' ? runAiEval() : verb === 'specgen' ? runSpecGen() : verb === 'spec' ? runSpec() : verb === 'qa' ? runQa() : runApply())
   .catch((err) => { console.error(c.red('✗ ' + err.message)); process.exit(1); });

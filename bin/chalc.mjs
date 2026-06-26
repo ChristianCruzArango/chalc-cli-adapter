@@ -26,7 +26,7 @@ import { emitKeypressEvents } from 'node:readline';
 import { spawn } from 'node:child_process';
 import { stdin, stdout } from 'node:process';
 import { installSkill } from '../lib/install.mjs';
-import { t, lang } from '../lib/i18n.mjs';
+import { t, lang, saveLang } from '../lib/i18n.mjs';
 import { PROVIDERS, configForTask, loadConfig, modelForTask, saveConfig, isConfigured, CONFIG_PATH } from '../lib/ai.mjs';
 import { readDocument } from '../lib/docread.mjs';
 import { fetchAzureDevOps, fetchJira, fetchUrl } from '../lib/sources.mjs';
@@ -60,7 +60,8 @@ const DETECT_SKIP_DIRS = new Set([
 const argv = process.argv.slice(2);
 const { flags, positional } = parseArgs(argv);
 const first = (positional[0] || '').toLowerCase();
-const verb = ['init', 'new', 'create'].includes(first) ? 'init'
+const verb = ['lang', 'config-lang', 'idioma', 'language'].includes(first) ? 'lang'
+  : ['init', 'new', 'create'].includes(first) ? 'init'
   : ['install', 'add'].includes(first) ? 'install'
   : ['inspect', 'explain'].includes(first) ? 'inspect'
     : ['doctor', 'check'].includes(first) ? 'doctor'
@@ -1539,6 +1540,23 @@ async function runQa() {
 
 // ---------- comando: chalc init ----------
 // Crea un proyecto desde cero con decisión arquitectónica guiada y luego lo equipa con Chalc.
+// ---------- comando: chalc lang ----------
+// Fija el idioma una sola vez en ~/.chalc/config.json; se aplica a todos los proyectos sin volver a cambiarlo.
+async function runConfigLang() {
+  console.log('\n' + c.bold('⚙️  chalc lang') + '\n');
+  console.log(c.dim('  ' + t('langCurrent', lang)));
+  const opts = [{ label: t('langOptEs'), value: 'es' }, { label: t('langOptEn'), value: 'en' }];
+  let code = String(positional[1] || flags.lang || '').slice(0, 2).toLowerCase();
+  if (interactive && code !== 'es' && code !== 'en') {
+    const prompter = makePrompter();
+    code = opts[await prompter.select(t('langCmdQ'), opts, lang === 'en' ? 1 : 0)].value;
+    prompter.close();
+  }
+  if (code !== 'es' && code !== 'en') code = lang;
+  const path = saveLang(code);
+  console.log(c.green('\n✓ ' + t('langSaved', path) + '\n'));
+}
+
 // Corre un paso del scaffolder/verify con salida visible. cwd: 'project' = dentro de <dest>; si no, en el padre.
 function runInitStep(step, { parentDir, projectDir }) {
   return new Promise((res) => {
@@ -2230,5 +2248,5 @@ async function runSpecGen() {
   console.log(c.cyan(handoffCommand(rel, equippedSkills, specLang)) + '\n');
 }
 
-(verb === 'init' ? runInit() : verb === 'install' ? runInstall() : verb === 'inspect' ? runInspect() : verb === 'doctor' ? runDoctor() : verb === 'configure' ? runConfigure() : verb === 'ai' ? runAi() : verb === 'aidoctor' ? runAiDoctor() : verb === 'aieval' ? runAiEval() : verb === 'specgen' ? runSpecGen() : verb === 'spec' ? runSpec() : verb === 'qa' ? runQa() : runApply())
+(verb === 'lang' ? runConfigLang() : verb === 'init' ? runInit() : verb === 'install' ? runInstall() : verb === 'inspect' ? runInspect() : verb === 'doctor' ? runDoctor() : verb === 'configure' ? runConfigure() : verb === 'ai' ? runAi() : verb === 'aidoctor' ? runAiDoctor() : verb === 'aieval' ? runAiEval() : verb === 'specgen' ? runSpecGen() : verb === 'spec' ? runSpec() : verb === 'qa' ? runQa() : runApply())
   .catch((err) => { console.error(c.red('✗ ' + err.message)); process.exit(1); });

@@ -25,7 +25,7 @@ test('inspect keeps positional path after boolean --yes', async () => {
 
   assert.equal(result.code, 0, result.output);
   assert.match(result.output, /test\/fixtures\/angular/);
-  assert.match(result.output, /Stack detectado: .*Angular/s);
+  assert.match(result.output, /(Stack detectado|Detected stack): .*Angular/s);
 });
 
 test('inspect detects NestJS fixture from package dependencies', async () => {
@@ -33,7 +33,7 @@ test('inspect detects NestJS fixture from package dependencies', async () => {
 
   assert.equal(result.code, 0, result.output);
   assert.match(result.output, /test\/fixtures\/nestjs/);
-  assert.match(result.output, /Stack detectado: .*NestJS/s);
+  assert.match(result.output, /(Stack detectado|Detected stack): .*NestJS/s);
 });
 
 test('unsafe target ids are rejected before import', async () => {

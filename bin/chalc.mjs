@@ -140,7 +140,7 @@ async function loadJsonDir(dir) {
 async function loadMcp(id) {
   id = assertSafeId(id, 'MCP id');
   const file = join(CATALOG, 'mcp', `${id}.json`);
-  if (!existsSync(file)) throw new Error(`MCP "${id}" no existe en el catálogo`);
+  if (!existsSync(file)) throw new Error(t('mcpNotInCatalog', id));
   const def = JSON.parse(await readFile(file, 'utf8'));
   def.id = assertSafeId(def.id || id, 'MCP id');
   return def;
@@ -365,15 +365,15 @@ async function loadRules() {
   return (await loadJsonDir(RULES_DIR)).sort((a, b) => String(a.id).localeCompare(String(b.id)));
 }
 
-async function chooseRule(prompter, q = '¿A qué rule lo agregamos?') {
+async function chooseRule(prompter, q = t('ruleAddToWhich')) {
   const rules = await loadRules();
-  const term = (await prompter.text('Buscar rule por id/nombre/lenguaje (Enter = todas):')).toLowerCase();
+  const term = (await prompter.text(t('ruleSearchQ'))).toLowerCase();
   const filtered = rules.filter((r) => {
     const hay = `${r.id} ${r.name || ''} ${r.language || ''}`.toLowerCase();
     return !term || hay.includes(term);
   });
   const options = filtered.length ? filtered : rules;
-  if (!filtered.length) console.log(c.yellow('  • Sin resultados; mostrando todas las rules.'));
+  if (!filtered.length) console.log(c.yellow(t('ruleNoResults')));
   const idx = await prompter.select(q, options.map((r) => ({
     label: `${r.id} — ${r.name || r.id}${r.language ? ` · ${r.language}` : ''}`,
     value: r.id
@@ -385,7 +385,7 @@ async function addMcpToRule(ruleId, mcpId, optional = false) {
   ruleId = assertSafeId(ruleId, 'rule id');
   mcpId = assertSafeId(mcpId, 'MCP id');
   const file = join(RULES_DIR, `${ruleId}.json`);
-  if (!existsSync(file)) throw new Error(`Rule "${ruleId}" no existe`);
+  if (!existsSync(file)) throw new Error(t('ruleNotExists', ruleId));
   const rule = JSON.parse(await readFile(file, 'utf8'));
   const key = optional ? 'optionalMcp' : 'mcp';
   rule[key] = rule[key] || [];
@@ -400,34 +400,34 @@ async function addExistingSkillToRule(prompter) {
   const skillDirs = existsSync(join(CATALOG, 'skills'))
     ? (await readdir(join(CATALOG, 'skills'), { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name).sort()
     : [];
-  if (!skillDirs.length) throw new Error('No hay skills en catalog/skills');
-  const term = (await prompter.text('Buscar skill (Enter = todos):')).toLowerCase();
+  if (!skillDirs.length) throw new Error(t('skillNoneInCatalog'));
+  const term = (await prompter.text(t('skillSearchQ'))).toLowerCase();
   const filtered = skillDirs.filter((id) => !term || id.toLowerCase().includes(term));
   const options = filtered.length ? filtered : skillDirs;
-  if (!filtered.length) console.log(c.yellow('  • Sin resultados; mostrando todos los skills.'));
-  const skillId = options[await prompter.select('¿Qué skill quieres agregar a una rule?', options.map((id) => ({ label: id })), 0)];
+  if (!filtered.length) console.log(c.yellow(t('skillNoResults')));
+  const skillId = options[await prompter.select(t('skillWhichToAddQ'), options.map((id) => ({ label: id })), 0)];
   const rule = await chooseRule(prompter);
   await addSkillToRule(rule.id, skillId);
-  console.log(c.green(`✓ ${skillId} agregado a rule ${rule.id}`));
+  console.log(c.green(t('skillAddedToRule', skillId, rule.id)));
 }
 
 async function createRuleWizard(prompter) {
-  let id = slugifyId(await prompter.text('Id de la rule (ej. nextjs, spring-boot):'));
-  while (!id) id = slugifyId(await prompter.text('Id requerido:'));
+  let id = slugifyId(await prompter.text(t('ruleIdQ')));
+  while (!id) id = slugifyId(await prompter.text(t('idRequired')));
   const file = join(RULES_DIR, `${id}.json`);
-  if (existsSync(file) && !await prompter.yesno(`La rule "${id}" ya existe. ¿Reemplazar?`, false)) return null;
+  if (existsSync(file) && !await prompter.yesno(t('ruleExistsReplace', id), false)) return null;
 
-  const name = await prompter.text(`Nombre visible [${id}]:`) || id;
-  const language = await prompter.text('Lenguaje principal (opcional):');
+  const name = await prompter.text(t('ruleVisibleNameQ', id)) || id;
+  const language = await prompter.text(t('ruleLanguageQ'));
   const detectKindOptions = [
-    { label: 'Archivos: anyFile', value: 'anyFile' },
-    { label: 'Globs: anyGlob (*.ext)', value: 'anyGlob' },
-    { label: 'Dependencias package.json: anyDependency', value: 'anyDependency' }
+    { label: t('ruleDetectFiles'), value: 'anyFile' },
+    { label: t('ruleDetectGlobs'), value: 'anyGlob' },
+    { label: t('ruleDetectDeps'), value: 'anyDependency' }
   ];
-  const detectKind = detectKindOptions[await prompter.select('¿Qué señal detecta esta rule?', detectKindOptions, 0)].value;
-  const raw = await prompter.text(`Valores para ${detectKind} separados por coma:`);
+  const detectKind = detectKindOptions[await prompter.select(t('ruleSignalQ'), detectKindOptions, 0)].value;
+  const raw = await prompter.text(t('ruleValuesQ', detectKind));
   const values = raw.split(',').map((x) => x.trim()).filter(Boolean);
-  if (!values.length) throw new Error('La rule necesita al menos una señal de detección.');
+  if (!values.length) throw new Error(t('ruleNeedsSignal'));
 
   const rule = {
     id,
@@ -439,22 +439,22 @@ async function createRuleWizard(prompter) {
     optionalMcp: []
   };
   await writeJson(file, rule);
-  console.log(c.green(`✓ Rule creada: rules/${id}.json`));
+  console.log(c.green(t('ruleCreated', id)));
   return rule;
 }
 
 async function installSkillWizard(prompter) {
-  const source = cleanPath(await prompter.text('Fuente del skill (Git/GitHub, skills.sh o ruta local):'));
+  const source = cleanPath(await prompter.text(t('skillSourceQ')));
   if (!source) return;
   const installed = await installSkill({ source, CATALOG, prompter, force, allowExternalExec, log: (m) => console.log(c.dim('  ' + m)) });
   if (!installed.length) {
-    console.log(c.dim('  · No se instaló ningún skill.'));
+    console.log(c.dim(t('skillNoneInstalled')));
     return;
   }
-  console.log(c.green(`✓ Skill(s) instalado(s): ${installed.join(', ')}`));
+  console.log(c.green(t('skillsInstalled', installed.join(', '))));
   for (const id of installed) {
-    if (await prompter.yesno(`¿Agregar "${id}" a una rule ahora?`, true)) {
-      const rule = await chooseRule(prompter, `Rule destino para "${id}"`);
+    if (await prompter.yesno(t('skillAddNowQ', id), true)) {
+      const rule = await chooseRule(prompter, t('skillTargetRule', id));
       await addSkillToRule(rule.id, id);
       console.log(c.green(`  ✓ ${id} → ${rule.id}`));
     }
@@ -462,23 +462,23 @@ async function installSkillWizard(prompter) {
 }
 
 async function createMcpWizard(prompter) {
-  let id = slugifyId(await prompter.text('Id del MCP (ej. postgres, angular-cli):'));
-  while (!id) id = slugifyId(await prompter.text('Id requerido:'));
+  let id = slugifyId(await prompter.text(t('mcpIdQ')));
+  while (!id) id = slugifyId(await prompter.text(t('idRequired')));
   const file = join(CATALOG, 'mcp', `${id}.json`);
-  if (existsSync(file) && !await prompter.yesno(`El MCP "${id}" ya existe. ¿Reemplazar?`, false)) return null;
+  if (existsSync(file) && !await prompter.yesno(t('mcpExistsReplace', id), false)) return null;
 
-  const description = await prompter.text('Descripción:');
-  const command = await prompter.text('Comando (ej. npx, node, uvx):');
-  if (!command) throw new Error('El MCP necesita un comando.');
-  const argsRaw = await prompter.text('Args separados por espacio (opcional):');
-  const requiresSecret = await prompter.yesno('¿Requiere secretos/env?', false);
+  const description = await prompter.text(t('mcpDescQ'));
+  const command = await prompter.text(t('mcpCommandQ'));
+  if (!command) throw new Error(t('mcpNeedsCommand'));
+  const argsRaw = await prompter.text(t('mcpArgsQ'));
+  const requiresSecret = await prompter.yesno(t('mcpSecretsQ'), false);
   const server = {
     command,
     ...(argsRaw ? { args: argsRaw.split(/\s+/).filter(Boolean) } : {})
   };
   if (requiresSecret) {
-    const envName = await prompter.text('Nombre de variable/env file (ej. DB_ENV_FILE):');
-    const envValue = await prompter.text('Valor por defecto (puede usar ${PROJECT}):');
+    const envName = await prompter.text(t('mcpEnvNameQ'));
+    const envValue = await prompter.text(t('mcpEnvValueQ'));
     if (envName && envValue) server.env = { [envName]: envValue };
   }
   const mcp = {
@@ -489,7 +489,7 @@ async function createMcpWizard(prompter) {
     server
   };
   await writeJson(file, mcp);
-  console.log(c.green(`✓ MCP registrado: catalog/mcp/${id}.json`));
+  console.log(c.green(t('mcpRegistered', id)));
   return mcp;
 }
 
@@ -497,16 +497,16 @@ async function addMcpWizard(prompter) {
   const mcps = existsSync(join(CATALOG, 'mcp'))
     ? (await readdir(join(CATALOG, 'mcp'))).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, '')).sort()
     : [];
-  if (!mcps.length) throw new Error('No hay MCP en catalog/mcp');
-  const term = (await prompter.text('Buscar MCP (Enter = todos):')).toLowerCase();
+  if (!mcps.length) throw new Error(t('mcpNoneInCatalog'));
+  const term = (await prompter.text(t('mcpSearchQ'))).toLowerCase();
   const filtered = mcps.filter((id) => !term || id.toLowerCase().includes(term));
   const options = filtered.length ? filtered : mcps;
-  if (!filtered.length) console.log(c.yellow('  • Sin resultados; mostrando todos los MCP.'));
-  const mcpId = options[await prompter.select('¿Qué MCP quieres agregar a una rule?', options.map((id) => ({ label: id })), 0)];
-  const rule = await chooseRule(prompter, `Rule destino para MCP "${mcpId}"`);
-  const optional = await prompter.yesno('¿Agregarlo como opcional?', true);
+  if (!filtered.length) console.log(c.yellow(t('mcpNoResults')));
+  const mcpId = options[await prompter.select(t('mcpWhichToAddQ'), options.map((id) => ({ label: id })), 0)];
+  const rule = await chooseRule(prompter, t('cfgMcpTargetRule', mcpId));
+  const optional = await prompter.yesno(t('cfgAsOptionalQ'), true);
   await addMcpToRule(rule.id, mcpId, optional);
-  console.log(c.green(`✓ ${mcpId} agregado a ${optional ? 'optionalMcp' : 'mcp'} de rule ${rule.id}`));
+  console.log(c.green(t('mcpAddedToRule', mcpId, optional ? 'optionalMcp' : 'mcp', rule.id)));
 }
 
 async function nextSpecNumber(specsDir) {
@@ -753,7 +753,7 @@ function makePrompter() {
       return opts.search ? searchSelect(q, options) : arrowSelect(q, options, def);
     },
     async multi(q, options, def = []) {
-      console.log(`${c.cyan('?')} ${q} ${c.dim('(núms con coma, "a"=todos, enter=por defecto)')}`);
+      console.log(`${c.cyan('?')} ${q} ${c.dim(t('multiHint'))}`);
       options.forEach((o, i) => console.log(`    ${i + 1}) ${o.label}`));
       const ans = (await ask(`  ${c.dim('>')} `)).trim().toLowerCase();
       if (!ans) return def;
@@ -815,7 +815,7 @@ async function associate(prompter, rules, skillId, stackFlag) {
 
 // ---------- comando: chalc install ----------
 async function runInstall() {
-  if (!installSource) throw new Error('Uso: chalc install <url-git | nombre-skills.sh | ruta-local> [--stack <id>]');
+  if (!installSource) throw new Error(t('installUsage'));
   const source = cleanPath(installSource);
   console.log('\n' + c.bold('⚙️  chalc install') + c.dim(`  ·  ${source}`) + '\n');
   const prompter = interactive ? makePrompter() : null;
@@ -846,49 +846,49 @@ async function runInspect() {
 
   if (stacks.length) {
     const langs = [...new Set(stacks.map((r) => r.language).filter(Boolean))];
-    console.log(c.green('✓ ') + c.bold('Stack detectado: ') + stacks.map((r) => r.name).join(' + ') + (langs.length ? c.dim(`  ·  ${langs.join(', ')}`) : ''));
+    console.log(c.green('✓ ') + c.bold(t('inspectStackDetected')) + stacks.map((r) => r.name).join(' + ') + (langs.length ? c.dim(`  ·  ${langs.join(', ')}`) : ''));
   } else {
-    console.log(c.yellow('• No reconocí un stack conocido.'));
+    console.log(c.yellow(t('inspectNoStack')));
   }
 
   const prompter = interactive ? makePrompter() : null;
-  const showMatched = !prompter || await prompter.yesno('¿Ver reglas que aplican y sus señales?', true);
-  const showPlan = !prompter || await prompter.yesno('¿Ver plan base de lo que montaría chalc --yes?', true);
-  const showMisses = !prompter || await prompter.yesno('¿Ver reglas que NO aplican?', false);
-  const showCatalog = !prompter || await prompter.yesno('¿Ver métodos y targets disponibles?', true);
+  const showMatched = !prompter || await prompter.yesno(t('inspectShowMatchedQ'), true);
+  const showPlan = !prompter || await prompter.yesno(t('inspectShowPlanQ'), true);
+  const showMisses = !prompter || await prompter.yesno(t('inspectShowMissesQ'), false);
+  const showCatalog = !prompter || await prompter.yesno(t('inspectShowCatalogQ'), true);
 
   if (showMatched) {
-    console.log('\n' + c.bold('Reglas que aplican:'));
+    console.log('\n' + c.bold(t('inspectMatchedHdr')));
     for (const { rule, reasons } of matches) {
       console.log(`  ${c.green('✓')} ${rule.id} ${c.dim(`(${rule.name || rule.id})`)}`);
-      console.log(`    señales : ${formatList(reasons)}`);
+      console.log(`    ${t('inspectLblSignals').padEnd(8)}: ${formatList(reasons)}`);
       console.log(`    skills  : ${formatList(rule.skills || [])}`);
       console.log(`    mcp     : ${formatList(rule.mcp || [])}`);
-      if (rule.optionalMcp?.length) console.log(`    opcional: ${formatList(rule.optionalMcp)}`);
+      if (rule.optionalMcp?.length) console.log(`    ${t('inspectLblOptional').padEnd(8)}: ${formatList(rule.optionalMcp)}`);
     }
-    if (!matches.length) console.log(`  ${c.dim('— ninguna regla matchea señales del proyecto')}`);
+    if (!matches.length) console.log(`  ${c.dim(t('inspectNoRuleMatches'))}`);
   }
 
   if (showPlan) {
-    console.log('\n' + c.bold('Plan base si ejecutas chalc --yes:'));
+    console.log('\n' + c.bold(t('inspectPlanHdr')));
     console.log(`  skills  : ${formatList(skills)}`);
     console.log(`  mcp     : ${formatList(mcpIds)}`);
-    console.log(`  opcional: ${formatList(optionalMcpIds)}`);
+    console.log(`  ${t('inspectLblOptional').padEnd(8)}: ${formatList(optionalMcpIds)}`);
     console.log(`  target  : ${flags.target || 'claude'}`);
   }
 
   if (showMisses) {
-    console.log('\n' + c.bold('Reglas que no aplican:'));
+    console.log('\n' + c.bold(t('inspectMissesHdr')));
     for (const { rule } of misses) {
-      console.log(`  ${c.dim('·')} ${rule.id} ${c.dim(`esperaba ${formatDetect(rule)}`)}`);
+      console.log(`  ${c.dim('·')} ${rule.id} ${c.dim(`${t('inspectExpected')} ${formatDetect(rule)}`)}`);
     }
-    if (!misses.length) console.log(`  ${c.dim('— todas las reglas aplican')}`);
+    if (!misses.length) console.log(`  ${c.dim(t('inspectAllApply'))}`);
   }
 
   if (showCatalog) {
-    console.log('\n' + c.bold('Catálogo disponible:'));
-    console.log(`  métodos : ${formatList(methods.map((m) => `${m.id} (${m.modes.map((mode) => mode.id).join('/')})`))}`);
-    console.log(`  targets : ${formatList(targets.map((t) => `${t.id} (${t.label})`))}`);
+    console.log('\n' + c.bold(t('inspectCatalogHdr')));
+    console.log(`  ${t('inspectLblMethods').padEnd(8)}: ${formatList(methods.map((m) => `${m.id} (${m.modes.map((mode) => mode.id).join('/')})`))}`);
+    console.log(`  targets : ${formatList(targets.map((tg) => `${tg.id} (${tg.label})`))}`);
   }
   if (prompter) prompter.close();
   console.log('');
@@ -1718,7 +1718,7 @@ async function runInit() {
   for (const step of steps) {
     console.log('\n▶ ' + c.bold(step.label) + c.dim(`  · ${step.command} ${step.args.join(' ')}`));
     const r = await runInitStep(step, { parentDir, projectDir: dest });
-    if (r.code !== 0) throw new Error(t('initScaffoldFail', step.label, r.error?.code || r.error?.message || `código ${r.code}`, step.command));
+    if (r.code !== 0) throw new Error(t('initScaffoldFail', step.label, r.error?.code || r.error?.message || t('scaffoldExitCode', r.code), step.command));
   }
   if (!existsSync(dest)) throw new Error(t('initScaffoldNoDir', dest));
 
@@ -1749,7 +1749,7 @@ async function runInit() {
 
 // ---------- comando: chalc configure ----------
 async function runConfigure() {
-  console.log('\n' + c.bold('⚙️  chalc configure') + c.dim('  ·  catálogo local') + '\n');
+  console.log('\n' + c.bold('⚙️  chalc configure') + c.dim('  ·  ' + t('cfgSubtitle')) + '\n');
   if (!interactive) throw new Error(t('cfgInteractiveOnly'));
   const prompter = makePrompter();
   const actions = [

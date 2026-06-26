@@ -1573,6 +1573,13 @@ async function runInit() {
   }
   if (!projectName) projectName = 'chalc-app';
 
+  // 2b) Ubicación: carpeta padre donde se creará <projectName>. Default = directorio actual.
+  let baseDir = String(flags.dir || '').trim() ? resolve(cleanPath(String(flags.dir))) : process.cwd();
+  if (prompter) {
+    const ans = (await prompter.text(`¿En qué carpeta lo creo? ${c.dim(`[${baseDir}]`)}:`)).trim();
+    if (ans) baseDir = resolve(cleanPath(ans));
+  }
+
   // 3) Propuesta: texto o documento (Word/PDF/MD/TXT) → reusa la ingesta de spec-ia.
   let proposal = String(flags.description || '').trim();
   if (flags.doc) proposal = await readDocument(resolve(cleanPath(String(flags.doc))));
@@ -1639,7 +1646,7 @@ async function runInit() {
   }
   targetName = assertSafeId(targetName, 'target');
 
-  const dest = resolve(projectName);
+  const dest = resolve(baseDir, projectName);
   const parentDir = dirname(dest);
   const steps = scaffoldSteps(stackId, decision.architecture.id, projectName);
   const doVerify = !!flags.verify;
@@ -1668,7 +1675,8 @@ async function runInit() {
   if (existsSync(dest)) throw new Error(`La ruta ya existe: ${dest}. Usa otro nombre o borra la carpeta.`);
   if (!interactive && !allowExternalExec) throw new Error('chalc init ejecuta el scaffolder oficial del lenguaje. En modo no interactivo usa --allow-exec.');
 
-  // 6) Scaffolder oficial (ng new / nest new / dotnet new). Los pasos 'project' corren dentro de <dest>.
+  // 6) Scaffolder oficial (ng new / nest new / dotnet new). Aseguramos la carpeta padre (cwd del scaffolder).
+  await mkdir(parentDir, { recursive: true });
   if (steps.some((s) => s.cwd === 'project')) await mkdir(dest, { recursive: true });
   for (const step of steps) {
     console.log('\n▶ ' + c.bold(step.label) + c.dim(`  · ${step.command} ${step.args.join(' ')}`));

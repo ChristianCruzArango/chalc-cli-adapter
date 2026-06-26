@@ -1557,7 +1557,8 @@ async function runInit() {
   // 1) Stack (lenguaje/framework).
   let stackId = String(positional[1] || flags.stack || '').trim().toLowerCase();
   if (prompter && !stackId) {
-    stackId = stacks[await prompter.select('¿Qué lenguaje/framework quieres usar?', stacks.map((s) => ({ label: s.label })), 0)].id;
+    // Buscador automático cuando la lista crezca (hacia "cualquier lenguaje"); con pocos, selector simple.
+    stackId = stacks[await prompter.select('¿Qué lenguaje/framework quieres usar?', stacks.map((s) => ({ label: s.label })), 0, { search: stacks.length > 6 })].id;
   }
   if (!stackId) stackId = 'angular';
   if (!getStack(stackId)) {

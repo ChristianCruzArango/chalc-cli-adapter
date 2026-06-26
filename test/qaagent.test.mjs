@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAgentReplaySpec, buildResultsMarkdown, httpExecutor, normalizeVerdicts, parseAgentMessage, runQaAgent } from '../lib/qaagent.mjs';
+import { buildAgentReplaySpec, buildRepairPlanMarkdown, buildResultsMarkdown, httpExecutor, normalizeVerdicts, parseAgentMessage, parseResultsMarkdown, runQaAgent } from '../lib/qaagent.mjs';
 
 test('buildAgentReplaySpec emits ONE test per requirement, grouping its verified steps', () => {
   const steps = [
@@ -111,6 +111,25 @@ test('buildResultsMarkdown renders one traceable row per verdict and escapes pip
   assert.match(md, /# Resultados QA — 001-login/);
   assert.match(md, /Superficie: \*\*api\*\*/);
   assert.match(md, /\| R1 \| PASS \| a \\\| b \|/);
+});
+
+test('repair plan is generated only from FAIL/BLOCKED QA verdicts', () => {
+  const result = {
+    verdicts: [
+      { id: 'R1', status: 'PASS', evidence: 'ok' },
+      { id: 'R2', status: 'FAIL', evidence: 'expected a | got b' },
+      { id: 'R3', status: 'BLOCKED', evidence: 'missing token' }
+    ]
+  };
+  const md = buildRepairPlanMarkdown('001-login', { result, requirementTexts: { R2: 'Login visible' }, generatedAt: '2026-06-26T00:00:00.000Z' });
+  assert.match(md, /R2 — Login visible/);
+  assert.match(md, /R3/);
+  assert.doesNotMatch(md, /R1.*PASS/);
+});
+
+test('parseResultsMarkdown reconstructs verdict rows from qa results', () => {
+  const parsed = parseResultsMarkdown('| Requisito | Estado | Evidencia |\n|---|---|---|\n| R1 | FAIL | a \\| b |\n');
+  assert.deepEqual(parsed.verdicts, [{ id: 'R1', status: 'FAIL', evidence: 'a | b' }]);
 });
 
 test('runQaAgent compacts bulky observations with CCR and serves recall from cache (no extra executor call)', async () => {

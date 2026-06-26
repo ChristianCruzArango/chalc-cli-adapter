@@ -1,0 +1,27 @@
+{
+  "id": "chalc-default",
+  "description": "Perfil base para flujos SDD + QA con IA: modelo fuerte para specs, modelo económico para loops QA y modelo fuerte para planes de reparación.",
+  "models": {
+    "spec": {
+      "openai": "gpt-4o",
+      "openrouter": "anthropic/claude-sonnet-4.6",
+      "anthropic": "claude-sonnet-4-6",
+      "google": "gemini-2.0-flash",
+      "ollama": "llama3.1"
+    },
+    "qa": {
+      "openai": "gpt-4o-mini",
+      "openrouter": "anthropic/claude-haiku-4.5",
+      "anthropic": "claude-haiku-4-5",
+      "google": "gemini-2.0-flash",
+      "ollama": "llama3.1"
+    },
+    "repair": {
+      "openai": "gpt-4o",
+      "openrouter": "anthropic/claude-sonnet-4.6",
+      "anthropic": "claude-sonnet-4-6",
+      "google": "gemini-2.0-flash",
+      "ollama": "llama3.1"
+    }
+  }
+}

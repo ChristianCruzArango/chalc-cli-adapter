@@ -29,12 +29,15 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 | `chalc install <fuente>` | Instala un skill al catálogo y lo cablea a una regla | no |
 | `chalc spec` | Crea una carpeta/plantilla vacía `specs/NNN-feature` | no |
 | `chalc config-ia` | Configura el proveedor de IA + API key (una vez) | sí (setup) |
+| `chalc ai-doctor` | Muestra proveedor, perfil y modelos resueltos por tarea | no |
+| `chalc eval-ia` | Ejecuta evals locales de prompts/parsers sin llamar al proveedor | no |
 | `chalc spec-ia` | HU (Azure DevOps/Jira/Drive/Word/pegar) → spec/plan/tasks | sí |
 | `chalc qa <ruta>` | Lista specs y valida el preflight QA (Docker + documentación) | no |
 | `chalc qa <ruta> --spec 004-login --plan` | Genera el plan QA trazable a los requisitos de una spec | no |
 | `chalc qa <ruta> --spec 004-login --env qa:up --plan` | Registra en el plan el entorno de arranque elegido (sin ejecutarlo aún) | no |
 | `chalc qa <ruta> --spec 004-login --env serve --url http://localhost:3000 --up` | Levanta el entorno, espera a que la URL responda y luego lo baja | no |
 | `chalc qa <ruta> --spec 004-login --env serve --url http://localhost:3000 --agent` | Levanta la app, corre el agente QA (verifica cada R# contra la app viva), escribe `qa/results.md` y baja | sí |
+| `chalc qa <ruta> ... --agent --repair-plan` | Además genera `qa/repair-plan.md` desde FAIL/BLOCKED | sí |
 | `chalc qa <ruta> ... --agent --surface web\|api` | Fuerza la superficie (navegador vs HTTP) si la autodetección no acierta | sí |
 
 Cada comando tiene su equivalente `npm run <comando>` (ej. `npm run spec-ia`) por si no haces `npm link`.
@@ -69,6 +72,8 @@ npm run spec
 ```bash
 chalc inspect               # explica qué detecta y por qué, sin escribir
 chalc doctor                # valida reglas, catálogo, MCP, métodos y targets
+chalc ai-doctor             # valida la configuración IA local sin gastar tokens
+chalc eval-ia               # evals locales de contratos IA/prompt sin red
 chalc configure             # crea rules y conecta skills/MCP de forma guiada
 chalc spec                  # crea una plantilla vacía specs/NNN-feature
 chalc --yes                 # usa los valores por defecto, sin preguntar
@@ -107,6 +112,8 @@ Con `--agent`, chalc **levanta tu app, la prueba como una persona y reporta** ca
 ```bash
 chalc qa . --spec 004-login --env start --agent           # interactivo: pregunta superficie/auth si hace falta
 chalc qa . --spec 004-login --env start --agent --url http://localhost:3000 --surface web --max-steps 24 --allow-exec
+chalc qa . --spec 004-login --env start --agent --repair-plan --allow-exec
+chalc qa . --spec 004-login --repair-plan                 # genera repair-plan desde qa/results.md existente
 ```
 
 ### Manejo de tokens en el agente QA (CCR, integrado)
@@ -387,7 +394,20 @@ Elige el proveedor de LLM y pega tu API key:
 
 La config se guarda en `~/.chalc/config.json` (permisos `600`, **fuera del proyecto**, nunca se commitea).
 La key se teclea **enmascarada**. Override por entorno: `CHALC_PROVIDER`, `CHALC_API_KEY`, `CHALC_MODEL`, `CHALC_BASE_URL`.
+También puedes separar modelos por tarea con `CHALC_SPEC_MODEL`, `CHALC_QA_MODEL` y `CHALC_REPAIR_MODEL`.
 Cliente HTTP con `fetch` nativo, cero dependencias.
+
+Chalc soporta perfiles versionables en `catalog/profiles/*.json`. El perfil incluido (`chalc-default`) define:
+- `spec`: modelo fuerte para convertir HU/documentos en SDD.
+- `qa`: modelo más económico/rápido para loops de verificación.
+- `repair`: modelo fuerte si luego se agrega reparación asistida; el plan actual se genera de forma determinística desde QA.
+
+Puedes inspeccionar la resolución final sin consumir tokens:
+
+```bash
+chalc ai-doctor
+CHALC_QA_MODEL=mi-modelo-rapido chalc ai-doctor
+```
 
 > **Copilot no es proveedor de generación** (no expone API con key) — es un *destino*. Para generar usa
 > OpenRouter / Anthropic / OpenAI / Gemini / Ollama.
@@ -413,7 +433,9 @@ Flujo:
    | Pegar texto | el texto directo |
 
 4. La IA genera `specs/NNN-feature/{spec,plan,tasks}.md` (en `full`, también data-model/research/quickstart/contracts).
-5. Imprime un **comando hand-off** detallado para pegar en tu asistente y generar el código con TDD.
+5. Chalc valida la salida: requisitos `R#`, referencias en tasks, estructura mínima y aclaraciones pendientes.
+6. Guarda una traza reproducible en `specs/<feature>/.chalc/ai-trace.jsonl` con hashes de prompt/output, nunca el contenido crudo.
+7. Imprime un **comando hand-off** detallado para pegar en tu asistente y generar el código con TDD.
 
 ### Harness de fidelidad (la IA NO inventa)
 
@@ -450,6 +472,7 @@ producción); audítalas con `npm audit` / `dotnet list package --vulnerable` / 
 - La **API key** vive en `~/.chalc/config.json` (permisos `600`), **nunca** en el proyecto ni en `.chalc.json`; entrada enmascarada.
 - Las fuentes remotas para `spec-ia` usan timeout, límite de tamaño y validación de redirects; se bloquean protocolos no HTTP(S), `localhost` e IPs privadas/locales.
 - Las llamadas a proveedores de IA tienen timeout para evitar procesos colgados.
+- Las trazas IA guardan hashes, conteos y metadatos; no guardan prompts, documentos fuente ni secretos.
 - Los ids de targets, skills, MCP, rules y métodos se validan como kebab-case seguro antes de usarse como rutas o imports.
 - Instalar skills desde Git/GitHub o `skills.sh` requiere confirmación interactiva o `--allow-exec` en modo no interactivo.
 - Las **herramientas de mutación** se instalan **project-local** (dev-dependency / tool-manifest), nunca `-g` global.
@@ -471,6 +494,7 @@ bloqueos de seguridad (`target` inseguro, instalación externa sin `--allow-exec
 ```bash
 npm test
 npm run doctor -- --yes
+node bin/chalc.mjs eval-ia --yes
 ```
 
 ## Targets (asistentes) soportados

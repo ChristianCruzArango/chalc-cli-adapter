@@ -8,6 +8,9 @@ node_modules/
 .chalc.json
 .rig.json
 
+# trazas de IA por spec (specs/<id>/.chalc/ai-trace.jsonl) — no subir
+.chalc/
+
 # sistema
 .DS_Store
 

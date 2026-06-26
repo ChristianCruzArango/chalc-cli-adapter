@@ -63,5 +63,5 @@ test('init dry-run summarizes the selected Angular architecture', async () => {
   assert.equal(result.code, 0, result.output);
   assert.match(result.output, /chalc init/);
   assert.match(result.output, /Angular Modular Clean Architecture/);
-  assert.match(result.output, /Clean Code, SOLID, arquitectura modular/);
+  assert.match(result.output, /Clean Code, SOLID, (arquitectura modular|modular architecture)/);
 });

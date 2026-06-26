@@ -9,7 +9,7 @@ import { reshapeProject } from '../lib/init-scaffold.mjs';
 
 test('init analysis detects signals and recommends a calibrated architecture', () => {
   const analysis = analyzeProjectProposal('Dashboard administrativo con usuarios, roles, permisos, formularios y consumo API');
-  assert.equal(analysis.type, 'dashboard administrativo');
+  assert.equal(analysis.typeKey, 'dashboard');
   assert.ok(analysis.signals.includes('auth'));
   assert.ok(analysis.signals.includes('forms'));
   const suggestions = suggestArchitectures('angular', analysis);
@@ -21,7 +21,7 @@ test('init analysis detects signals and recommends a calibrated architecture', (
 test('mandatory principles always include Clean Code, SOLID and modular architecture', () => {
   assert.ok(MANDATORY_DESIGN_PRINCIPLES.includes('Clean Code'));
   assert.ok(MANDATORY_DESIGN_PRINCIPLES.includes('SOLID'));
-  assert.ok(MANDATORY_DESIGN_PRINCIPLES.includes('arquitectura modular'));
+  assert.ok(MANDATORY_DESIGN_PRINCIPLES.some((p) => /modular/i.test(p)));   // 'arquitectura modular' / 'modular architecture'
 });
 
 test('init supports Angular, NestJS and .NET stacks', () => {
@@ -53,11 +53,11 @@ test('the architecture doc records the clarifications the user answered', () => 
     clarifications: [{ q: '¿De dónde vienen los datos?', a: 'API REST propia' }]
   });
   const md = renderArchitectureDecisionMarkdown(decision);
-  assert.match(md, /Preguntas resueltas con el usuario/);
-  assert.match(md, /¿De dónde vienen los datos\?/);
+  assert.match(md, /Preguntas resueltas con el usuario|Questions resolved with the user/);   // frame bilingüe
+  assert.match(md, /¿De dónde vienen los datos\?/);   // la Q&A del usuario es neutral al idioma
   assert.match(md, /API REST propia/);
   // sin clarifications, no aparece la sección
-  assert.doesNotMatch(renderArchitectureDecisionMarkdown(buildArchitectureDecision({ stack: 'angular', proposal: 'x', architectureId: 'modular-feature-first' })), /Preguntas resueltas/);
+  assert.doesNotMatch(renderArchitectureDecisionMarkdown(buildArchitectureDecision({ stack: 'angular', proposal: 'x', architectureId: 'modular-feature-first' })), /Preguntas resueltas|Questions resolved/);
 });
 
 test('architectureSkills adds interface-design only for clean/hexagonal/enterprise (not for simple ones)', () => {

@@ -606,7 +606,7 @@ function hasShellSyntax(value) {
 function printIssues(title, issues) {
   console.log('\n' + c.bold(title));
   if (!issues.length) {
-    console.log(`  ${c.green('✓')} sin hallazgos`);
+    console.log(`  ${c.green('✓')} ${t('doctorNoFindings')}`);
     return;
   }
   for (const issue of issues) {
@@ -898,11 +898,11 @@ async function runInspect() {
 async function runDoctor() {
   console.log('\n' + c.bold('⚙️  chalc doctor') + c.dim(`  ·  ${CHALC_ROOT}`) + '\n');
   const prompter = interactive ? makePrompter() : null;
-  const runRules = !prompter || await prompter.yesno('¿Validar rules?', true);
-  const runCatalog = !prompter || await prompter.yesno('¿Validar skills y MCP del catálogo?', true);
-  const runMethods = !prompter || await prompter.yesno('¿Validar métodos?', true);
-  const runTargets = !prompter || await prompter.yesno('¿Validar targets?', true);
-  const verbose = !prompter || await prompter.yesno('¿Mostrar detalle completo?', false);
+  const runRules = !prompter || await prompter.yesno(t('doctorAskRules'), true);
+  const runCatalog = !prompter || await prompter.yesno(t('doctorAskCatalog'), true);
+  const runMethods = !prompter || await prompter.yesno(t('doctorAskMethods'), true);
+  const runTargets = !prompter || await prompter.yesno(t('doctorAskTargets'), true);
+  const verbose = !prompter || await prompter.yesno(t('doctorAskVerbose'), false);
   if (prompter) prompter.close();
 
   const issues = [];
@@ -1077,17 +1077,17 @@ async function runDoctor() {
   const errors = issues.filter((i) => i.level === 'error');
   const warnings = issues.filter((i) => i.level === 'warn');
   const selected = verbose ? issues : errors.concat(warnings.slice(0, 20));
-  printIssues('Diagnóstico', selected);
-  if (!verbose && warnings.length > 20) console.log(c.dim(`  … ${warnings.length - 20} warning(s) más. Ejecuta interactivo y pide detalle completo.`));
+  printIssues(t('doctorDiagnosis'), selected);
+  if (!verbose && warnings.length > 20) console.log(c.dim('  ' + t('doctorMoreWarnings', warnings.length - 20)));
 
-  console.log('\n' + c.bold('Resumen:'));
+  console.log('\n' + c.bold(t('summary')));
   console.log(`  rules   : ${ruleFiles.filter((r) => r.json).length}`);
   console.log(`  skills  : ${skillIds.length}`);
   console.log(`  mcp     : ${mcpIds.length}`);
   console.log(`  profiles: ${profileFiles.filter((p) => p.json).length}`);
   console.log(`  targets : ${existsSync(TARGETS_DIR) ? (await readdir(TARGETS_DIR)).filter((f) => f.endsWith('.mjs')).length : 0}`);
-  console.log(`  errores : ${errors.length}`);
-  console.log(`  avisos  : ${warnings.length}\n`);
+  console.log(`  ${t('doctorErrors')} : ${errors.length}`);
+  console.log(`  ${t('doctorWarnings')}  : ${warnings.length}\n`);
 
   if (errors.length) process.exit(1);
 }
@@ -1100,16 +1100,16 @@ async function runSpec() {
 
   if (prompter) {
     console.log('\n' + c.bold('⚙️  chalc spec') + '\n');
-    const ans = await prompter.text(`Ruta del proyecto ${c.dim(`[${proj}]`)}:`);
+    const ans = await prompter.text(t('qaPathQ', c.dim(`[${proj}]`)));
     if (ans) proj = resolve(cleanPath(ans));
     while (!featureName) {
-      featureName = await prompter.text('Nombre corto para la carpeta de la feature:');
+      featureName = await prompter.text(t('specFolderNameQ'));
     }
   } else {
     console.log('\n' + c.bold('⚙️  chalc spec') + c.dim(`  ·  ${proj}`) + '\n');
-    if (!featureName) throw new Error('Uso: chalc spec <nombre-carpeta> [rutaProyecto] [--mode lite|full]');
+    if (!featureName) throw new Error(t('specUsage'));
   }
-  if (!existsSync(proj)) { if (prompter) prompter.close(); throw new Error(`La ruta no existe: ${proj}`); }
+  if (!existsSync(proj)) { if (prompter) prompter.close(); throw new Error(t('pathMissing', proj)); }
 
   let mode = String(flags.mode || 'lite');
   if (prompter && !existsSync(join(proj, 'specs', '_template'))) {
@@ -1117,25 +1117,25 @@ async function runSpec() {
       { label: 'lite — constitution + spec + plan + tasks', value: 'lite' },
       { label: 'full — + research, data-model, contracts, quickstart', value: 'full' }
     ];
-    mode = modes[await prompter.select('No existe specs/_template. ¿Qué scaffold SDD crear?', modes, 0)].value;
+    mode = modes[await prompter.select(t('specScaffoldQ'), modes, 0)].value;
   }
-  if (!['lite', 'full'].includes(mode)) { if (prompter) prompter.close(); throw new Error(`Modo SDD inválido: ${mode}. Usa lite o full.`); }
+  if (!['lite', 'full'].includes(mode)) { if (prompter) prompter.close(); throw new Error(t('specModeInvalid', mode)); }
 
   const specsDir = await ensureSddScaffold(proj, mode);
   const slug = slugifyFeatureName(featureName);
   const number = await nextSpecNumber(specsDir);
   const featureDir = join(specsDir, `${number}-${slug}`);
-  if (existsSync(featureDir)) { if (prompter) prompter.close(); throw new Error(`La spec ya existe: ${featureDir}`); }
+  if (existsSync(featureDir)) { if (prompter) prompter.close(); throw new Error(t('specAlreadyExists', featureDir)); }
 
   const templateDir = join(specsDir, '_template');
-  if (!existsSync(templateDir)) { if (prompter) prompter.close(); throw new Error(`No existe la plantilla: ${templateDir}`); }
+  if (!existsSync(templateDir)) { if (prompter) prompter.close(); throw new Error(t('specNoTemplate', templateDir)); }
   await cp(templateDir, featureDir, { recursive: true, dereference: true, force: false });
 
   if (prompter) prompter.close();
-  console.log(c.green(`✓ Plantilla de spec creada: ${featureDir}`));
-  console.log(c.dim('  Ruta oficial: specs/NNN-nombre/'));
-  console.log(c.dim('  Chalc no redacta la spec: solo prepara archivos vacíos con placeholders.'));
-  console.log(c.dim('  La spec real se escribe en spec.md; luego plan.md y tasks.md.\n'));
+  console.log(c.green(`✓ ${t('specCreated', featureDir)}`));
+  console.log(c.dim('  ' + t('specOfficialPath')));
+  console.log(c.dim('  ' + t('specNoWrite')));
+  console.log(c.dim('  ' + t('specRealNote') + '\n'));
 }
 
 // Pide al SO un puerto libre (bind a :0). Así forzamos el dev server ahí y evitamos choques y adivinanzas.
@@ -1750,19 +1750,19 @@ async function runInit() {
 // ---------- comando: chalc configure ----------
 async function runConfigure() {
   console.log('\n' + c.bold('⚙️  chalc configure') + c.dim('  ·  catálogo local') + '\n');
-  if (!interactive) throw new Error('chalc configure es interactivo. Ejecuta sin --yes.');
+  if (!interactive) throw new Error(t('cfgInteractiveOnly'));
   const prompter = makePrompter();
   const actions = [
-    { label: 'Crear una rule nueva', value: 'rule' },
-    { label: 'Instalar skill y agregarlo a una rule', value: 'install-skill' },
-    { label: 'Agregar skill existente a una rule', value: 'add-skill' },
-    { label: 'Registrar MCP nuevo', value: 'create-mcp' },
-    { label: 'Agregar MCP existente a una rule', value: 'add-mcp' },
-    { label: 'Salir', value: 'exit' }
+    { label: t('cfgActionCreateRule'), value: 'rule' },
+    { label: t('cfgActionInstallSkill'), value: 'install-skill' },
+    { label: t('cfgActionAddSkill'), value: 'add-skill' },
+    { label: t('cfgActionCreateMcp'), value: 'create-mcp' },
+    { label: t('cfgActionAddMcp'), value: 'add-mcp' },
+    { label: t('cfgActionExit'), value: 'exit' }
   ];
 
   while (true) {
-    const action = actions[await prompter.select('¿Qué quieres configurar?', actions, 0)].value;
+    const action = actions[await prompter.select(t('cfgWhatQ'), actions, 0)].value;
     try {
       if (action === 'exit') break;
       if (action === 'rule') await createRuleWizard(prompter);
@@ -1770,9 +1770,9 @@ async function runConfigure() {
       if (action === 'add-skill') await addExistingSkillToRule(prompter);
       if (action === 'create-mcp') {
         const mcp = await createMcpWizard(prompter);
-        if (mcp && await prompter.yesno(`¿Agregar MCP "${mcp.id}" a una rule ahora?`, true)) {
-          const rule = await chooseRule(prompter, `Rule destino para MCP "${mcp.id}"`);
-          const optional = await prompter.yesno('¿Agregarlo como opcional?', true);
+        if (mcp && await prompter.yesno(t('cfgAddMcpNowQ', mcp.id), true)) {
+          const rule = await chooseRule(prompter, t('cfgMcpTargetRule', mcp.id));
+          const optional = await prompter.yesno(t('cfgAsOptionalQ'), true);
           await addMcpToRule(rule.id, mcp.id, optional);
           console.log(c.green(`  ✓ ${mcp.id} → ${rule.id}`));
         }
@@ -1781,10 +1781,10 @@ async function runConfigure() {
     } catch (e) {
       console.log(c.red('  ✗ ' + e.message));
     }
-    if (!await prompter.yesno('¿Configurar algo más?', true)) break;
+    if (!await prompter.yesno(t('cfgMoreQ'), true)) break;
   }
   prompter.close();
-  console.log(c.dim('\nListo. Puedes revisar el catálogo con `npm run doctor -- --yes`.\n'));
+  console.log(c.dim('\n' + t('cfgDone') + '\n'));
 }
 
 // ---------- comando: chalc (apply) ----------
@@ -1949,7 +1949,7 @@ async function configureAi(prompter) {
     const profileIds = profiles.map((p) => p.id);
     const defaultProfile = String(flags.profile || cfg.profile || 'chalc-default');
     const pIndex = Math.max(0, profileIds.indexOf(defaultProfile));
-    const picked = profiles[await prompter.select('Perfil de IA por tarea', profiles.map((p) => ({ label: `${p.id} — ${p.description || 'sin descripción'}` })), pIndex)];
+    const picked = profiles[await prompter.select(t('aiProfileQ'), profiles.map((p) => ({ label: `${p.id} — ${p.description || t('aiNoDesc')}` })), pIndex)];
     out.profile = picked.id;
   }
   if (prov.needsBaseURL) out.baseURL = (await prompter.text(t('aiBaseUrlQ') + ':')).trim() || cfg.baseURL || '';
@@ -1959,12 +1959,12 @@ async function configureAi(prompter) {
   out.model = (await prompter.text(modelQ + ':')).trim() || cfg.model || prov.defaultModel;
   const profile = await loadAiProfile(out.profile || 'chalc-default');
   const profiled = applyProfileModels({ ...out, models: cfg.models || {} }, profile);
-  const askPerTask = await prompter.yesno('¿Personalizar modelos por tarea (spec/qa/repair)?', false);
+  const askPerTask = await prompter.yesno(t('aiPerTaskQ'), false);
   out.models = { ...(profiled.models || {}) };
   if (askPerTask) {
-    out.models.spec = (await prompter.text(`Modelo para spec-ia [${out.models.spec || out.model}]:`)).trim() || out.models.spec || out.model;
-    out.models.qa = (await prompter.text(`Modelo para qa --agent [${out.models.qa || out.model}]:`)).trim() || out.models.qa || out.model;
-    out.models.repair = (await prompter.text(`Modelo para repair-plan [${out.models.repair || out.model}]:`)).trim() || out.models.repair || out.model;
+    out.models.spec = (await prompter.text(t('aiModelForTask', 'spec-ia', out.models.spec || out.model) + ':')).trim() || out.models.spec || out.model;
+    out.models.qa = (await prompter.text(t('aiModelForTask', 'qa --agent', out.models.qa || out.model) + ':')).trim() || out.models.qa || out.model;
+    out.models.repair = (await prompter.text(t('aiModelForTask', 'repair-plan', out.models.repair || out.model) + ':')).trim() || out.models.repair || out.model;
   }
   if (provider === 'azure') out.apiVersion = (await prompter.text(t('aiVersionQ', '2024-10-21') + ':')).trim() || cfg.apiVersion || '2024-10-21';
   const path = await saveConfig(out);
@@ -1989,17 +1989,17 @@ async function runAiDoctor() {
   const profile = await loadAiProfile(String(flags.profile || cfg.profile || 'chalc-default'));
   cfg = applyProfileModels(cfg, profile);
   if (!isConfigured(cfg)) {
-    console.log(c.red('✗ IA no configurada. Ejecuta `chalc config-ia` o define CHALC_PROVIDER/CHALC_API_KEY.'));
+    console.log(c.red('✗ ' + t('aiDoctorNotConfigured')));
     process.exit(1);
   }
   const prov = PROVIDERS[cfg.provider];
-  console.log(`  Proveedor : ${cfg.provider} — ${prov.label}`);
-  console.log(`  Base URL  : ${cfg.baseURL || prov.baseURL}`);
-  console.log(`  Perfil    : ${cfg.profile || '—'}`);
-  console.log(`  Modelos   : spec=${modelForTask(cfg, 'spec')} · qa=${modelForTask(cfg, 'qa')} · repair=${modelForTask(cfg, 'repair')}`);
-  if (prov.needsKey && cfg.apiKey) console.log(`  API key   : ${cfg.apiKey.slice(0, 4)}…${cfg.apiKey.slice(-2)}`);
-  console.log(c.green('\n✓ Configuración local consistente.'));
-  console.log(c.dim('  Para una prueba live, ejecuta un comando real con --dry-run primero y luego sin --dry-run.\n'));
+  console.log(`  ${t('aiDoctorProvider').padEnd(9)} : ${cfg.provider} — ${prov.label}`);
+  console.log(`  ${t('aiDoctorBaseUrl').padEnd(9)} : ${cfg.baseURL || prov.baseURL}`);
+  console.log(`  ${t('aiDoctorProfile').padEnd(9)} : ${cfg.profile || '—'}`);
+  console.log(`  ${t('aiDoctorModels').padEnd(9)} : spec=${modelForTask(cfg, 'spec')} · qa=${modelForTask(cfg, 'qa')} · repair=${modelForTask(cfg, 'repair')}`);
+  if (prov.needsKey && cfg.apiKey) console.log(`  ${t('aiDoctorApiKey').padEnd(9)} : ${cfg.apiKey.slice(0, 4)}…${cfg.apiKey.slice(-2)}`);
+  console.log(c.green('\n✓ ' + t('aiDoctorConsistent')));
+  console.log(c.dim('  ' + t('aiDoctorLiveHint') + '\n'));
 }
 
 async function runAiEval() {
@@ -2010,7 +2010,7 @@ async function runAiEval() {
     console.log(`  ${mark} ${check.name}${check.error ? c.dim(` — ${check.error}`) : ''}`);
   }
   const failed = checks.filter((x) => !x.ok);
-  console.log(`\n  ${checks.length - failed.length}/${checks.length} evals pasaron.\n`);
+  console.log(`\n  ${t('aiEvalSummary', checks.length - failed.length, checks.length)}\n`);
   if (failed.length) process.exit(1);
 }
 
@@ -2202,8 +2202,8 @@ async function runSpecGen() {
     const { system, user } = await buildPrompt(opts);
     if (prompter) prompter.close();
     console.log(c.bold('\n--- SYSTEM PROMPT ---\n') + system);
-    console.log(c.bold('\n--- USER ---\n') + user.slice(0, 1200) + (user.length > 1200 ? '\n…(truncado)' : ''));
-    console.log('\n' + c.dim('(dry-run: no se llamó a la IA)\n'));
+    console.log(c.bold('\n--- USER ---\n') + user.slice(0, 1200) + (user.length > 1200 ? '\n' + t('specgenTruncated') : ''));
+    console.log('\n' + c.dim(t('specgenDryRunNote') + '\n'));
     return;
   }
 
@@ -2215,12 +2215,12 @@ async function runSpecGen() {
   finally { stopSpinner(spin); }
   const validation = summarizeValidation(result.validation || []);
   if (result.validation?.length) {
-    console.log(c.yellow(`\n! Validación SDD: ${validation.errors} error(es), ${validation.warnings} aviso(s)`));
+    console.log(c.yellow('\n! ' + t('specgenValidation', validation.errors, validation.warnings)));
     for (const issue of result.validation.slice(0, 8)) {
       const mark = issue.level === 'error' ? c.red('✗') : c.yellow('!');
       console.log(`  ${mark} ${issue.message}`);
     }
-    if (validation.errors) throw new Error('La spec generada no pasó validación. Ajusta el documento fuente o reintenta con más contexto.');
+    if (validation.errors) throw new Error(t('specgenValidationFailed'));
   }
 
   const feat = (feature || result.feature || 'feature').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'feature';

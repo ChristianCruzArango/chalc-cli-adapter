@@ -54,7 +54,7 @@ test('doctor validates the bundled catalog', async () => {
   const result = await runChalc(['doctor', '--yes']);
 
   assert.equal(result.code, 0, result.output);
-  assert.match(result.output, /sin hallazgos/);
+  assert.match(result.output, /(sin hallazgos|no findings)/);
 });
 
 test('init dry-run summarizes the selected Angular architecture', async () => {

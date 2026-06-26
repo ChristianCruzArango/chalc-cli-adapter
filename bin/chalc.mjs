@@ -1600,23 +1600,40 @@ async function runInit() {
   let recommendedIndex = Math.max(0, suggestions.findIndex((item) => item.recommended));
   let architectureId = String(flags.architecture || '').trim();
 
-  // 4b) Opt-in IA: lee la propuesta a fondo y sugiere (modelo económico + CCR para no quemar tokens en docs grandes).
+  // 4b) IA por defecto (es la razón de ser de init): analiza la propuesta, PREGUNTA sus dudas al usuario
+  // y re-analiza con las respuestas. Usa modelo económico + CCR. --no-ai la desactiva.
   let aiHint = null;
-  let useAi = !!flags.ai;
-  if (!architectureId && prompter && !flags.ai) useAi = await prompter.yesno('¿Que la IA analice la propuesta para sugerir arquitectura? (usa tokens, con CCR)', false);
-  if (!architectureId && useAi) {
+  const clarificationsQA = [];
+  if (!architectureId && !flags['no-ai']) {
     const cfg = await loadConfig();
-    if (!isConfigured(cfg)) console.log(c.yellow('  ! IA no configurada (chalc config-ia) — uso el análisis determinista.'));
-    else {
+    if (!isConfigured(cfg)) {
+      console.log(c.dim('  (IA no configurada — uso el análisis determinista. Configúrala con: chalc config-ia)'));
+    } else {
       console.log(c.dim('  Analizando la propuesta con IA (CCR activo)...'));
       try {
         aiHint = await analyzeArchitectureWithAi({ cfg, stackId, proposal, principles: MANDATORY_DESIGN_PRINCIPLES });
+
+        // Las dudas del LLM se le PREGUNTAN al usuario (no se dejan pasar) y se re-analiza con las respuestas.
+        if (prompter && aiHint.clarifications?.length) {
+          console.log('\n' + c.bold('  La IA necesita aclarar algunas cosas') + c.dim('  (Enter para omitir)'));
+          for (const q of aiHint.clarifications) {
+            const a = (await prompter.text(`  ${q}`)).trim();
+            if (a) clarificationsQA.push({ q, a });
+          }
+          if (clarificationsQA.length) {
+            proposal += '\n\nAclaraciones del usuario:\n' + clarificationsQA.map((x) => `- ${x.q} → ${x.a}`).join('\n');
+            console.log(c.dim('  Re-analizando con tus respuestas...'));
+            aiHint = await analyzeArchitectureWithAi({ cfg, stackId, proposal, principles: MANDATORY_DESIGN_PRINCIPLES });
+          }
+        } else if (aiHint.clarifications?.length) {
+          console.log(c.dim(`  A confirmar (no interactivo): ${aiHint.clarifications.join(' · ')}`));
+        }
+
         const idx = suggestions.findIndex((s) => s.id === aiHint.architectureId);
         if (idx >= 0) recommendedIndex = idx;
         console.log('\n' + c.bold('Sugerencia de la IA') + c.dim(aiHint.source === 'fallback' ? '  (cayó a determinista)' : ''));
         console.log(`  Arquitectura: ${c.bold(aiHint.architectureId)}`);
         if (aiHint.reasoning) console.log(`  Porqué: ${aiHint.reasoning}`);
-        if (aiHint.clarifications?.length) console.log(c.dim(`  A confirmar: ${aiHint.clarifications.join(' · ')}`));
         if (aiHint.ccr) console.log(c.dim(`  CCR: ${aiHint.ccr.entries} ref(s), ~${aiHint.ccr.charsSaved} caracteres diferidos`));
       } catch (e) { console.log(c.yellow(`  ! La IA falló (${e.message}); uso el análisis determinista.`)); }
     }
@@ -1635,7 +1652,7 @@ async function runInit() {
     architectureId = suggestions[idx].id;
   }
   if (!architectureId) architectureId = suggestions[recommendedIndex].id;
-  const decision = buildArchitectureDecision({ stack: stackId, proposal, architectureId: architectureId || suggestions[recommendedIndex].id });
+  const decision = buildArchitectureDecision({ stack: stackId, proposal, architectureId: architectureId || suggestions[recommendedIndex].id, clarifications: clarificationsQA });
 
   // 5) Target (asistente de IA).
   let targetName = String(flags.target || 'claude');

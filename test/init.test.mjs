@@ -4,7 +4,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { analyzeProjectProposal, architectureFolders, architectureSkills, buildArchitectureDecision, listStacks, MANDATORY_DESIGN_PRINCIPLES, scaffoldSteps, slugifyProjectName, suggestArchitectures, verifySteps } from '../lib/init.mjs';
+import { analyzeProjectProposal, architectureFolders, architectureSkills, buildArchitectureDecision, listStacks, MANDATORY_DESIGN_PRINCIPLES, renderArchitectureDecisionMarkdown, scaffoldSteps, slugifyProjectName, suggestArchitectures, verifySteps } from '../lib/init.mjs';
 import { reshapeProject } from '../lib/init-scaffold.mjs';
 
 test('init analysis detects signals and recommends a calibrated architecture', () => {
@@ -45,6 +45,19 @@ test('scaffoldSteps orchestrates the OFFICIAL scaffolder per stack/architecture'
   assert.ok(dnClean.length >= 5);
   assert.ok(dnClean.every((s) => s.cwd === 'project'));
   assert.ok(dnClean.some((s) => s.args.includes('sln') && s.args.includes('add')));
+});
+
+test('the architecture doc records the clarifications the user answered', () => {
+  const decision = buildArchitectureDecision({
+    stack: 'angular', proposal: 'dashboard', architectureId: 'modular-feature-first',
+    clarifications: [{ q: '¿De dónde vienen los datos?', a: 'API REST propia' }]
+  });
+  const md = renderArchitectureDecisionMarkdown(decision);
+  assert.match(md, /Preguntas resueltas con el usuario/);
+  assert.match(md, /¿De dónde vienen los datos\?/);
+  assert.match(md, /API REST propia/);
+  // sin clarifications, no aparece la sección
+  assert.doesNotMatch(renderArchitectureDecisionMarkdown(buildArchitectureDecision({ stack: 'angular', proposal: 'x', architectureId: 'modular-feature-first' })), /Preguntas resueltas/);
 });
 
 test('architectureSkills adds interface-design only for clean/hexagonal/enterprise (not for simple ones)', () => {

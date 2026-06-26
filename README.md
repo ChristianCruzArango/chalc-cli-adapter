@@ -22,6 +22,7 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 
 | Comando | Qué hace | ¿IA? |
 |---|---|---|
+| `chalc init` | Crea un proyecto nuevo desde cero con arquitectura elegida por el usuario y lo equipa | no |
 | `chalc` | Detecta el stack y equipa skills/MCP/método (interactivo) | no |
 | `chalc inspect` | Explica qué detecta y por qué, sin escribir | no |
 | `chalc doctor` | Valida el catálogo (rules, skills, MCP, métodos, targets) | no |
@@ -50,7 +51,12 @@ Todo el CLI es **bilingüe (es/en)** según el idioma del sistema operativo.
 npm link        # crea el comando `chalc` en todo tu sistema
 ```
 
-**Después, en cualquier proyecto:**
+**Crear un proyecto nuevo desde cero:**
+```bash
+chalc init angular
+```
+
+**Equipar un proyecto existente:**
 ```bash
 cd mi-proyecto
 chalc             # detecta el lenguaje/stack y te pregunta qué montar (interactivo)
@@ -65,12 +71,14 @@ npm start -- /ruta/al/proyecto     # equipa otro proyecto
 npm run inspect -- /ruta/al/proyecto
 npm run doctor
 npm run configure
+npm run init -- angular mi-app --description "dashboard administrativo con roles y permisos"
 npm run spec
 ```
 
 ### Banderas (para automatizar / sin preguntas)
 ```bash
 chalc inspect               # explica qué detecta y por qué, sin escribir
+chalc init angular          # crea un proyecto Angular desde cero
 chalc doctor                # valida reglas, catálogo, MCP, métodos y targets
 chalc ai-doctor             # valida la configuración IA local sin gastar tokens
 chalc eval-ia               # evals locales de contratos IA/prompt sin red
@@ -83,6 +91,33 @@ chalc --target claude       # elige el asistente destino
 chalc install <fuente> --allow-exec  # permite Git/npx si confías en la fuente
 chalc install <fuente> --force       # reemplaza un skill existente sin preguntar
 ```
+
+### Crear desde cero (`chalc init`)
+
+`chalc init` es el flujo para quitar el dolor de empezar proyectos. Chalc lee una propuesta
+por texto o archivo (`--doc` soporta Word/PDF/Markdown/TXT vía `docread`), sugiere arquitecturas
+y deja que el usuario seleccione. La regla es: **Chalc sugiere, el usuario decide**.
+
+Clean Code, SOLID y arquitectura modular son **principios obligatorios** en todos los proyectos.
+Lo que el usuario elige es la arquitectura concreta. En la primera versión, `init` crea Angular:
+
+```bash
+chalc init angular
+chalc init angular mi-admin --description "dashboard administrativo con usuarios, roles, permisos y API"
+chalc init angular mi-admin --doc propuesta.docx --architecture modular-clean-architecture --target claude
+```
+
+Arquitecturas Angular disponibles:
+
+| Arquitectura | Cuándo usarla |
+|---|---|
+| `modular-feature-first` | MVPs, dashboards y velocidad con buen orden modular |
+| `modular-clean-architecture` | Dominio/reglas de negocio y larga vida útil |
+| `enterprise-modular` | Equipos grandes, dominios separados y crecimiento sostenido |
+
+Al crear, Chalc genera `package.json`, `angular.json`, `src/`, `docs/architecture.md`, `specs/`,
+skills globales (`clean-code`, `solid-principles`, `modular-architecture`, `mutation-testing`),
+skills del stack, MCP y el target IA elegido (`CLAUDE.md`, Cursor, Copilot o Gemini).
 
 ### Entender antes de aplicar
 ```bash

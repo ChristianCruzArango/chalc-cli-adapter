@@ -56,3 +56,12 @@ test('doctor validates the bundled catalog', async () => {
   assert.equal(result.code, 0, result.output);
   assert.match(result.output, /sin hallazgos/);
 });
+
+test('init dry-run summarizes the selected Angular architecture', async () => {
+  const result = await runChalc(['init', 'angular', 'demo-admin', '--description', 'Dashboard con usuarios roles permisos formularios y API', '--architecture', 'modular-clean-architecture', '--dry-run', '--yes']);
+
+  assert.equal(result.code, 0, result.output);
+  assert.match(result.output, /chalc init/);
+  assert.match(result.output, /Angular Modular Clean Architecture/);
+  assert.match(result.output, /Clean Code, SOLID, arquitectura modular/);
+});

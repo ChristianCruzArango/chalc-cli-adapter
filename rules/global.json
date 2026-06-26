@@ -2,7 +2,12 @@
   "id": "global",
   "name": "Global",
   "always": true,
-  "skills": ["mutation-testing"],
+  "skills": [
+    "clean-code",
+    "solid-principles",
+    "modular-architecture",
+    "mutation-testing"
+  ],
   "mcp": [],
   "optionalMcp": []
 }

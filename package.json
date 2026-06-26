@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node bin/chalc.mjs",
+    "init": "node bin/chalc.mjs init",
     "inspect": "node bin/chalc.mjs inspect",
     "doctor": "node bin/chalc.mjs doctor",
     "configure": "node bin/chalc.mjs configure",

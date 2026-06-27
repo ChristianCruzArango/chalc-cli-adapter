@@ -11,6 +11,10 @@ node_modules/
 # trazas de IA por spec (specs/<id>/.chalc/ai-trace.jsonl) — no subir
 .chalc/
 
+# config local del asistente (privada del usuario, no del proyecto) — no subir
+CLAUDE.md
+.claude/
+
 # sistema
 .DS_Store
 

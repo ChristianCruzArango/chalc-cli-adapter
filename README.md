@@ -22,6 +22,7 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 
 | Comando | Qué hace | ¿IA? |
 |---|---|---|
+| `chalc lang [es\|en]` | Fija el idioma de Chalc una sola vez (se guarda en `~/.chalc/config.json`) | no |
 | `chalc init` | Crea un proyecto nuevo desde cero con arquitectura elegida por el usuario y lo equipa | no |
 | `chalc` | Detecta el stack y equipa skills/MCP/método (interactivo) | no |
 | `chalc inspect` | Explica qué detecta y por qué, sin escribir | no |
@@ -42,13 +43,16 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 | `chalc qa <ruta> ... --agent --surface web\|api` | Fuerza la superficie (navegador vs HTTP) si la autodetección no acierta | sí |
 
 Cada comando tiene su equivalente `npm run <comando>` (ej. `npm run spec-ia`) por si no haces `npm link`.
-Todo el CLI es **bilingüe (es/en)** según el idioma del sistema operativo.
+Todo el CLI es **bilingüe (es/en)**. Por defecto sigue el idioma del sistema operativo, pero puedes
+fijarlo una sola vez con **`chalc lang es`** o **`chalc lang en`** (queda guardado y se aplica a todos
+tus proyectos, sin tener que tocar variables de entorno cada vez).
 
 ## Cómo se usa (la idea: descargar, un comando, interactivo)
 
 **Una sola vez** — dentro de la carpeta `chalc/`, instala el comando global:
 ```bash
 npm link        # crea el comando `chalc` en todo tu sistema
+chalc lang es   # (opcional) fija el idioma del CLI; queda guardado para siempre
 ```
 
 **Crear un proyecto nuevo desde cero:**
@@ -95,29 +99,56 @@ chalc install <fuente> --force       # reemplaza un skill existente sin pregunta
 ### Crear desde cero (`chalc init`)
 
 `chalc init` es el flujo para quitar el dolor de empezar proyectos. Chalc lee una propuesta
-por texto o archivo (`--doc` soporta Word/PDF/Markdown/TXT vía `docread`), sugiere arquitecturas
-y deja que el usuario seleccione. La regla es: **Chalc sugiere, el usuario decide**.
+por texto o archivo (`--doc` soporta Word/PDF/Markdown/TXT vía `docread`), sugiere arquitecturas,
+explica tradeoffs y deja que el usuario seleccione. La regla es: **Chalc sugiere, el usuario decide**.
+La IA nunca es autoridad: si propone algo fuera del catálogo, Chalc lo descarta y cae a una recomendación
+determinística.
 
 Clean Code, SOLID y arquitectura modular son **principios obligatorios** en todos los proyectos.
-Lo que el usuario elige es la arquitectura concreta. En la primera versión, `init` crea Angular:
+Lo que el usuario elige es la arquitectura concreta. Soporta **Angular, NestJS y .NET**, orquestando
+el scaffolder **oficial** de cada uno (`ng new`, `nest new`, `dotnet new`):
 
 ```bash
+chalc init                         # interactivo: elige stack, describe la idea, elige arquitectura
 chalc init angular
 chalc init angular mi-admin --description "dashboard administrativo con usuarios, roles, permisos y API"
 chalc init angular mi-admin --doc propuesta.docx --architecture modular-clean-architecture --target claude
+chalc init nestjs mi-api --description "API de tickets con autenticación y colas"
+chalc init dotnet mi-svc --architecture clean-architecture --verify   # --verify compila al final
 ```
 
-Arquitecturas Angular disponibles:
+#### Paso a paso (flujo interactivo)
+1. **Stack** — eliges Angular / NestJS / .NET.
+2. **Nombre y carpeta** — dónde se crea el proyecto (`--dir` para fijarla sin preguntar).
+3. **Propuesta** — describes la idea por texto o adjuntas un documento (`--doc` lee Word/PDF/Markdown/TXT).
+4. **La IA sugiere la arquitectura** (calibrada a tu propuesta) y, si tiene dudas que cambian la decisión,
+   **te las pregunta**. Tú eliges la arquitectura final de la lista. Con `--no-ai` usas solo el análisis determinista.
+5. **Resumen y confirmación** — Chalc te muestra qué va a hacer (incluida la versión del CLI elegida) antes de crear.
+6. Crea el proyecto con el scaffolder oficial, lo re-moldea a la arquitectura y lo **equipa**.
 
-| Arquitectura | Cuándo usarla |
+Arquitecturas disponibles (la IA recomienda la más liviana que encaje; tú decides):
+
+| Stack | Arquitecturas |
 |---|---|
-| `modular-feature-first` | MVPs, dashboards y velocidad con buen orden modular |
-| `modular-clean-architecture` | Dominio/reglas de negocio y larga vida útil |
-| `enterprise-modular` | Equipos grandes, dominios separados y crecimiento sostenido |
+| **Angular** | `modular-feature-first` (MVPs/dashboards) · `modular-clean-architecture` (dominio/larga vida) · `enterprise-modular` (equipos grandes) |
+| **NestJS** | `modular-feature` · `clean-hexagonal` · `enterprise-microservices` |
+| **.NET** | `webapi-simple` · `clean-architecture` (solución + capas Domain/Application/Infrastructure/Api) |
 
-Al crear, Chalc genera `package.json`, `angular.json`, `src/`, `docs/architecture.md`, `specs/`,
-skills globales (`clean-code`, `solid-principles`, `modular-architecture`, `mutation-testing`),
-skills del stack, MCP y el target IA elegido (`CLAUDE.md`, Cursor, Copilot o Gemini).
+#### Qué hace especial a `chalc init`
+- **Se acomoda a tu máquina:** elige la versión del CLI **compatible con el Node que ya tienes instalado**
+  (ej.: Node 22.20 → `@angular/cli@20`, no el 22 que aborta). No te obliga a actualizar Node.
+- **Cada carpeta nace documentada:** en vez de un `.gitkeep` vacío, cada carpeta trae un `README.md` que
+  explica —según la arquitectura— qué va ahí, buenas prácticas y qué skills aplicar. Así tu IA tiene contexto local.
+- **`docs/architecture.md` detallado:** mapa de carpetas, reglas de dependencia y cómo agregar un feature.
+- **El asistente lo lee primero:** `CLAUDE.md` (y equivalentes) abre con un bloque de **Principios obligatorios
+  (siempre)** y una referencia a `docs/architecture.md` para que la IA respete la arquitectura antes de crear archivos.
+- **`--verify`** corre el build (`npm run build` / `dotnet build`) para confirmar que el proyecto compila al nacer.
+- **Bilingüe (es/en)** según `chalc lang` o el idioma del sistema.
+
+Al crear, Chalc genera el proyecto base del scaffolder oficial, las carpetas de la arquitectura con su
+`README.md`, `docs/architecture.md`, `specs/` (método SDD), las skills globales (`clean-code`,
+`solid-principles`, `modular-architecture`, `mutation-testing`), las skills del stack, los MCP y el target
+IA elegido (`CLAUDE.md`, Cursor, Copilot o Gemini).
 
 ### Entender antes de aplicar
 ```bash
@@ -498,7 +529,10 @@ producción); audítalas con `npm audit` / `dotnet list package --vulnerable` / 
 
 ## Internacionalización
 
-- **CLI bilingüe (es/en)**: los textos salen en el idioma del SO (`LANG`/`LC_*`), o forzado con `CHALC_LANG=es`.
+- **CLI bilingüe (es/en)**: toda la salida al usuario pasa por `lib/i18n.mjs` y sale en el idioma elegido.
+- **Fijar el idioma una sola vez**: `chalc lang es` o `chalc lang en` lo guarda en `~/.chalc/config.json`
+  y se aplica a todos tus proyectos. `chalc lang` sin argumento abre el menú interactivo.
+- **Precedencia del idioma**: `--lang` > `CHALC_LANG` > config guardada (`chalc lang`) > `LANG`/`LC_*` del SO > `en`.
 - **Idioma del spec**: `chalc spec-ia --lang es|en|pt|…` (o el menú) — independiente del idioma del CLI.
 - El método SDD (constitución, plantillas, reglas, gráfico explicativo) está en **es y en**.
 

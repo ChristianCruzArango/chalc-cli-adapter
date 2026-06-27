@@ -9,7 +9,7 @@ import * as kit from '../lib/targetkit.mjs';
 
 export const label = 'GitHub Copilot';
 
-export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, dryRun }) {
+export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, dryRun }) {
   const plan = [];
   for (const s of skills) plan.push(`skill     .chalc/skills/${s}`);
   for (const m of mcps) plan.push(`mcp       .vscode/mcp.json  ::  ${m.id}`);
@@ -22,6 +22,10 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
 
   const metas = await Promise.all(skills.map((s) => kit.readSkillMeta(CATALOG, s)));
   const lines = [kit.START, '## ⚙️ Chalc'];
+  const principles = kit.mandatoryPrinciplesBlock(skills);
+  if (principles) lines.push('', principles);
+  const archRef = kit.architectureBlock(projectPath, architecture?.name);
+  if (archRef) lines.push('', archRef);
   if (metas.length) {
     lines.push('', '### Skills disponibles', '_Cuando la tarea lo amerite, lee el archivo indicado:_',
       ...metas.map((m) => `- **${m.name}** — ${m.description} → \`.chalc/skills/${m.id}/SKILL.md\``));

@@ -13,7 +13,7 @@ import * as kit from '../lib/targetkit.mjs';
 
 export const label = 'Claude Code';
 
-export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, dryRun }) {
+export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, dryRun }) {
   const plan = [];
   for (const s of skills) plan.push(`skill     .claude/skills/${s}`);
   for (const m of mcps) plan.push(`mcp       .mcp.json  ::  ${m.id}`);
@@ -42,6 +42,10 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
 
   // 4) CLAUDE.md (bloque gestionado)
   const lines = [kit.START, '## ⚙️ Chalc'];
+  const principles = kit.mandatoryPrinciplesBlock(skills);
+  if (principles) lines.push('', principles);
+  const archRef = kit.architectureBlock(projectPath, architecture?.name);
+  if (archRef) lines.push('', archRef);
   if (skills.length) lines.push('', '### Skills activas', ...skills.map((s) => `- \`${s}\``));
   if (mcps.length) lines.push('', '### Servidores MCP', ...mcps.map((m) => `- \`${m.id}\` — ${m.description || ''}`));
   for (const me of methods) lines.push('', me.rulesText.trim());

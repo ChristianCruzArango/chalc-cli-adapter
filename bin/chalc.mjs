@@ -38,7 +38,7 @@ import { buildAgentReplaySpec, buildRepairPlanMarkdown, buildResultsMarkdown, cr
 import { appendAiTrace, makeAiTrace } from '../lib/aitrace.mjs';
 import { runLocalAiEvals } from '../lib/aieval.mjs';
 import { summarizeValidation } from '../lib/specvalidate.mjs';
-import { analyzeProjectProposal, architectureSkills, archText, buildArchitectureDecision, getStack, listStacks, localizeComplexity, localizeType, MANDATORY_DESIGN_PRINCIPLES, scaffoldSteps, slugifyProjectName, suggestArchitectures, verifySteps } from '../lib/init.mjs';
+import { analyzeProjectProposal, architectureSkills, archText, buildArchitectureDecision, getStack, listStacks, localizeComplexity, localizeType, MANDATORY_DESIGN_PRINCIPLES, resolveScaffoldTool, scaffoldSteps, slugifyProjectName, suggestArchitectures, verifySteps } from '../lib/init.mjs';
 import { reshapeProject } from '../lib/init-scaffold.mjs';
 import { analyzeArchitectureWithAi } from '../lib/initai.mjs';
 
@@ -557,7 +557,7 @@ async function equipForSpec(proj, mode, targetName, specLang) {
   return skills;
 }
 
-async function equipCreatedProject(proj, { targetName = 'claude', methodMode = 'lite', extraSkills = [] } = {}) {
+async function equipCreatedProject(proj, { targetName = 'claude', methodMode = 'lite', extraSkills = [], architecture = null } = {}) {
   targetName = assertSafeId(targetName, 'target');
   const ctx = await detectContext(proj);
   const rules = await loadJsonDir(RULES_DIR);
@@ -575,7 +575,7 @@ async function equipCreatedProject(proj, { targetName = 'claude', methodMode = '
   const targetFile = join(TARGETS_DIR, `${targetName}.mjs`);
   if (!existsSync(targetFile)) throw new Error(`Target no existe: ${targetName}`);
   const target = await import(targetFile);
-  const applied = await target.apply({ projectPath: proj, CATALOG, skills, mcps, methods, stacks, dryRun: false });
+  const applied = await target.apply({ projectPath: proj, CATALOG, skills, mcps, methods, stacks, architecture, dryRun: false });
   return { skills, mcps, methods, stacks, plan: applied.plan };
 }
 
@@ -1655,6 +1655,7 @@ async function runInit() {
         console.log(`  ${t('initAiArch')}: ${c.bold(recLabel)}`);
         if (aiHint.reasoning) console.log(`  ${t('initAiWhy', aiHint.reasoning)}`);
         if (aiHint.ccr) console.log(c.dim('  ' + t('initAiCcr', aiHint.ccr.entries, aiHint.ccr.charsSaved)));
+        console.log(c.dim('  ' + t('initHumanDecision')));
       } catch (e) { console.log(c.yellow('  ! ' + t('initAiFailed', e.message))); }
     }
   }
@@ -1693,6 +1694,12 @@ async function runInit() {
   console.log(`  ${t('initSumStack')}: ${decision.stackLabel}`);
   console.log(`  ${t('initSumArch')}: ${archText(decision.architecture.label)}`);
   console.log(`  ${t('initSumScaffolder')}: ${steps.map((s) => `${s.command} ${s.args.slice(0, 4).join(' ')}…`).join(' · ')}`);
+  const tool = resolveScaffoldTool(stackId);
+  if (tool) {
+    const node = process.version.replace(/^v/, '');
+    const pinned = tool.tag !== 'latest';
+    console.log(`  ${t('initSumToolchain')}: ${tool.pkg}@${tool.tag}` + (pinned ? c.dim('  · ' + t('initToolPinned', node)) : ''));
+  }
   console.log(`  ${t('initSumPrinciples')}: ${decision.mandatoryPrinciples.slice(0, 3).join(', ')} ${t('initSumAlways')}`);
   console.log(`  ${t('initSumTarget')}: ${targetName}${doVerify ? c.dim('  · ' + t('initWithVerify')) : ''}`);
   if (prompter) {
@@ -1727,7 +1734,7 @@ async function runInit() {
 
   // 8) Equipar (mismo motor que `apply`): stack + principios globales + skills propias de la arquitectura.
   const extraSkills = architectureSkills(stackId, decision.architecture.id);
-  const equipped = await equipCreatedProject(dest, { targetName, methodMode: 'lite', extraSkills });
+  const equipped = await equipCreatedProject(dest, { targetName, methodMode: 'lite', extraSkills, architecture: { name: archText(decision.architecture.label) } });
 
   console.log('\n' + c.green('✓ ' + t('initCreated', dest)));
   console.log(c.dim('  ' + t('initFolders', reshaped.folders.join(', '))));

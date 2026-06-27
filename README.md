@@ -1,10 +1,15 @@
 # ⚙️ Chalc
 
-Chalc es una CLI local para detectar el stack de un proyecto y generar la configuración de asistentes de desarrollo: skills, servidores MCP, reglas y métodos de trabajo.
+Chalc es una CLI local para **crear proyectos nuevos** (`chalc init`) y **equipar proyectos existentes** con la configuración de asistentes de desarrollo: skills, servidores MCP, reglas y métodos de trabajo.
 
-El flujo principal no llama a modelos de IA: lee señales del proyecto (`package.json`, archivos raíz, globs), aplica reglas del catálogo y escribe los archivos que necesita el target elegido (Claude Code, GitHub Copilot, Cursor o Gemini CLI).
+El flujo de equipado (`chalc`) no llama a modelos de IA: lee señales del proyecto (`package.json`, archivos raíz, globs), aplica reglas del catálogo y escribe los archivos que necesita el target elegido (Claude Code, GitHub Copilot, Cursor o Gemini CLI).
 
-La parte con IA existe solo en `chalc spec-ia`: usa la API key configurada por el usuario para transformar una historia de usuario o documento fuente en archivos SDD (`spec.md`, `plan.md`, `tasks.md`). Si no usas `spec-ia`, Chalc no necesita proveedor de IA ni tokens.
+La IA es **opt-in** y se usa solo en tres comandos, siempre con la API key configurada por el usuario:
+- **`chalc init`** — la IA *sugiere* una arquitectura calibrada a tu propuesta (aliada, no oráculo; tú decides).
+- **`chalc spec-ia`** — transforma una historia de usuario o documento en archivos SDD (`spec.md`, `plan.md`, `tasks.md`).
+- **`chalc qa --agent`** — verifica cada requisito `R#` contra la app viva.
+
+Si no usas esos comandos, Chalc no necesita proveedor de IA ni tokens. Las llamadas a IA usan **CCR** (compresión reversible) para ahorrar tokens y son provider-agnósticas (OpenRouter, Anthropic, OpenAI, Gemini u Ollama).
 
 ## Idea en una frase
 
@@ -23,7 +28,7 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 | Comando | Qué hace | ¿IA? |
 |---|---|---|
 | `chalc lang [es\|en]` | Fija el idioma de Chalc una sola vez (se guarda en `~/.chalc/config.json`) | no |
-| `chalc init` | Crea un proyecto nuevo desde cero con arquitectura elegida por el usuario y lo equipa | no |
+| `chalc init` | Crea un proyecto nuevo desde cero con arquitectura elegida por el usuario y lo equipa | opt-in (sugiere arq.; `--no-ai` la desactiva) |
 | `chalc` | Detecta el stack y equipa skills/MCP/método (interactivo) | no |
 | `chalc inspect` | Explica qué detecta y por qué, sin escribir | no |
 | `chalc doctor` | Valida el catálogo (rules, skills, MCP, métodos, targets) | no |
@@ -237,29 +242,47 @@ proyecto  ──►  detecta señales        ──►  aplica reglas      ─�
 
 ```
 chalc/
-├── bin/chalc.mjs          el motor / CLI (Node puro, sin dependencias)
-├── lib/                 módulos del motor
-│   ├── cli/args.mjs     parser de banderas/argumentos testeable
-│   ├── i18n.mjs         textos bilingües (es/en)
-│   ├── install.mjs      instalar/vendorizar skills (Git/skills.sh/local)
-│   ├── targetkit.mjs    utilidades compartidas por los targets
-│   ├── ids.mjs          validación de ids seguros (kebab-case)
-│   ├── net.mjs          fetch con timeout/límites y validación de URLs externas
-│   ├── ai.mjs           cliente multi-proveedor de IA (fetch) + config ~/.chalc
-│   ├── docread.mjs      extrae texto de Word/PDF/CSV/…
-│   ├── sources.mjs      trae la HU de Azure DevOps / Jira / Drive
-│   ├── specgen.mjs      orquesta la generación del spec
-│   └── prompts/spec-gen.prompt.xml   el system prompt (harness de fidelidad)
+├── bin/chalc.mjs            el motor / CLI (Node puro, sin dependencias)
+├── lib/                     módulos del motor
+│   ├── cli/args.mjs         parser de banderas/argumentos testeable
+│   ├── i18n.mjs             textos bilingües (es/en) + `chalc lang` (idioma persistente)
+│   ├── ids.mjs              validación de ids seguros (kebab-case)
+│   ├── net.mjs              fetch con timeout/límites y validación de URLs externas
+│   ├── install.mjs          instalar/vendorizar skills (Git/skills.sh/local)
+│   ├── targetkit.mjs        utilidades compartidas por los targets (principios, arquitectura, bloques)
+│   ├── docread.mjs          extrae texto de Word/PDF/CSV/…
+│   ├── sources.mjs          trae la HU de Azure DevOps / Jira / Drive
+│   ├── ── creación de proyectos (`chalc init`) ──
+│   ├── init.mjs             registro de stacks: arquitecturas, scaffolder oficial, versión de CLI por Node
+│   ├── init-folders.mjs     guías por carpeta (README.md) + mapa de carpetas para architecture.md
+│   ├── init-scaffold.mjs    re-moldea el proyecto a la arquitectura + escribe docs/architecture.md
+│   ├── initai.mjs           capa IA opcional que sugiere arquitectura (CCR + recall, clarifications)
+│   ├── ── generación de specs (`chalc spec-ia`) ──
+│   ├── ai.mjs               cliente multi-proveedor de IA (fetch) + config ~/.chalc (perfiles por tarea)
+│   ├── ccr.mjs              compresión reversible (CCR) para ahorrar tokens, provider-agnóstica
+│   ├── specgen.mjs          orquesta la generación del spec
+│   ├── specvalidate.mjs     valida la salida (R#, trazabilidad, estructura mínima)
+│   ├── aitrace.mjs          traza reproducible por spec (hashes, sin contenido crudo)
+│   ├── aieval.mjs           evals locales de prompts/parsers sin llamar al proveedor
+│   ├── ── agente QA (`chalc qa --agent`) ──
+│   ├── qa.mjs               plan QA, entornos, reportes (results.md / repair-plan.md)
+│   ├── qaagent.mjs          agente que verifica cada R# contra la app viva (provider-agnóstico)
+│   └── prompts/             system prompts (estándar XML de HALLC)
+│       ├── spec-gen.prompt.xml       generación de specs (harness de fidelidad)
+│       ├── init-architect.prompt.xml sugerencia de arquitectura (aliada, no oráculo)
+│       └── qa-agent.prompt.xml       verificación QA anclada en hechos
 ├── catalog/
-│   ├── skills/          las skills reales (autocontenidas, portátiles)
-│   ├── mcp/             definiciones de servidores MCP
-│   └── methods/sdd/     el método SDD (constitución, plantillas es/en, reglas, gráfico)
-├── rules/               criterio: qué señal = qué stack = qué se instala (incl. global.json)
-└── targets/
-    ├── claude.mjs       traductor a Claude Code
-    ├── copilot.mjs      traductor a GitHub Copilot
-    ├── cursor.mjs       traductor a Cursor
-    └── gemini.mjs       traductor a Gemini CLI
+│   ├── skills/              las skills reales (autocontenidas, portátiles)
+│   ├── mcp/                 definiciones de servidores MCP
+│   ├── profiles/            perfiles de modelos por tarea (chalc-default.json: spec/qa/repair)
+│   └── methods/sdd/         el método SDD (constitución, plantillas es/en, reglas, gráfico)
+├── rules/                   criterio: qué señal = qué stack = qué se instala (incl. global.json)
+├── targets/
+│   ├── claude.mjs           traductor a Claude Code
+│   ├── copilot.mjs          traductor a GitHub Copilot
+│   ├── cursor.mjs           traductor a Cursor
+│   └── gemini.mjs           traductor a Gemini CLI
+└── test/                    suite con `node --test` (parser, init, IA, QA, seguridad, doctor)
 ```
 
 ## Qué genera (target Claude)

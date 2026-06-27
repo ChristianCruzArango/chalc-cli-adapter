@@ -12,7 +12,7 @@ import * as kit from '../lib/targetkit.mjs';
 
 export const label = 'Cursor';
 
-export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, dryRun }) {
+export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, dryRun }) {
   const plan = [];
   for (const s of skills) plan.push(`skill     .cursor/rules/chalc-skill-${s}.mdc  (+ .chalc/skills/${s})`);
   for (const me of methods) plan.push(`método    .cursor/rules/chalc-method-${me.id}.mdc`);
@@ -25,7 +25,25 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   await kit.cleanPrefixed(rulesDir, 'chalc-', '.mdc');     // quita reglas Chalc obsoletas de una corrida anterior
   await kit.copySkills(CATALOG, skills, join(projectPath, '.chalc', 'skills'));
 
-  // (sin regla de perfil: el asistente ya ve el proyecto; evitamos llenar contexto)
+  // principios obligatorios (siempre activos): Clean Code + SOLID + arquitectura modular, prominentes
+  const principles = kit.mandatoryPrinciplesBlock(skills);
+  if (principles) {
+    await writeFile(join(rulesDir, 'chalc-principles.mdc'), kit.mdc({
+      description: 'Principios obligatorios del proyecto (Chalc)',
+      alwaysApply: true,
+      body: principles
+    }));
+  }
+
+  // referencia a la arquitectura acordada (siempre activa): apunta a docs/architecture.md
+  const archRef = kit.architectureBlock(projectPath, architecture?.name);
+  if (archRef) {
+    await writeFile(join(rulesDir, 'chalc-architecture.mdc'), kit.mdc({
+      description: 'Arquitectura acordada del proyecto (Chalc)',
+      alwaysApply: true,
+      body: archRef
+    }));
+  }
 
   // métodos (siempre activos)
   for (const me of methods) {

@@ -4,6 +4,7 @@
   "always": true,
   "skills": [
     "clean-code",
+    "minimal-implementation",
     "solid-principles",
     "modular-architecture",
     "mutation-testing"

@@ -1,0 +1,10 @@
+{
+  "id": "dart",
+  "kind": "stdio",
+  "description": "Servidor MCP oficial del SDK de Dart/Flutter (analiza, ejecuta pub, pruebas y más; on-demand).",
+  "requiresSecret": false,
+  "server": {
+    "command": "dart",
+    "args": ["mcp-server"]
+  }
+}

@@ -7,7 +7,16 @@
     "allFile": ["pubspec.yaml"],
     "anyFile": ["android", "ios", "macos", "linux", "windows", "web"]
   },
-  "skills": [],
-  "mcp": [],
+  "skills": [
+    "dart-best-practices",
+    "flutter-architecture",
+    "flutter-widgets",
+    "flutter-state-management",
+    "flutter-navigation",
+    "flutter-async",
+    "flutter-testing",
+    "flutter-performance"
+  ],
+  "mcp": ["dart"],
   "optionalMcp": []
 }

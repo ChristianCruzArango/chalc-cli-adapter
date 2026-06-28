@@ -19,6 +19,7 @@ test('init analysis detects signals and recommends a calibrated architecture', (
 });
 
 test('mandatory principles always include Clean Code, SOLID and modular architecture', () => {
+  assert.ok(MANDATORY_DESIGN_PRINCIPLES.some((p) => /implementaci[oó]n m[ií]nima|minimal implementation/i.test(p)));
   assert.ok(MANDATORY_DESIGN_PRINCIPLES.includes('Clean Code'));
   assert.ok(MANDATORY_DESIGN_PRINCIPLES.includes('SOLID'));
   assert.ok(MANDATORY_DESIGN_PRINCIPLES.some((p) => /modular/i.test(p)));   // 'arquitectura modular' / 'modular architecture'

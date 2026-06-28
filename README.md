@@ -109,7 +109,7 @@ explica tradeoffs y deja que el usuario seleccione. La regla es: **Chalc sugiere
 La IA nunca es autoridad: si propone algo fuera del catálogo, Chalc lo descarta y cae a una recomendación
 determinística.
 
-Clean Code, SOLID y arquitectura modular son **principios obligatorios** en todos los proyectos.
+Implementación mínima, Clean Code, SOLID y arquitectura modular son **principios obligatorios** en todos los proyectos.
 Lo que el usuario elige es la arquitectura concreta. Soporta **Angular, NestJS y .NET**, orquestando
 el scaffolder **oficial** de cada uno (`ng new`, `nest new`, `dotnet new`):
 
@@ -154,8 +154,8 @@ Arquitecturas disponibles (la IA recomienda la más liviana que encaje; tú deci
 - **Bilingüe (es/en)** según `chalc lang` o el idioma del sistema.
 
 Al crear, Chalc genera el proyecto base del scaffolder oficial, las carpetas de la arquitectura con su
-`README.md`, `docs/architecture.md`, `specs/` (método SDD), las skills globales (`clean-code`,
-`solid-principles`, `modular-architecture`, `mutation-testing`), las skills del stack, los MCP y el target
+`README.md`, `docs/architecture.md`, `specs/` (método SDD), las skills globales (`minimal-implementation`,
+`clean-code`, `solid-principles`, `modular-architecture`, `mutation-testing`), las skills del stack, los MCP y el target
 IA elegido (`CLAUDE.md`, Cursor, Copilot o Gemini).
 
 #### Extensible a cualquier framework

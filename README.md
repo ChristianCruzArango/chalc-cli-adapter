@@ -133,27 +133,72 @@ chalc init dotnet mi-svc --architecture clean-architecture --verify   # --verify
 
 Arquitecturas disponibles (la IA recomienda la más liviana que encaje; tú decides):
 
-| Stack | Arquitecturas |
-|---|---|
-| **Angular** | `modular-feature-first` (MVPs/dashboards) · `modular-clean-architecture` (dominio/larga vida) · `enterprise-modular` (equipos grandes) |
-| **NestJS** | `modular-feature` · `clean-hexagonal` · `enterprise-microservices` |
-| **.NET** | `webapi-simple` · `clean-architecture` (solución + capas Domain/Application/Infrastructure/Api) |
+| Stack | Scaffolder oficial | Arquitecturas |
+|---|---|---|
+| **Angular** | `ng new` | `modular-feature-first` (MVPs/dashboards) · `modular-clean-architecture` (dominio/larga vida) · `enterprise-modular` (equipos grandes) |
+| **NestJS** | `nest new` | `modular-feature` · `clean-hexagonal` · `enterprise-microservices` |
+| **.NET** | `dotnet new` | `webapi-simple` · `clean-architecture` (solución + capas Domain/Application/Infrastructure/Api) |
+| **Flutter** | `flutter create` | `feature-first` · `clean-architecture` (capas `presentation/domain/data`) · `enterprise-modular` |
 
 #### Qué hace especial a `chalc init`
-- **Se acomoda a tu máquina:** elige la versión del CLI **compatible con el Node que ya tienes instalado**
-  (ej.: Node 22.20 → `@angular/cli@20`, no el 22 que aborta). No te obliga a actualizar Node.
+- **Se acomoda a tu máquina:** usa la versión de la herramienta que **ya tienes instalada**. En Angular/NestJS
+  elige el major del CLI **compatible con tu Node** (ej.: Node 22.20 → `@angular/cli@20`, no el 22 que aborta);
+  en **Flutter** y **.NET** usa directamente el **SDK instalado** (`flutter create` / `dotnet new`), y muestra
+  esa versión en el resumen. No te obliga a actualizar nada.
 - **Cada carpeta nace documentada:** en vez de un `.gitkeep` vacío, cada carpeta trae un `README.md` que
   explica —según la arquitectura— qué va ahí, buenas prácticas y qué skills aplicar. Así tu IA tiene contexto local.
 - **`docs/architecture.md` detallado:** mapa de carpetas, reglas de dependencia y cómo agregar un feature.
 - **El asistente lo lee primero:** `CLAUDE.md` (y equivalentes) abre con un bloque de **Principios obligatorios
   (siempre)** y una referencia a `docs/architecture.md` para que la IA respete la arquitectura antes de crear archivos.
-- **`--verify`** corre el build (`npm run build` / `dotnet build`) para confirmar que el proyecto compila al nacer.
+- **`--verify`** corre el build/análisis (`npm run build` / `dotnet build` / `flutter analyze`) para confirmar que el proyecto compila al nacer.
 - **Bilingüe (es/en)** según `chalc lang` o el idioma del sistema.
 
 Al crear, Chalc genera el proyecto base del scaffolder oficial, las carpetas de la arquitectura con su
 `README.md`, `docs/architecture.md`, `specs/` (método SDD), las skills globales (`clean-code`,
 `solid-principles`, `modular-architecture`, `mutation-testing`), las skills del stack, los MCP y el target
 IA elegido (`CLAUDE.md`, Cursor, Copilot o Gemini).
+
+#### Extensible a cualquier framework
+
+`chalc init` no está casado con Angular/NestJS/.NET/Flutter: cada stack es **una entrada declarativa** en
+el registro de stacks (`lib/init.mjs`). Sumar Vue, Django, Spring, Go, Rails… es definir su scaffolder
+oficial, sus arquitecturas y sus carpetas — **el motor no se toca**.
+
+Forma de una entrada de stack:
+
+```js
+STACKS = {
+  '<stack-id>': {
+    label:        'Mi Framework (Lenguaje)',
+    scaffold:     () => [{ command: '<cli-oficial>', args: (name) => ['create', name], cwd: 'parent' }],
+    verify:       [{ command: '<cli>', args: ['install'] }, { command: '<cli>', args: ['build'] }],
+    pick:         (a) => a.complexity === 'alta' ? 'clean-architecture' : 'feature-first',  // recomendación
+    architectures: [
+      { id: 'feature-first',      folders: ['src/core', 'src/shared', 'src/features'] },
+      { id: 'clean-architecture', folders: ['src/domain', 'src/application', 'src/infrastructure', 'src/presentation'] }
+    ]
+  }
+}
+```
+
+El flujo es el mismo para todos los stacks:
+
+```
+chalc init <stack>
+     │
+     ├─ 1) scaffolder OFICIAL  (usa la versión instalada en tu máquina)  ──►  proyecto base
+     │        ng new · nest new · dotnet new · flutter create · …
+     │
+     ├─ 2) reshape a la arquitectura elegida  ──►  carpetas + README por carpeta + docs/architecture.md
+     │
+     └─ 3) equip (rules/<stack>.json + regla global)  ──►  skills + MCP + método SDD (specs/) + archivo del asistente
+```
+
+Para dejar equipado el nuevo stack: crea sus skills en `catalog/skills/`, (opcional) su MCP en
+`catalog/mcp/`, y cabléalos en `rules/<stack>.json`. Cada carpeta de la arquitectura se documenta sola
+vía `lib/init-folders.mjs` (si usas un rol de carpeta nuevo, agrega ahí su guía). Versionado de la
+herramienta: si es un CLI de npm, añade su tabla Node→versión como en Angular/NestJS; si es un SDK local
+(como Flutter/.NET), simplemente usa el instalado.
 
 ### Entender antes de aplicar
 ```bash

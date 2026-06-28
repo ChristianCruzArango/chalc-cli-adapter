@@ -20,6 +20,9 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
 
   await kit.copySkills(CATALOG, skills, join(projectPath, '.chalc', 'skills'));
 
+  // Scaffold de los métodos (specs/ del SDD): contenido del proyecto, va con cualquier asistente.
+  await kit.copyMethodScaffolds(methods, projectPath);
+
   const metas = await Promise.all(skills.map((s) => kit.readSkillMeta(CATALOG, s)));
   const lines = [kit.START, '## ⚙️ Chalc'];
   const principles = kit.mandatoryPrinciplesBlock(skills);

@@ -25,6 +25,9 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   await kit.cleanPrefixed(rulesDir, 'chalc-', '.mdc');     // quita reglas Chalc obsoletas de una corrida anterior
   await kit.copySkills(CATALOG, skills, join(projectPath, '.chalc', 'skills'));
 
+  // Scaffold de los métodos (specs/ del SDD): contenido del proyecto, va con cualquier asistente.
+  await kit.copyMethodScaffolds(methods, projectPath);
+
   // principios obligatorios (siempre activos): Clean Code + SOLID + arquitectura modular, prominentes
   const principles = kit.mandatoryPrinciplesBlock(skills);
   if (principles) {

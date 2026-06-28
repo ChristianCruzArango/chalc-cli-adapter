@@ -33,12 +33,8 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
     });
   }
 
-  // 3) Métodos -> copiar scaffold (sin sobrescribir archivos existentes del usuario)
-  for (const me of methods) {
-    if (me.scaffoldDir && existsSync(me.scaffoldDir)) {
-      await cp(me.scaffoldDir, projectPath, { recursive: true, force: false, errorOnExist: false, dereference: true });
-    }
-  }
+  // 3) Métodos -> copiar scaffold (specs/ del SDD, sin sobrescribir archivos del usuario)
+  await kit.copyMethodScaffolds(methods, projectPath);
 
   // 4) CLAUDE.md (bloque gestionado)
   const lines = [kit.START, '## ⚙️ Chalc'];

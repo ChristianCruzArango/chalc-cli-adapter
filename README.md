@@ -311,7 +311,7 @@ Chalc detecta el **lenguaje/stack** por señales reales y se adapta:
 | Grupo | Reglas incluidas | Estado |
 |---|---|---|
 | Web/TypeScript | JavaScript, TypeScript, Angular, NestJS | Angular/NestJS con skills; JS/TS detecta |
-| Mobile | Flutter, Dart, Swift, Kotlin | detecta |
+| Mobile | Flutter, Dart, Swift, Kotlin | Flutter con skills + MCP (`dart`); Dart/Swift/Kotlin detecta |
 | Backend/General | .NET, Go, Java, PHP, Ruby, Python, Rust, Elixir | detecta |
 | Sistemas/IaC | C, C++, Shell, Terraform, Zig | detecta |
 | Otros ecosistemas | Clojure, Erlang, Haskell, Julia, Lua, Perl, R, Scala | detecta |

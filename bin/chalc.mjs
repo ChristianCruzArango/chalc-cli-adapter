@@ -38,7 +38,7 @@ import { buildAgentReplaySpec, buildRepairPlanMarkdown, buildResultsMarkdown, cr
 import { appendAiTrace, makeAiTrace } from '../lib/aitrace.mjs';
 import { runLocalAiEvals } from '../lib/aieval.mjs';
 import { summarizeValidation } from '../lib/specvalidate.mjs';
-import { analyzeProjectProposal, architectureSkills, archText, buildArchitectureDecision, getStack, listStacks, localizeComplexity, localizeType, MANDATORY_DESIGN_PRINCIPLES, resolveScaffoldTool, scaffoldSteps, slugifyProjectName, suggestArchitectures, verifySteps } from '../lib/init.mjs';
+import { analyzeProjectProposal, architectureSkills, archText, buildArchitectureDecision, dartPackageName, getStack, listStacks, localizeComplexity, localizeType, MANDATORY_DESIGN_PRINCIPLES, resolveScaffoldTool, scaffoldSteps, slugifyProjectName, suggestArchitectures, verifySteps } from '../lib/init.mjs';
 import { reshapeProject } from '../lib/init-scaffold.mjs';
 import { analyzeArchitectureWithAi } from '../lib/initai.mjs';
 
@@ -1568,6 +1568,19 @@ function runInitStep(step, { parentDir, projectDir }) {
   });
 }
 
+// Lee la versión del Flutter instalado en la máquina (la que usará `flutter create`). null si no está en PATH.
+function detectFlutterVersion() {
+  return new Promise((res) => {
+    try {
+      let out = '';
+      const child = spawn('flutter', ['--version'], { stdio: ['ignore', 'pipe', 'ignore'] });
+      child.stdout.on('data', (d) => { out += d; });
+      child.on('error', () => res(null));
+      child.on('exit', () => { const m = out.match(/Flutter\s+(\d+\.\d+\.\d+)/i); res(m ? m[1] : null); });
+    } catch { res(null); }
+  });
+}
+
 async function runInit() {
   console.log('\n' + c.bold('⚙️  chalc init') + (dryRun ? c.dim('  (dry-run)') : '') + '\n');
   const prompter = interactive ? makePrompter() : null;
@@ -1591,6 +1604,8 @@ async function runInit() {
     projectName = slugifyProjectName(await prompter.text(t('initNameQ')));
   }
   if (!projectName) projectName = 'chalc-app';
+  // Flutter/Dart exige nombre de paquete en snake_case (rechaza guiones): se aplica al nombre y a la carpeta.
+  if (stackId === 'flutter') projectName = dartPackageName(projectName);
 
   // 2b) Ubicación: carpeta padre donde se creará <projectName>. Default = directorio actual.
   let baseDir = String(flags.dir || '').trim() ? resolve(cleanPath(String(flags.dir))) : process.cwd();
@@ -1699,6 +1714,11 @@ async function runInit() {
     const node = process.version.replace(/^v/, '');
     const pinned = tool.tag !== 'latest';
     console.log(`  ${t('initSumToolchain')}: ${tool.pkg}@${tool.tag}` + (pinned ? c.dim('  · ' + t('initToolPinned', node)) : ''));
+  }
+  // Flutter usa el SDK instalado en tu máquina: mostramos esa versión (o avisamos si no está en PATH).
+  if (stackId === 'flutter') {
+    const fv = await detectFlutterVersion();
+    console.log(`  ${t('initSumToolchain')}: ` + (fv ? `flutter ${fv}` + c.dim('  · ' + t('initFlutterLocal')) : c.yellow(t('initFlutterMissing'))));
   }
   console.log(`  ${t('initSumPrinciples')}: ${decision.mandatoryPrinciples.slice(0, 3).join(', ')} ${t('initSumAlways')}`);
   console.log(`  ${t('initSumTarget')}: ${targetName}${doVerify ? c.dim('  · ' + t('initWithVerify')) : ''}`);

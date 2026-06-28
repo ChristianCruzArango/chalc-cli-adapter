@@ -4,7 +4,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { analyzeProjectProposal, architectureFolders, architectureSkills, ANGULAR_CLI_NODE, buildArchitectureDecision, listStacks, MANDATORY_DESIGN_PRINCIPLES, pickCliTag, renderArchitectureDecisionMarkdown, resolveScaffoldTool, scaffoldSteps, slugifyProjectName, suggestArchitectures, verifySteps } from '../lib/init.mjs';
+import { analyzeProjectProposal, architectureFolders, architectureSkills, ANGULAR_CLI_NODE, buildArchitectureDecision, dartPackageName, listStacks, MANDATORY_DESIGN_PRINCIPLES, pickCliTag, renderArchitectureDecisionMarkdown, resolveScaffoldTool, scaffoldSteps, slugifyProjectName, suggestArchitectures, verifySteps } from '../lib/init.mjs';
 import { reshapeProject } from '../lib/init-scaffold.mjs';
 
 test('init analysis detects signals and recommends a calibrated architecture', () => {
@@ -24,8 +24,21 @@ test('mandatory principles always include Clean Code, SOLID and modular architec
   assert.ok(MANDATORY_DESIGN_PRINCIPLES.some((p) => /modular/i.test(p)));   // 'arquitectura modular' / 'modular architecture'
 });
 
-test('init supports Angular, NestJS and .NET stacks', () => {
-  assert.deepEqual(listStacks().map((s) => s.id), ['angular', 'nestjs', 'dotnet']);
+test('init supports Angular, NestJS, .NET and Flutter stacks', () => {
+  assert.deepEqual(listStacks().map((s) => s.id), ['angular', 'nestjs', 'dotnet', 'flutter']);
+});
+
+test('Flutter scaffolds with the official CLI (uses the machine SDK) and a valid Dart package name', () => {
+  const fl = scaffoldSteps('flutter', 'feature-first', 'mi_app');
+  assert.equal(fl.length, 1);
+  assert.deepEqual(fl[0].args, ['create', 'mi_app']);   // sin @version: flutter create toma el SDK instalado
+  assert.equal(fl[0].command, 'flutter');
+  // nombre de paquete Dart: snake_case, empieza por letra
+  assert.equal(dartPackageName('Mi App'), 'mi_app');
+  assert.equal(dartPackageName('mi-app-genial'), 'mi_app_genial');
+  assert.match(dartPackageName('123 app'), /^[a-z]/);
+  // clean-architecture de Flutter usa capas presentation/domain/data
+  assert.deepEqual(architectureFolders('flutter', 'clean-architecture'), ['lib/core', 'lib/shared', 'lib/presentation', 'lib/domain', 'lib/data']);
 });
 
 test('scaffoldSteps orchestrates the OFFICIAL scaffolder per stack/architecture', () => {

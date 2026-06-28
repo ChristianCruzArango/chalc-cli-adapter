@@ -28,7 +28,7 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   // Scaffold de los métodos (specs/ del SDD): contenido del proyecto, va con cualquier asistente.
   await kit.copyMethodScaffolds(methods, projectPath);
 
-  // principios obligatorios (siempre activos): Clean Code + SOLID + arquitectura modular, prominentes
+  // principios obligatorios (siempre activos): implementación mínima + Clean Code + SOLID + arquitectura modular, prominentes
   const principles = kit.mandatoryPrinciplesBlock(skills);
   if (principles) {
     await writeFile(join(rulesDir, 'chalc-principles.mdc'), kit.mdc({

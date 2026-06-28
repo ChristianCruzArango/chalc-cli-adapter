@@ -1720,7 +1720,7 @@ async function runInit() {
     const fv = await detectFlutterVersion();
     console.log(`  ${t('initSumToolchain')}: ` + (fv ? `flutter ${fv}` + c.dim('  · ' + t('initFlutterLocal')) : c.yellow(t('initFlutterMissing'))));
   }
-  console.log(`  ${t('initSumPrinciples')}: ${decision.mandatoryPrinciples.slice(0, 3).join(', ')} ${t('initSumAlways')}`);
+  console.log(`  ${t('initSumPrinciples')}: ${decision.mandatoryPrinciples.slice(0, 4).join(', ')} ${t('initSumAlways')}`);
   console.log(`  ${t('initSumTarget')}: ${targetName}${doVerify ? c.dim('  · ' + t('initWithVerify')) : ''}`);
   if (prompter) {
     const ok = await prompter.yesno(dryRun ? t('initConfirmDry') : t('initConfirmCreate'), true);

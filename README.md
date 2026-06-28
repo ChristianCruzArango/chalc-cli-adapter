@@ -1,406 +1,391 @@
 # ⚙️ Chalc
 
-Chalc es una CLI local para **crear proyectos nuevos** (`chalc init`) y **equipar proyectos existentes** con la configuración de asistentes de desarrollo: skills, servidores MCP, reglas y métodos de trabajo.
+> [Español](README.es.md) · **English**
 
-El flujo de equipado (`chalc`) no llama a modelos de IA: lee señales del proyecto (`package.json`, archivos raíz, globs), aplica reglas del catálogo y escribe los archivos que necesita el target elegido (Claude Code, GitHub Copilot, Cursor o Gemini CLI).
+Chalc is a local CLI for **creating new projects** (`chalc init`) and **equipping existing projects** with development-assistant configuration: skills, MCP servers, rules, and working methods.
 
-La IA es **opt-in** y se usa solo en tres comandos, siempre con la API key configurada por el usuario:
-- **`chalc init`** — la IA *sugiere* una arquitectura calibrada a tu propuesta (aliada, no oráculo; tú decides).
-- **`chalc spec-ia`** — transforma una historia de usuario o documento en archivos SDD (`spec.md`, `plan.md`, `tasks.md`).
-- **`chalc qa --agent`** — verifica cada requisito `R#` contra la app viva.
+The equip flow (`chalc`) doesn't call AI models: it reads project signals (`package.json`, root files, globs), applies catalog rules, and writes the files the chosen target needs (Claude Code, GitHub Copilot, Cursor, or Gemini CLI).
 
-Si no usas esos comandos, Chalc no necesita proveedor de IA ni tokens. Las llamadas a IA usan **CCR** (compresión reversible) para ahorrar tokens y son provider-agnósticas (OpenRouter, Anthropic, OpenAI, Gemini u Ollama).
+AI is **opt-in** and used only in three commands, always with the API key configured by the user:
+- **`chalc init`** — the AI *suggests* an architecture calibrated to your proposal (an ally, not an oracle; you decide).
+- **`chalc spec-ia`** — turns a user story or document into SDD files (`spec.md`, `plan.md`, `tasks.md`).
+- **`chalc qa --agent`** — verifies each `R#` requirement against the live app.
 
-## Idea en una frase
+If you don't use those commands, Chalc needs no AI provider or tokens. AI calls use **CCR** (reversible compression) to save tokens and are provider-agnostic (OpenRouter, Anthropic, OpenAI, Gemini, or Ollama).
 
-> Chalc no analiza el código con IA: detecta señales simples del proyecto y aplica reglas explícitas del catálogo.
+## The idea in one sentence
 
-## Por qué existe
+> Chalc doesn't analyze code with AI: it detects simple project signals and applies explicit catalog rules.
 
-La idea nació de una necesidad práctica: hoy muchas configuraciones de asistentes se resuelven dentro de un CLI o una sesión con tokens, y cada proyecto termina dependiendo de lo que se configure o recuerde en ese momento.
+## Why it exists
 
-Chalc busca separar esas dos cosas. La IA puede ayudar cuando hace falta, pero las herramientas, reglas, skills, MCP y métodos de trabajo deberían poder viajar con los proyectos de forma explícita y repetible. En vez de configurar todo a mano una y otra vez, Chalc permite mantener un catálogo propio y aplicar esa “herencia” a cada proyecto según su stack.
+The idea was born from a practical need: today many assistant configurations get resolved inside a CLI or a token-consuming session, and each project ends up depending on whatever was configured or remembered at that moment.
 
-Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reglas de backend, todos pueden heredar reglas globales como mutation testing, y cada asistente recibe la configuración en su propio formato. La intención no es reemplazar al asistente, sino preparar bien el terreno para que trabaje con el contexto correcto.
+Chalc aims to separate those two things. AI can help when needed, but tools, rules, skills, MCP, and working methods should be able to travel with projects in an explicit, repeatable way. Instead of configuring everything by hand over and over, Chalc lets you maintain your own catalog and apply that "inheritance" to each project according to its stack.
 
-## Comandos (referencia rápida)
+This way, an Angular project can receive its Angular skills, a NestJS one its backend rules, all of them can inherit global rules like mutation testing, and each assistant receives the configuration in its own format. The intent isn't to replace the assistant, but to prepare the ground well so it works with the right context.
 
-| Comando | Qué hace | ¿IA? |
+## Commands (quick reference)
+
+| Command | What it does | AI? |
 |---|---|---|
-| `chalc lang [es\|en]` | Fija el idioma de Chalc una sola vez (se guarda en `~/.chalc/config.json`) | no |
-| `chalc init` | Crea un proyecto nuevo desde cero con arquitectura elegida por el usuario y lo equipa | opt-in (sugiere arq.; `--no-ai` la desactiva) |
-| `chalc` | Detecta el stack y equipa skills/MCP/método (interactivo) | no |
-| `chalc inspect` | Explica qué detecta y por qué, sin escribir | no |
-| `chalc doctor` | Valida el catálogo (rules, skills, MCP, métodos, targets) | no |
-| `chalc configure` | Administra el catálogo (rules/skills/MCP) por menú | no |
-| `chalc install <fuente>` | Instala un skill al catálogo y lo cablea a una regla | no |
-| `chalc spec` | Crea una carpeta/plantilla vacía `specs/NNN-feature` | no |
-| `chalc config-ia` | Configura el proveedor de IA + API key (una vez) | sí (setup) |
-| `chalc ai-doctor` | Muestra proveedor, perfil y modelos resueltos por tarea | no |
-| `chalc eval-ia` | Ejecuta evals locales de prompts/parsers sin llamar al proveedor | no |
-| `chalc spec-ia` | HU (Azure DevOps/Jira/Drive/Word/pegar) → spec/plan/tasks | sí |
-| `chalc qa <ruta>` | Lista specs y valida el preflight QA (Docker + documentación) | no |
-| `chalc qa <ruta> --spec 004-login --plan` | Genera el plan QA trazable a los requisitos de una spec | no |
-| `chalc qa <ruta> --spec 004-login --env qa:up --plan` | Registra en el plan el entorno de arranque elegido (sin ejecutarlo aún) | no |
-| `chalc qa <ruta> --spec 004-login --env serve --url http://localhost:3000 --up` | Levanta el entorno, espera a que la URL responda y luego lo baja | no |
-| `chalc qa <ruta> --spec 004-login --env serve --url http://localhost:3000 --agent` | Levanta la app, corre el agente QA (verifica cada R# contra la app viva), escribe `qa/results.md` y baja | sí |
-| `chalc qa <ruta> ... --agent --repair-plan` | Además genera `qa/repair-plan.md` desde FAIL/BLOCKED | sí |
-| `chalc qa <ruta> ... --agent --surface web\|api` | Fuerza la superficie (navegador vs HTTP) si la autodetección no acierta | sí |
+| `chalc lang [es\|en]` | Sets Chalc's language once (saved in `~/.chalc/config.json`) | no |
+| `chalc init` | Creates a new project from scratch with a user-chosen architecture and equips it | opt-in (suggests arch.; `--no-ai` disables it) |
+| `chalc` | Detects the stack and equips skills/MCP/method (interactive) | no |
+| `chalc inspect` | Explains what it detects and why, without writing | no |
+| `chalc doctor` | Validates the catalog (rules, skills, MCP, methods, targets) | no |
+| `chalc configure` | Manages the catalog (rules/skills/MCP) via menu | no |
+| `chalc install <source>` | Installs a skill into the catalog and wires it to a rule | no |
+| `chalc spec` | Creates an empty `specs/NNN-feature` folder/template | no |
+| `chalc config-ia` | Configures the AI provider + API key (once) | yes (setup) |
+| `chalc ai-doctor` | Shows provider, profile, and models resolved per task | no |
+| `chalc eval-ia` | Runs local evals of prompts/parsers without calling the provider | no |
+| `chalc spec-ia` | User story (Azure DevOps/Jira/Drive/Word/paste) → spec/plan/tasks | yes |
+| `chalc qa <path>` | Lists specs and validates the QA preflight (Docker + documentation) | no |
+| `chalc qa <path> --spec 004-login --plan` | Generates the QA plan traceable to a spec's requirements | no |
+| `chalc qa <path> --spec 004-login --env qa:up --plan` | Records the chosen startup environment in the plan (without running it yet) | no |
+| `chalc qa <path> --spec 004-login --env serve --url http://localhost:3000 --up` | Brings up the environment, waits for the URL to respond, then tears it down | no |
+| `chalc qa <path> --spec 004-login --env serve --url http://localhost:3000 --agent` | Brings up the app, runs the QA agent (verifies each R# against the live app), writes `qa/results.md`, and tears down | yes |
+| `chalc qa <path> ... --agent --repair-plan` | Also generates `qa/repair-plan.md` from FAIL/BLOCKED | yes |
+| `chalc qa <path> ... --agent --surface web\|api` | Forces the surface (browser vs HTTP) if autodetection gets it wrong | yes |
 
-Cada comando tiene su equivalente `npm run <comando>` (ej. `npm run spec-ia`) por si no haces `npm link`.
-Todo el CLI es **bilingüe (es/en)**. Por defecto sigue el idioma del sistema operativo, pero puedes
-fijarlo una sola vez con **`chalc lang es`** o **`chalc lang en`** (queda guardado y se aplica a todos
-tus proyectos, sin tener que tocar variables de entorno cada vez).
+Every command has its `npm run <command>` equivalent (e.g. `npm run spec-ia`) in case you don't run `npm link`.
+The whole CLI is **bilingual (es/en)**. By default it follows the operating system's language, but you can
+set it once with **`chalc lang es`** or **`chalc lang en`** (it's saved and applies to all
+your projects, without having to touch environment variables every time).
 
-## Cómo se usa (la idea: descargar, un comando, interactivo)
+## How it's used (the idea: download, one command, interactive)
 
-**Una sola vez** — dentro de la carpeta `chalc/`, instala el comando global:
+**One time only** — inside the `chalc/` folder, install the global command:
 ```bash
-npm link        # crea el comando `chalc` en todo tu sistema
-chalc lang es   # (opcional) fija el idioma del CLI; queda guardado para siempre
+npm link        # creates the `chalc` command system-wide
+chalc lang es   # (optional) sets the CLI language; saved forever
 ```
 
-**Crear un proyecto nuevo desde cero:**
+**Create a new project from scratch:**
 ```bash
 chalc init angular
 ```
 
-**Equipar un proyecto existente:**
+**Equip an existing project:**
 ```bash
-cd mi-proyecto
-chalc             # detecta el lenguaje/stack y te pregunta qué montar (interactivo)
+cd my-project
+chalc             # detects the language/stack and asks what to set up (interactive)
 ```
 
-Eso es todo. `chalc` te guía: elige asistente (Claude…), confirma el stack, activa métodos (SDD…) y aplica.
+That's it. `chalc` guides you: pick an assistant (Claude…), confirm the stack, enable methods (SDD…), and apply.
 
-### Sin instalar nada (desde la carpeta chalc)
+### Without installing anything (from the chalc folder)
 ```bash
-npm start                          # equipa la carpeta actual
-npm start -- /ruta/al/proyecto     # equipa otro proyecto
-npm run inspect -- /ruta/al/proyecto
+npm start                          # equips the current folder
+npm start -- /path/to/project      # equips another project
+npm run inspect -- /path/to/project
 npm run doctor
 npm run configure
-npm run init -- angular mi-app --description "dashboard administrativo con roles y permisos"
+npm run init -- angular mi-app --description "admin dashboard with roles and permissions"
 npm run spec
 ```
 
-### Banderas (para automatizar / sin preguntas)
+### Flags (for automation / no questions)
 ```bash
-chalc inspect               # explica qué detecta y por qué, sin escribir
-chalc init angular          # crea un proyecto Angular desde cero
-chalc doctor                # valida reglas, catálogo, MCP, métodos y targets
-chalc ai-doctor             # valida la configuración IA local sin gastar tokens
-chalc eval-ia               # evals locales de contratos IA/prompt sin red
-chalc configure             # crea rules y conecta skills/MCP de forma guiada
-chalc spec                  # crea una plantilla vacía specs/NNN-feature
-chalc --yes                 # usa los valores por defecto, sin preguntar
-chalc --method sdd          # activa el método SDD sin preguntar
-chalc --dry-run             # muestra el plan sin escribir nada
-chalc --target claude       # elige el asistente destino
-chalc install <fuente> --allow-exec  # permite Git/npx si confías en la fuente
-chalc install <fuente> --force       # reemplaza un skill existente sin preguntar
+chalc inspect               # explains what it detects and why, without writing
+chalc init angular          # creates an Angular project from scratch
+chalc doctor                # validates rules, catalog, MCP, methods, and targets
+chalc ai-doctor             # validates the local AI config without spending tokens
+chalc eval-ia               # local evals of AI/prompt contracts, no network
+chalc configure             # creates rules and wires skills/MCP in a guided way
+chalc spec                  # creates an empty specs/NNN-feature template
+chalc --yes                 # uses the defaults, without asking
+chalc --method sdd          # enables the SDD method without asking
+chalc --dry-run             # shows the plan without writing anything
+chalc --target claude       # picks the destination assistant
+chalc install <fuente> --allow-exec  # allows Git/npx if you trust the source
+chalc install <fuente> --force       # replaces an existing skill without asking
 ```
 
-### Crear desde cero (`chalc init`)
+### Create from scratch (`chalc init`)
 
-`chalc init` es el flujo para quitar el dolor de empezar proyectos. Chalc lee una propuesta
-por texto o archivo (`--doc` soporta Word/PDF/Markdown/TXT vía `docread`), sugiere arquitecturas,
-explica tradeoffs y deja que el usuario seleccione. La regla es: **Chalc sugiere, el usuario decide**.
-La IA nunca es autoridad: si propone algo fuera del catálogo, Chalc lo descarta y cae a una recomendación
-determinística.
+`chalc init` is the flow for taking the pain out of starting projects. Chalc reads a proposal
+from text or a file (`--doc` supports Word/PDF/Markdown/TXT via `docread`), suggests architectures,
+explains tradeoffs, and lets the user select. The rule is: **Chalc suggests, the user decides**.
+The AI is never the authority: if it proposes something outside the catalog, Chalc discards it and falls back
+to a deterministic recommendation.
 
-Implementación mínima, Clean Code, SOLID y arquitectura modular son **principios obligatorios** en todos los proyectos.
-Lo que el usuario elige es la arquitectura concreta. Soporta **Angular, NestJS y .NET**, orquestando
-el scaffolder **oficial** de cada uno (`ng new`, `nest new`, `dotnet new`):
+Minimal implementation, Clean Code, SOLID, and modular architecture are **mandatory principles** in every project.
+What the user chooses is the concrete architecture. It supports **Angular, NestJS, and .NET**, orchestrating
+each one's **official** scaffolder (`ng new`, `nest new`, `dotnet new`):
 
 ```bash
-chalc init                         # interactivo: elige stack, describe la idea, elige arquitectura
+chalc init                         # interactive: pick stack, describe the idea, pick architecture
 chalc init angular
-chalc init angular mi-admin --description "dashboard administrativo con usuarios, roles, permisos y API"
-chalc init angular mi-admin --doc propuesta.docx --architecture modular-clean-architecture --target claude
-chalc init nestjs mi-api --description "API de tickets con autenticación y colas"
-chalc init dotnet mi-svc --architecture clean-architecture --verify   # --verify compila al final
+chalc init angular mi-admin --description "admin dashboard with users, roles, permissions, and API"
+chalc init angular mi-admin --doc proposal.docx --architecture modular-clean-architecture --target claude
+chalc init nestjs mi-api --description "ticketing API with authentication and queues"
+chalc init dotnet mi-svc --architecture clean-architecture --verify   # --verify compiles at the end
 ```
 
-#### Paso a paso (flujo interactivo)
-1. **Stack** — eliges Angular / NestJS / .NET.
-2. **Nombre y carpeta** — dónde se crea el proyecto (`--dir` para fijarla sin preguntar).
-3. **Propuesta** — describes la idea por texto o adjuntas un documento (`--doc` lee Word/PDF/Markdown/TXT).
-4. **La IA sugiere la arquitectura** (calibrada a tu propuesta) y, si tiene dudas que cambian la decisión,
-   **te las pregunta**. Tú eliges la arquitectura final de la lista. Con `--no-ai` usas solo el análisis determinista.
-5. **Resumen y confirmación** — Chalc te muestra qué va a hacer (incluida la versión del CLI elegida) antes de crear.
-6. Crea el proyecto con el scaffolder oficial, lo re-moldea a la arquitectura y lo **equipa**.
+#### Step by step (interactive flow)
+1. **Stack** — you pick Angular / NestJS / .NET.
+2. **Name and folder** — where the project is created (`--dir` to set it without asking).
+3. **Proposal** — you describe the idea in text or attach a document (`--doc` reads Word/PDF/Markdown/TXT).
+4. **The AI suggests the architecture** (calibrated to your proposal) and, if it has doubts that change the decision,
+   **it asks you about them**. You pick the final architecture from the list. With `--no-ai` you use only the deterministic analysis.
+5. **Summary and confirmation** — Chalc shows you what it's going to do (including the chosen CLI version) before creating.
+6. It creates the project with the official scaffolder, reshapes it to the architecture, and **equips** it.
 
-Arquitecturas disponibles (la IA recomienda la más liviana que encaje; tú decides):
+Available architectures (the AI recommends the lightest one that fits; you decide):
 
-| Stack | Scaffolder oficial | Arquitecturas |
+| Stack | Official scaffolder | Architectures |
 |---|---|---|
-| **Angular** | `ng new` | `modular-feature-first` (MVPs/dashboards) · `modular-clean-architecture` (dominio/larga vida) · `enterprise-modular` (equipos grandes) |
+| **Angular** | `ng new` | `modular-feature-first` (MVPs/dashboards) · `modular-clean-architecture` (domain/long-lived) · `enterprise-modular` (large teams) |
 | **NestJS** | `nest new` | `modular-feature` · `clean-hexagonal` · `enterprise-microservices` |
-| **.NET** | `dotnet new` | `webapi-simple` · `clean-architecture` (solución + capas Domain/Application/Infrastructure/Api) |
-| **Flutter** | `flutter create` | `feature-first` · `clean-architecture` (capas `presentation/domain/data`) · `enterprise-modular` |
+| **.NET** | `dotnet new` | `webapi-simple` · `clean-architecture` (solution + Domain/Application/Infrastructure/Api layers) |
+| **Flutter** | `flutter create` | `feature-first` · `clean-architecture` (`presentation/domain/data` layers) · `enterprise-modular` |
 
-#### Qué hace especial a `chalc init`
-- **Se acomoda a tu máquina:** usa la versión de la herramienta que **ya tienes instalada**. En Angular/NestJS
-  elige el major del CLI **compatible con tu Node** (ej.: Node 22.20 → `@angular/cli@20`, no el 22 que aborta);
-  en **Flutter** y **.NET** usa directamente el **SDK instalado** (`flutter create` / `dotnet new`), y muestra
-  esa versión en el resumen. No te obliga a actualizar nada.
-- **Cada carpeta nace documentada:** en vez de un `.gitkeep` vacío, cada carpeta trae un `README.md` que
-  explica —según la arquitectura— qué va ahí, buenas prácticas y qué skills aplicar. Así tu IA tiene contexto local.
-- **`docs/architecture.md` detallado:** mapa de carpetas, reglas de dependencia y cómo agregar un feature.
-- **El asistente lo lee primero:** `CLAUDE.md` (y equivalentes) abre con un bloque de **Principios obligatorios
-  (siempre)** y una referencia a `docs/architecture.md` para que la IA respete la arquitectura antes de crear archivos.
-- **`--verify`** corre el build/análisis (`npm run build` / `dotnet build` / `flutter analyze`) para confirmar que el proyecto compila al nacer.
-- **Bilingüe (es/en)** según `chalc lang` o el idioma del sistema.
+#### What makes `chalc init` special
+- **It adapts to your machine:** it uses the version of the tool you **already have installed**. On Angular/NestJS
+  it picks the CLI major **compatible with your Node** (e.g. Node 22.20 → `@angular/cli@20`, not 22 which aborts);
+  on **Flutter** and **.NET** it directly uses the **installed SDK** (`flutter create` / `dotnet new`), and shows
+  that version in the summary. It doesn't force you to update anything.
+- **Every folder is born documented:** instead of an empty `.gitkeep`, each folder ships a `README.md` that
+  explains —according to the architecture— what goes there, best practices, and which skills to apply. This way your AI has local context.
+- **Detailed `docs/architecture.md`:** folder map, dependency rules, and how to add a feature.
+- **The assistant reads it first:** `CLAUDE.md` (and equivalents) opens with a **Mandatory principles
+  (always)** block and a reference to `docs/architecture.md` so the AI respects the architecture before creating files.
+- **`--verify`** runs the build/analysis (`npm run build` / `dotnet build` / `flutter analyze`) to confirm the project compiles at birth.
+- **Bilingual (es/en)** following `chalc lang` or the system language.
 
-Al crear, Chalc genera el proyecto base del scaffolder oficial, las carpetas de la arquitectura con su
-`README.md`, `docs/architecture.md`, `specs/` (método SDD), las skills globales (`minimal-implementation`,
-`clean-code`, `solid-principles`, `modular-architecture`, `mutation-testing`), las skills del stack, los MCP y el target
-IA elegido (`CLAUDE.md`, Cursor, Copilot o Gemini).
+When creating, Chalc generates the official scaffolder's base project, the architecture's folders with their
+`README.md`, `docs/architecture.md`, `specs/` (SDD method), the global skills (`minimal-implementation`,
+`clean-code`, `solid-principles`, `modular-architecture`, `mutation-testing`), the stack's skills, the MCP, and the chosen AI target
+(`CLAUDE.md`, Cursor, Copilot, or Gemini).
 
-#### Extensible a cualquier framework
+#### Extensible to any framework
 
-`chalc init` no está casado con Angular/NestJS/.NET/Flutter: cada stack es **una entrada declarativa** en
-el registro de stacks (`lib/init.mjs`). Sumar Vue, Django, Spring, Go, Rails… es definir su scaffolder
-oficial, sus arquitecturas y sus carpetas — **el motor no se toca**.
+`chalc init` isn't married to Angular/NestJS/.NET/Flutter: each stack is **a declarative entry** in
+the stack registry (`lib/init.mjs`). Adding Vue, Django, Spring, Go, Rails… is a matter of defining its official
+scaffolder, its architectures, and its folders — **the engine isn't touched**.
 
-Forma de una entrada de stack:
-
-```js
-STACKS = {
-  '<stack-id>': {
-    label:        'Mi Framework (Lenguaje)',
-    scaffold:     () => [{ command: '<cli-oficial>', args: (name) => ['create', name], cwd: 'parent' }],
-    verify:       [{ command: '<cli>', args: ['install'] }, { command: '<cli>', args: ['build'] }],
-    pick:         (a) => a.complexity === 'alta' ? 'clean-architecture' : 'feature-first',  // recomendación
-    architectures: [
-      { id: 'feature-first',      folders: ['src/core', 'src/shared', 'src/features'] },
-      { id: 'clean-architecture', folders: ['src/domain', 'src/application', 'src/infrastructure', 'src/presentation'] }
-    ]
-  }
-}
-```
-
-El flujo es el mismo para todos los stacks:
+The flow is the same for all stacks:
 
 ```
 chalc init <stack>
      │
-     ├─ 1) scaffolder OFICIAL  (usa la versión instalada en tu máquina)  ──►  proyecto base
+     ├─ 1) OFFICIAL scaffolder  (uses the version installed on your machine)  ──►  base project
      │        ng new · nest new · dotnet new · flutter create · …
      │
-     ├─ 2) reshape a la arquitectura elegida  ──►  carpetas + README por carpeta + docs/architecture.md
+     ├─ 2) reshape to the chosen architecture  ──►  folders + README per folder + docs/architecture.md
      │
-     └─ 3) equip (rules/<stack>.json + regla global)  ──►  skills + MCP + método SDD (specs/) + archivo del asistente
+     └─ 3) equip (rules/<stack>.json + global rule)  ──►  skills + MCP + SDD method (specs/) + assistant file
 ```
 
-Para dejar equipado el nuevo stack: crea sus skills en `catalog/skills/`, (opcional) su MCP en
-`catalog/mcp/`, y cabléalos en `rules/<stack>.json`. Cada carpeta de la arquitectura se documenta sola
-vía `lib/init-folders.mjs` (si usas un rol de carpeta nuevo, agrega ahí su guía). Versionado de la
-herramienta: si es un CLI de npm, añade su tabla Node→versión como en Angular/NestJS; si es un SDK local
-(como Flutter/.NET), simplemente usa el instalado.
+To finish equipping the new stack: create its skills in `catalog/skills/`, (optionally) its MCP in
+`catalog/mcp/`, and wire them in `rules/<stack>.json`. Each architecture folder documents itself
+via `lib/init-folders.mjs` (if you use a new folder role, add its guide there). Tool
+versioning: if it's an npm CLI, add its Node→version table as in Angular/NestJS; if it's a local SDK
+(like Flutter/.NET), just use the installed one.
 
-### Entender antes de aplicar
+### Understand before applying
 ```bash
-chalc inspect /ruta/al/proyecto
+chalc inspect /path/to/project
 ```
 
-`inspect` es interactivo por defecto y no escribe archivos: te pregunta qué detalle quieres ver,
-lista las reglas que aplican, las señales que las activaron (`package.json`, archivos raíz o globs
-como `*.csproj`) y el plan base que `chalc --yes` montaría. En entornos no interactivos imprime el
-diagnóstico completo.
+`inspect` is interactive by default and writes no files: it asks you which detail you want to see,
+lists the rules that apply, the signals that triggered them (`package.json`, root files, or globs
+like `*.csproj`), and the base plan that `chalc --yes` would set up. In non-interactive environments it prints the
+full diagnosis.
 
-### Agente QA: probar la app de verdad (`chalc qa --agent`)
-Con `--agent`, chalc **levanta tu app, la prueba como una persona y reporta** cada requisito `R#`:
+### QA agent: actually test the app (`chalc qa --agent`)
+With `--agent`, chalc **brings up your app, tests it like a person, and reports** each `R#` requirement:
 
-1. **Levanta el entorno** sin forzar puerto y **lee la URL que el dev server anuncia** (`ng serve` → `:4201`,
-   Vite → `:5173`…), respetando la config de la app (forzar puerto rompe Module Federation). `--url` la fija.
-2. **Detecta la superficie** (web vs API) por stack; `--surface web|api` la fuerza.
-3. **Si la app exige autenticación, te la PIDE** (no falla en silencio): detecta guards/MSAL/interceptor Bearer
-   y te pregunta cómo inyectar la sesión (token en localStorage/sessionStorage o header `Authorization: Bearer`).
-4. **Explora y verifica con un agente IA** (provider-agnóstico): el veredicto se ancla en hechos observados
-   (status HTTP, texto/elemento visible), nunca en suposiciones — un requisito sin evidencia queda `BLOCKED`,
-   nunca un `PASS` inventado. El presupuesto de pasos escala con los `R#` (`--max-steps` lo ajusta).
-5. **Escribe `qa/results.md`** (veredicto + evidencia por `R#`) y un **spec Playwright ejecutable**
-   (`qa/e2e/<spec>.agent.spec.mjs`, un test por `R#`); si tienes `@playwright/test`, lo **corre con `npx playwright test`**.
-6. **Baja el entorno** al terminar (siempre).
+1. **Brings up the environment** without forcing a port and **reads the URL the dev server announces** (`ng serve` → `:4201`,
+   Vite → `:5173`…), respecting the app's config (forcing a port breaks Module Federation). `--url` sets it.
+2. **Detects the surface** (web vs API) by stack; `--surface web|api` forces it.
+3. **If the app requires authentication, it ASKS you** (doesn't fail silently): it detects guards/MSAL/Bearer interceptor
+   and asks how to inject the session (token in localStorage/sessionStorage or `Authorization: Bearer` header).
+4. **Explores and verifies with an AI agent** (provider-agnostic): the verdict is anchored in observed facts
+   (HTTP status, visible text/element), never assumptions — a requirement without evidence stays `BLOCKED`,
+   never a fabricated `PASS`. The step budget scales with the `R#` count (`--max-steps` adjusts it).
+5. **Writes `qa/results.md`** (verdict + evidence per `R#`) and an **executable Playwright spec**
+   (`qa/e2e/<spec>.agent.spec.mjs`, one test per `R#`); if you have `@playwright/test`, it **runs it with `npx playwright test`**.
+6. **Tears down the environment** when done (always).
 
 ```bash
-chalc qa . --spec 004-login --env start --agent           # interactivo: pregunta superficie/auth si hace falta
+chalc qa . --spec 004-login --env start --agent           # interactive: asks surface/auth if needed
 chalc qa . --spec 004-login --env start --agent --url http://localhost:3000 --surface web --max-steps 24 --allow-exec
 chalc qa . --spec 004-login --env start --agent --repair-plan --allow-exec
-chalc qa . --spec 004-login --repair-plan                 # genera repair-plan desde qa/results.md existente
+chalc qa . --spec 004-login --repair-plan                 # generates repair-plan from existing qa/results.md
 ```
 
-### Manejo de tokens en el agente QA (CCR, integrado)
-El agente (`qa --agent`) trae **CCR (Compresión Reversible)** propia, inspirada en Headroom pero **sin
-dependencias y provider-agnóstica** (funciona igual con Anthropic, OpenRouter, OpenAI, Gemini u Ollama):
+### Token handling in the QA agent (CCR, built in)
+The agent (`qa --agent`) ships its own **CCR (Reversible Compression)**, inspired by Headroom but **with no
+dependencies and provider-agnostic** (works the same with Anthropic, OpenRouter, OpenAI, Gemini, or Ollama):
 
-- Las salidas voluminosas (respuestas HTTP, DOM, logs) se reemplazan en el prompt por una referencia
-  compacta `[CCR ref=... chars=N preview="..."]`.
-- El original queda en una caché local con TTL; si el modelo necesita el contenido completo, pide
-  `{"type":"recall","ref":"..."}` y se le devuelve entero durante el siguiente turno; luego vuelve a diferirse.
-  **Reversible mientras la referencia viva dentro de su TTL.**
-- **El plan y los requisitos R# nunca se comprimen** (fidelidad). Solo se difieren las observaciones.
-- Está activo por defecto; desactívalo con `--no-ccr`. El reporte `qa/results.md` muestra cuánto difirió.
+- Bulky outputs (HTTP responses, DOM, logs) are replaced in the prompt by a compact reference
+  `[CCR ref=... chars=N preview="..."]`.
+- The original stays in a local cache with a TTL; if the model needs the full content, it requests
+  `{"type":"recall","ref":"..."}` and gets it back whole during the next turn; then it's deferred again.
+  **Reversible as long as the reference lives within its TTL.**
+- **The plan and the R# requirements are never compressed** (fidelity). Only observations are deferred.
+- It's on by default; disable it with `--no-ccr`. The `qa/results.md` report shows how much was deferred.
 
-Opcionalmente puedes **además** apuntar a un proxy externo (Headroom u otro OpenAI-compatible) vía
-`CHALC_BASE_URL`, sin tocar código:
+Optionally you can **also** point to an external proxy (Headroom or another OpenAI-compatible one) via
+`CHALC_BASE_URL`, without touching code:
 ```bash
 headroom proxy --port 8787
 CHALC_BASE_URL=http://localhost:8787/v1 CHALC_PROVIDER=openai CHALC_API_KEY=$TU_KEY \
   chalc qa . --spec 004-login --env serve --url http://localhost:3000 --agent
 ```
 
-### Revisar la salud del Chalc
+### Check Chalc's health
 ```bash
 chalc doctor
 ```
 
-`doctor` es interactivo por defecto y valida que el catálogo esté consistente: reglas JSON,
-referencias a skills/MCP, frontmatter básico de skills, ids seguros, `implies`, definición de
-MCP, métodos y targets cargables. En modo no interactivo (`chalc doctor --yes`) sale con código
-`1` si encuentra errores, útil para CI.
+`doctor` is interactive by default and validates that the catalog is consistent: JSON rules,
+references to skills/MCP, basic skill frontmatter, safe ids, `implies`, MCP
+definitions, methods, and loadable targets. In non-interactive mode (`chalc doctor --yes`) it exits with code
+`1` if it finds errors, useful for CI.
 
-### Preparar una plantilla de spec
+### Prepare a spec template
 ```bash
 chalc spec
 ```
 
-La ruta oficial es `specs/` en plural. `chalc spec` **no redacta la especificación**:
-solo crea la carpeta y copia plantillas vacías con placeholders. Cada feature vive en
-`specs/NNN-nombre/` con `spec.md`, `plan.md` y `tasks.md` (más archivos extra en modo `full`).
-La spec real la escribe una persona o un asistente después, dentro de `spec.md`.
+The official path is `specs/` in plural. `chalc spec` **does not write the specification**:
+it only creates the folder and copies empty templates with placeholders. Each feature lives in
+`specs/NNN-nombre/` with `spec.md`, `plan.md`, and `tasks.md` (plus extra files in `full` mode).
+The real spec is written afterwards by a person or an assistant, inside `spec.md`.
 
-## Cómo funciona
+## How it works
 
 ```
-proyecto  ──►  detecta señales        ──►  aplica reglas      ──►  target proyecta
-               (package.json, archivos)     (rules/*.json)          los archivos del asistente
+project   ──►  detects signals        ──►  applies rules      ──►  target projects
+               (package.json, files)        (rules/*.json)          the assistant files
 ```
 
-1. **Detecta** el stack por señales reales (`@angular/core`, `nest-cli.json`, etc.), incluyendo proyectos anidados típicos de monorepos.
-2. **Resuelve** del `catalog/` las skills + MCP que la regla indica.
-3. **Proyecta** con el `target` elegido a los archivos correctos.
+1. **Detects** the stack by real signals (`@angular/core`, `nest-cli.json`, etc.), including the nested projects typical of monorepos.
+2. **Resolves** from the `catalog/` the skills + MCP the rule indicates.
+3. **Projects** with the chosen `target` to the right files.
 
-## Estructura
+## Structure
 
 ```
 chalc/
-├── bin/chalc.mjs            el motor / CLI (Node puro, sin dependencias)
-├── lib/                     módulos del motor
-│   ├── cli/args.mjs         parser de banderas/argumentos testeable
-│   ├── i18n.mjs             textos bilingües (es/en) + `chalc lang` (idioma persistente)
-│   ├── ids.mjs              validación de ids seguros (kebab-case)
-│   ├── net.mjs              fetch con timeout/límites y validación de URLs externas
-│   ├── install.mjs          instalar/vendorizar skills (Git/skills.sh/local)
-│   ├── targetkit.mjs        utilidades compartidas por los targets (principios, arquitectura, bloques)
-│   ├── docread.mjs          extrae texto de Word/PDF/CSV/…
-│   ├── sources.mjs          trae la HU de Azure DevOps / Jira / Drive
-│   ├── ── creación de proyectos (`chalc init`) ──
-│   ├── init.mjs             registro de stacks: arquitecturas, scaffolder oficial, versión de CLI por Node
-│   ├── init-folders.mjs     guías por carpeta (README.md) + mapa de carpetas para architecture.md
-│   ├── init-scaffold.mjs    re-moldea el proyecto a la arquitectura + escribe docs/architecture.md
-│   ├── initai.mjs           capa IA opcional que sugiere arquitectura (CCR + recall, clarifications)
-│   ├── ── generación de specs (`chalc spec-ia`) ──
-│   ├── ai.mjs               cliente multi-proveedor de IA (fetch) + config ~/.chalc (perfiles por tarea)
-│   ├── ccr.mjs              compresión reversible (CCR) para ahorrar tokens, provider-agnóstica
-│   ├── specgen.mjs          orquesta la generación del spec
-│   ├── specvalidate.mjs     valida la salida (R#, trazabilidad, estructura mínima)
-│   ├── aitrace.mjs          traza reproducible por spec (hashes, sin contenido crudo)
-│   ├── aieval.mjs           evals locales de prompts/parsers sin llamar al proveedor
-│   ├── ── agente QA (`chalc qa --agent`) ──
-│   ├── qa.mjs               plan QA, entornos, reportes (results.md / repair-plan.md)
-│   ├── qaagent.mjs          agente que verifica cada R# contra la app viva (provider-agnóstico)
-│   └── prompts/             system prompts (estándar XML de HALLC)
-│       ├── spec-gen.prompt.xml       generación de specs (harness de fidelidad)
-│       ├── init-architect.prompt.xml sugerencia de arquitectura (aliada, no oráculo)
-│       └── qa-agent.prompt.xml       verificación QA anclada en hechos
+├── bin/chalc.mjs            the engine / CLI (pure Node, no dependencies)
+├── lib/                     engine modules
+│   ├── cli/args.mjs         testable flag/argument parser
+│   ├── i18n.mjs             bilingual strings (es/en) + `chalc lang` (persistent language)
+│   ├── ids.mjs              safe-id validation (kebab-case)
+│   ├── net.mjs              fetch with timeout/limits and external-URL validation
+│   ├── install.mjs          install/vendor skills (Git/skills.sh/local)
+│   ├── targetkit.mjs        shared utilities for the targets (principles, architecture, blocks)
+│   ├── docread.mjs          extracts text from Word/PDF/CSV/…
+│   ├── sources.mjs          fetches the user story from Azure DevOps / Jira / Drive
+│   ├── ── project creation (`chalc init`) ──
+│   ├── init.mjs             stack registry: architectures, official scaffolder, CLI version per Node
+│   ├── init-folders.mjs     per-folder guides (README.md) + folder map for architecture.md
+│   ├── init-scaffold.mjs    reshapes the project to the architecture + writes docs/architecture.md
+│   ├── initai.mjs           optional AI layer that suggests architecture (CCR + recall, clarifications)
+│   ├── ── spec generation (`chalc spec-ia`) ──
+│   ├── ai.mjs               multi-provider AI client (fetch) + ~/.chalc config (per-task profiles)
+│   ├── ccr.mjs              reversible compression (CCR) to save tokens, provider-agnostic
+│   ├── specgen.mjs          orchestrates spec generation
+│   ├── specvalidate.mjs     validates the output (R#, traceability, minimum structure)
+│   ├── aitrace.mjs          reproducible trace per spec (hashes, no raw content)
+│   ├── aieval.mjs           local evals of prompts/parsers without calling the provider
+│   ├── ── QA agent (`chalc qa --agent`) ──
+│   ├── qa.mjs               QA plan, environments, reports (results.md / repair-plan.md)
+│   ├── qaagent.mjs          agent that verifies each R# against the live app (provider-agnostic)
+│   └── prompts/             system prompts (HALLC XML standard)
+│       ├── spec-gen.prompt.xml       spec generation (fidelity harness)
+│       ├── init-architect.prompt.xml architecture suggestion (ally, not oracle)
+│       └── qa-agent.prompt.xml       fact-anchored QA verification
 ├── catalog/
-│   ├── skills/              las skills reales (autocontenidas, portátiles)
-│   ├── mcp/                 definiciones de servidores MCP
-│   ├── profiles/            perfiles de modelos por tarea (chalc-default.json: spec/qa/repair)
-│   └── methods/sdd/         el método SDD (constitución, plantillas es/en, reglas, gráfico)
-├── rules/                   criterio: qué señal = qué stack = qué se instala (incl. global.json)
+│   ├── skills/              the real skills (self-contained, portable)
+│   ├── mcp/                 MCP server definitions
+│   ├── profiles/            per-task model profiles (chalc-default.json: spec/qa/repair)
+│   └── methods/sdd/         the SDD method (constitution, es/en templates, rules, graphic)
+├── rules/                   criteria: which signal = which stack = what gets installed (incl. global.json)
 ├── targets/
-│   ├── claude.mjs           traductor a Claude Code
-│   ├── copilot.mjs          traductor a GitHub Copilot
-│   ├── cursor.mjs           traductor a Cursor
-│   └── gemini.mjs           traductor a Gemini CLI
-└── test/                    suite con `node --test` (parser, init, IA, QA, seguridad, doctor)
+│   ├── claude.mjs           translator to Claude Code
+│   ├── copilot.mjs          translator to GitHub Copilot
+│   ├── cursor.mjs           translator to Cursor
+│   └── gemini.mjs           translator to Gemini CLI
+└── test/                    suite with `node --test` (parser, init, AI, QA, security, doctor)
 ```
 
-## Qué genera (target Claude)
+## What it generates (Claude target)
 
-| Concepto | Archivo en el proyecto |
+| Concept | File in the project |
 |---|---|
-| Skills | `.claude/skills/<id>/` (copia real) |
-| MCP | `.mcp.json` (fusionado, no pisa lo existente) |
-| Reglas/stack | `CLAUDE.md` (bloque gestionado entre `<!-- chalc:start -->` y `<!-- chalc:end -->`) |
-| Manifiesto | `.chalc.json` (qué se instaló y cuándo) |
+| Skills | `.claude/skills/<id>/` (real copy) |
+| MCP | `.mcp.json` (merged, doesn't clobber what exists) |
+| Rules/stack | `CLAUDE.md` (managed block between `<!-- chalc:start -->` and `<!-- chalc:end -->`) |
+| Manifest | `.chalc.json` (what was installed and when) |
 
-## Extender Chalc
+## Extending Chalc
 
-- **Nuevo stack / lenguaje** → crea `rules/<id>.json` con su `detect` (`anyDependency`/`anyFile`/`anyGlob` o las variantes `all*`), `skills`, `mcp`. Un stack específico puede `"implies": ["javascript", …]` para suprimir lenguajes genéricos en el display.
-- **Nueva skill** → copia la carpeta a `catalog/skills/<id>/` y referénciala en una regla (o usa `chalc install` / `chalc configure`).
-- **Skill universal** → agrégalo a `rules/global.json` (`always:true`) para que lo reciba todo proyecto (así está `mutation-testing`).
-- **Nuevo MCP** → crea `catalog/mcp/<id>.json`.
-- **Nuevo asistente** → crea `targets/<nombre>.mjs` con un `apply()` que escriba los archivos de esa herramienta. El catálogo y las reglas se reutilizan tal cual.
-- **Nuevo método** → carpeta en `catalog/methods/<id>/` con `method.json` (label/description/explain/modes, todo `{es,en}`), reglas y scaffold por modo.
-- **Nuevo idioma del CLI** → agrega la clave (`pt`, …) en `lib/i18n.mjs` y los archivos `*.pt.*` / `scaffold-*-pt` del método.
+- **New stack / language** → create `rules/<id>.json` with its `detect` (`anyDependency`/`anyFile`/`anyGlob` or the `all*` variants), `skills`, `mcp`. A specific stack can `"implies": ["javascript", …]` to suppress generic languages in the display.
+- **New skill** → copy the folder to `catalog/skills/<id>/` and reference it in a rule (or use `chalc install` / `chalc configure`).
+- **Universal skill** → add it to `rules/global.json` (`always:true`) so every project receives it (that's how `mutation-testing` works).
+- **New MCP** → create `catalog/mcp/<id>.json`.
+- **New assistant** → create `targets/<nombre>.mjs` with an `apply()` that writes that tool's files. The catalog and rules are reused as is.
+- **New method** → a folder in `catalog/methods/<id>/` with `method.json` (label/description/explain/modes, all `{es,en}`), rules, and a scaffold per mode.
+- **New CLI language** → add the key (`pt`, …) in `lib/i18n.mjs` and the `*.pt.*` / `scaffold-*-pt` files of the method.
 
-## Multilenguaje
+## Multilanguage
 
-Chalc detecta el **lenguaje/stack** por señales reales y se adapta:
+Chalc detects the **language/stack** by real signals and adapts:
 
-| Grupo | Reglas incluidas | Estado |
+| Group | Included rules | Status |
 |---|---|---|
-| Web/TypeScript | JavaScript, TypeScript, Angular, NestJS | Angular/NestJS con skills; JS/TS detecta |
-| Mobile | Flutter, Dart, Swift, Kotlin | Flutter con skills + MCP (`dart`); Dart/Swift/Kotlin detecta |
-| Backend/General | .NET, Go, Java, PHP, Ruby, Python, Rust, Elixir | detecta |
-| Sistemas/IaC | C, C++, Shell, Terraform, Zig | detecta |
-| Otros ecosistemas | Clojure, Erlang, Haskell, Julia, Lua, Perl, R, Scala | detecta |
+| Web/TypeScript | JavaScript, TypeScript, Angular, NestJS | Angular/NestJS with skills; JS/TS detected |
+| Mobile | Flutter, Dart, Swift, Kotlin | Flutter with skills + MCP (`dart`); Dart/Swift/Kotlin detected |
+| Backend/General | .NET, Go, Java, PHP, Ruby, Python, Rust, Elixir | detected |
+| Systems/IaC | C, C++, Shell, Terraform, Zig | detected |
+| Other ecosystems | Clojure, Erlang, Haskell, Julia, Lua, Perl, R, Scala | detected |
 
-Agregar un lenguaje = crear `rules/<lang>.json` con su `detect`. Soporta:
-- `anyDependency`, `anyFile`, `anyGlob`: basta con una señal.
-- `allDependency`, `allFile`, `allGlob`: todas esas señales deben estar presentes.
+Adding a language = creating `rules/<lang>.json` with its `detect`. It supports:
+- `anyDependency`, `anyFile`, `anyGlob`: a single signal is enough.
+- `allDependency`, `allFile`, `allGlob`: all those signals must be present.
 
-## Configurar catálogo (rules, skills y MCP)
+## Configuring the catalog (rules, skills, and MCP)
 
-La forma recomendada de mantener Chalc es interactiva:
+The recommended way to maintain Chalc is interactively:
 
 ```bash
 npm run configure
-# o, si hiciste npm link:
+# or, if you ran npm link:
 chalc configure
 ```
 
-`configure` abre un menú para administrar el catálogo sin editar JSON a mano:
+`configure` opens a menu to manage the catalog without editing JSON by hand:
 
-| Opción | Qué hace | Dónde escribe |
+| Option | What it does | Where it writes |
 |---|---|---|
-| Crear una rule nueva | Crea una regla de detección por archivos, globs o dependencias | `rules/<id>.json` |
-| Instalar skill y agregarlo a una rule | Descarga/copia el skill al catálogo y luego pregunta a qué rule conectarlo | `catalog/skills/<id>/` + `rules/<id>.json` |
-| Agregar skill existente a una rule | Busca un skill ya instalado y lo agrega a `skills` de la rule elegida | `rules/<id>.json` |
-| Registrar MCP nuevo | Crea la definición del servidor MCP | `catalog/mcp/<id>.json` |
-| Agregar MCP existente a una rule | Busca un MCP y lo agrega a `mcp` u `optionalMcp` de la rule elegida | `rules/<id>.json` |
+| Create a new rule | Creates a detection rule by files, globs, or dependencies | `rules/<id>.json` |
+| Install a skill and add it to a rule | Downloads/copies the skill into the catalog and then asks which rule to wire it to | `catalog/skills/<id>/` + `rules/<id>.json` |
+| Add an existing skill to a rule | Finds an already-installed skill and adds it to the chosen rule's `skills` | `rules/<id>.json` |
+| Register a new MCP | Creates the MCP server definition | `catalog/mcp/<id>.json` |
+| Add an existing MCP to a rule | Finds an MCP and adds it to the chosen rule's `mcp` or `optionalMcp` | `rules/<id>.json` |
 
-El selector de rules incluye búsqueda por `id`, nombre o lenguaje. Por ejemplo puedes escribir
-`angular`, `TypeScript`, `nest`, `python`, etc., y luego elegir la rule con flechas.
+The rule selector includes search by `id`, name, or language. For example, you can type
+`angular`, `TypeScript`, `nest`, `python`, etc., and then pick the rule with arrow keys.
 
-### Flujo típico: agregar una skill
+### Typical flow: adding a skill
 
 ```bash
 npm run configure
 ```
 
-1. Elige **Instalar skill y agregarlo a una rule**.
-2. Pega la fuente: URL de GitHub, nombre de `skills.sh`, ruta local o el comando completo `npx skills add ...`.
-3. Chalc copia/vendoriza el skill a `catalog/skills/<id>/`. Ese es el destino permanente.
-4. Chalc pregunta si quieres conectarlo a una rule.
-5. Buscas la rule destino y Chalc actualiza `rules/<id>.json`.
+1. Choose **Install a skill and add it to a rule**.
+2. Paste the source: GitHub URL, `skills.sh` name, local path, or the full `npx skills add ...` command.
+3. Chalc copies/vendors the skill into `catalog/skills/<id>/`. That's the permanent destination.
+4. Chalc asks whether you want to wire it to a rule.
+5. You search for the target rule and Chalc updates `rules/<id>.json`.
 
-Si el skill ya existe, Chalc pregunta antes de reemplazarlo. En modo directo/no interactivo puedes usar:
+If the skill already exists, Chalc asks before replacing it. In direct/non-interactive mode you can use:
 
 ```bash
 chalc install <fuente> --stack angular
@@ -408,30 +393,30 @@ chalc install <fuente> --stack angular --allow-exec
 chalc install <fuente> --stack angular --force
 ```
 
-Las fuentes Git/GitHub y `skills.sh` requieren ejecutar herramientas externas (`git clone` o
-`npx --yes skills add`). En modo interactivo Chalc pide confirmación antes de ejecutarlas. En modo
-no interactivo debes pasar `--allow-exec` explícitamente si confías en la fuente. Las rutas locales
-no necesitan ese permiso.
+Git/GitHub and `skills.sh` sources require running external tools (`git clone` or
+`npx --yes skills add`). In interactive mode Chalc asks for confirmation before running them. In
+non-interactive mode you must pass `--allow-exec` explicitly if you trust the source. Local paths
+don't need that permission.
 
-También puedes pegar comandos completos del nuevo CLI de skills:
+You can also paste full commands from the new skills CLI:
 
 ```bash
 chalc install "npx skills add https://github.com/wshobson/agents --skill angular-migration" --allow-exec
 ```
 
-### Flujo típico: agregar un MCP
+### Typical flow: adding an MCP
 
 ```bash
 npm run configure
 ```
 
-1. Elige **Registrar MCP nuevo**.
-2. Define `id`, descripción, comando y argumentos.
-3. Si requiere secretos, agrega la variable/env correspondiente.
-4. Chalc escribe `catalog/mcp/<id>.json`.
-5. Puedes conectarlo inmediatamente a una rule como obligatorio (`mcp`) u opcional (`optionalMcp`).
+1. Choose **Register a new MCP**.
+2. Define `id`, description, command, and arguments.
+3. If it requires secrets, add the corresponding variable/env.
+4. Chalc writes `catalog/mcp/<id>.json`.
+5. You can wire it immediately to a rule as required (`mcp`) or optional (`optionalMcp`).
 
-Ejemplo conceptual de MCP:
+Conceptual MCP example:
 
 ```json
 {
@@ -448,185 +433,185 @@ Ejemplo conceptual de MCP:
 }
 ```
 
-Después de configurar, revisa la salud del catálogo:
+After configuring, check the catalog's health:
 
 ```bash
 npm run doctor -- --yes
 ```
 
-## Instalar skills nuevos (lo que mantiene vivo el sistema)
+## Installing new skills (what keeps the system alive)
 
-Los skills de skills.sh (o de cualquier marketplace) caen en `~/.claude/skills`, **nunca** en el catálogo de Chalc.
-Por eso Chalc los instala en un temporal, lo **copia al catálogo** (dereferenciando symlinks) y lo
-**cablea a una regla** preguntándote a qué stack pertenece. Así las reglas se llenan con el uso.
+Skills from skills.sh (or any marketplace) land in `~/.claude/skills`, **never** in Chalc's catalog.
+That's why Chalc installs them into a temp folder, **copies them into the catalog** (dereferencing symlinks), and
+**wires them to a rule** by asking which stack they belong to. This way the rules fill up through use.
 
 ```bash
 chalc install <fuente> [--stack <id>] [--allow-exec]
 ```
 
-`<fuente>` puede ser:
-- **URL de Git/GitHub** — `https://github.com/owner/repo`, `.../tree/<rama>/<subcarpeta>`, o `*.git`.
-- **skills.sh** — un nombre/URL; Chalc usa `npx skills add` por dentro y vendoriza el resultado.
-- **Ruta local / carpeta** — copia directa al catálogo.
+`<fuente>` can be:
+- **Git/GitHub URL** — `https://github.com/owner/repo`, `.../tree/<rama>/<subcarpeta>`, or `*.git`.
+- **skills.sh** — a name/URL; Chalc uses `npx skills add` under the hood and vendors the result.
+- **Local path / folder** — a direct copy into the catalog.
 
-Por seguridad, Git/GitHub y `skills.sh` no se ejecutan automáticamente en modo no interactivo:
-usa `--allow-exec` cuando la fuente sea confiable. En interactivo, Chalc pregunta antes de ejecutar.
+For safety, Git/GitHub and `skills.sh` aren't run automatically in non-interactive mode:
+use `--allow-exec` when the source is trusted. In interactive mode, Chalc asks before running.
 
-Tras instalar, Chalc pregunta **a qué stack pertenece** (Angular, Nest, … o *Global* = todos los proyectos)
-y escribe el skill en `rules/<stack>.json`. Desde ese momento, todo proyecto de ese stack lo recibe.
-Si el skill ya existe, Chalc pregunta antes de reemplazarlo; en modo no interactivo debes usar `--force`.
-Cada skill vendorized incluye `.chalc-skill.json` con fuente, fecha y hash del contenido.
+After installing, Chalc asks **which stack it belongs to** (Angular, Nest, … or *Global* = all projects)
+and writes the skill into `rules/<stack>.json`. From then on, every project of that stack receives it.
+If the skill already exists, Chalc asks before replacing it; in non-interactive mode you must use `--force`.
+Each vendored skill includes `.chalc-skill.json` with source, date, and content hash.
 
-> También puedes instalar **dentro del flujo interactivo** (`chalc`): te ofrece *"¿Instalar un skill nuevo?"*,
-> lo cablea a una regla y lo equipa de una vez en el proyecto actual.
+> You can also install **within the interactive flow** (`chalc`): it offers you *"Install a new skill?"*,
+> wires it to a rule, and equips it right away in the current project.
 
-## Métodos de trabajo
+## Working methods
 
-Además de skills/MCP por stack, Chalc puede montar **métodos** (formas de trabajar), independientes del lenguaje.
+Besides per-stack skills/MCP, Chalc can set up **methods** (ways of working), independent of the language.
 
 ### Spec-Driven Development (SDD)
 
-La **especificación es la fuente de verdad**, no el código. Basado en GitHub Spec Kit + AWS Kiro.
-Cinco fases en orden: **Constitución → Specify → Plan → Tasks → Implement**.
+The **specification is the source of truth**, not the code. Based on GitHub Spec Kit + AWS Kiro.
+Five phases in order: **Constitution → Specify → Plan → Tasks → Implement**.
 
-- **EARS**: los requisitos se escriben testeables — `WHEN <evento> THE SYSTEM SHALL <comportamiento>` — con id (`R1`, `R2`…).
-- **Test-First (innegociable)**: ningún código antes de un test que **falle** (Red), aprobado. Luego el mínimo código (Green), refactor.
-- **Mutation testing**: tras Green/refactor, los tests deben **matar mutantes** (score ≥ 80%). Ver sección *Test-First + Mutation testing*.
-- **Trazabilidad**: cada tarea y cada test apunta a un requisito (`R#`).
+- **EARS**: requirements are written to be testable — `WHEN <evento> THE SYSTEM SHALL <comportamiento>` — with an id (`R1`, `R2`…).
+- **Test-First (non-negotiable)**: no code before a test that **fails** (Red), approved. Then the minimal code (Green), refactor.
+- **Mutation testing**: after Green/refactor, the tests must **kill mutants** (score ≥ 80%). See the *Test-First + Mutation testing* section.
+- **Traceability**: each task and each test points to a requirement (`R#`).
 
-Al elegirlo en el modo interactivo, Chalc **muestra un gráfico breve** explicando SDD antes de integrarlo, y pregunta el **tamaño del proyecto**:
+When you choose it in interactive mode, Chalc **shows a brief diagram** explaining SDD before integrating it, and asks the **project size**:
 
-| Modo | Para | Monta en `specs/` |
+| Mode | For | Sets up in `specs/` |
 |---|---|---|
-| `lite` | proyectos pequeños | `constitution.md` + `_template/{spec,plan,tasks}.md` |
-| `full` | proyectos grandes | lo anterior + `research.md`, `data-model.md`, `contracts/`, `quickstart.md` |
+| `lite` | small projects | `constitution.md` + `_template/{spec,plan,tasks}.md` |
+| `full` | large projects | the above + `research.md`, `data-model.md`, `contracts/`, `quickstart.md` |
 
-El método se inyecta en el archivo del asistente (`CLAUDE.md`, etc.) como reglas, y deja `specs/` en el proyecto.
-Sin interactivo: `chalc --method sdd:lite` o `chalc --method sdd:full` (o `--mode lite|full`).
-La constitución, plantillas y reglas están en **es y en** (siguen el idioma del sistema).
+The method is injected into the assistant's file (`CLAUDE.md`, etc.) as rules, and leaves `specs/` in the project.
+Without interactive: `chalc --method sdd:lite` or `chalc --method sdd:full` (or `--mode lite|full`).
+The constitution, templates, and rules are in **es and en** (they follow the system language).
 
-## Capa de IA opcional — generar specs desde una HU
+## Optional AI layer — generating specs from a user story
 
-El núcleo de Chalc no usa IA. Pero dos comandos **opt-in** (con tu API key) convierten una historia de
-usuario en una especificación SDD. La IA aquí **solo estructura** lo que le pasas — no inventa.
+Chalc's core doesn't use AI. But two **opt-in** commands (with your API key) turn a user
+story into an SDD specification. The AI here **only structures** what you give it — it doesn't make things up.
 
-### 1) `chalc config-ia` — configurar el cerebro (una vez)
+### 1) `chalc config-ia` — configure the brain (once)
 
 ```bash
-chalc config-ia        # o: npm run config-ia
+chalc config-ia        # or: npm run config-ia
 ```
 
-Elige el proveedor de LLM y pega tu API key:
+Choose the LLM provider and paste your API key:
 
-| Proveedor | Notas |
+| Provider | Notes |
 |---|---|
-| **OpenRouter** | una sola key → Claude, GPT, Gemini, Llama… (recomendado) |
-| **Anthropic** | Claude nativo |
+| **OpenRouter** | one key → Claude, GPT, Gemini, Llama… (recommended) |
+| **Anthropic** | native Claude |
 | **OpenAI** | GPT |
 | **Google Gemini** | Gemini |
-| **Ollama** | local, sin key |
+| **Ollama** | local, no key |
 
-La config se guarda en `~/.chalc/config.json` (permisos `600`, **fuera del proyecto**, nunca se commitea).
-La key se teclea **enmascarada**. Override por entorno: `CHALC_PROVIDER`, `CHALC_API_KEY`, `CHALC_MODEL`, `CHALC_BASE_URL`.
-También puedes separar modelos por tarea con `CHALC_SPEC_MODEL`, `CHALC_QA_MODEL` y `CHALC_REPAIR_MODEL`.
-Cliente HTTP con `fetch` nativo, cero dependencias.
+The config is saved in `~/.chalc/config.json` (`600` permissions, **outside the project**, never committed).
+The key is typed **masked**. Environment override: `CHALC_PROVIDER`, `CHALC_API_KEY`, `CHALC_MODEL`, `CHALC_BASE_URL`.
+You can also split models per task with `CHALC_SPEC_MODEL`, `CHALC_QA_MODEL`, and `CHALC_REPAIR_MODEL`.
+HTTP client with native `fetch`, zero dependencies.
 
-Chalc soporta perfiles versionables en `catalog/profiles/*.json`. El perfil incluido (`chalc-default`) define:
-- `spec`: modelo fuerte para convertir HU/documentos en SDD.
-- `qa`: modelo más económico/rápido para loops de verificación.
-- `repair`: modelo fuerte si luego se agrega reparación asistida; el plan actual se genera de forma determinística desde QA.
+Chalc supports versionable profiles in `catalog/profiles/*.json`. The bundled profile (`chalc-default`) defines:
+- `spec`: a strong model to convert user stories/documents into SDD.
+- `qa`: a cheaper/faster model for verification loops.
+- `repair`: a strong model if assisted repair is later added; the current plan is generated deterministically from QA.
 
-Puedes inspeccionar la resolución final sin consumir tokens:
+You can inspect the final resolution without consuming tokens:
 
 ```bash
 chalc ai-doctor
 CHALC_QA_MODEL=mi-modelo-rapido chalc ai-doctor
 ```
 
-> **Copilot no es proveedor de generación** (no expone API con key) — es un *destino*. Para generar usa
+> **Copilot isn't a generation provider** (it doesn't expose an API with a key) — it's a *target*. To generate, use
 > OpenRouter / Anthropic / OpenAI / Gemini / Ollama.
 
-### 2) `chalc spec-ia` — HU → spec/plan/tasks
+### 2) `chalc spec-ia` — user story → spec/plan/tasks
 
 ```bash
-chalc spec-ia                                   # interactivo
-chalc spec-ia /ruta/proyecto --lang es --doc mi-hu.docx
+chalc spec-ia                                   # interactive
+chalc spec-ia /path/to/project --lang es --doc my-story.docx
 ```
 
-Flujo:
-1. **Ruta del proyecto.** Si no tiene SDD, Chalc **lo monta al vuelo** (`specs/` con constitución + plantillas).
-2. **Idioma del spec** (independiente del idioma del CLI): `--lang es` o lo eliges en el menú.
-3. **Fuente de la HU** (de dónde sale la historia de usuario):
+Flow:
+1. **Project path.** If it has no SDD, Chalc **sets it up on the fly** (`specs/` with constitution + templates).
+2. **Spec language** (independent of the CLI language): `--lang es` or you pick it in the menu.
+3. **User story source** (where the user story comes from):
 
-   | Fuente | Qué te pide |
+   | Source | What it asks for |
    |---|---|
-   | Archivo local | ruta a `.md` / `.txt` (recomendado: se leen directo, sin herramientas extra) / Word / PDF / Excel→CSV |
-   | **Azure DevOps** | URL del work item + PAT → trae título + descripción + criterios |
-   | **Jira** | URL del issue + email + token |
-   | **Google Drive / URL** | la URL (export a texto) |
-   | Pegar texto | el texto directo |
+   | Local file | path to `.md` / `.txt` (recommended: read directly, no extra tools) / Word / PDF / Excel→CSV |
+   | **Azure DevOps** | work item URL + PAT → brings title + description + criteria |
+   | **Jira** | issue URL + email + token |
+   | **Google Drive / URL** | the URL (exported to text) |
+   | Paste text | the text directly |
 
-4. La IA genera `specs/NNN-feature/{spec,plan,tasks}.md` (en `full`, también data-model/research/quickstart/contracts).
-5. Chalc valida la salida: requisitos `R#`, referencias en tasks, estructura mínima y aclaraciones pendientes.
-6. Guarda una traza reproducible en `specs/<feature>/.chalc/ai-trace.jsonl` con hashes de prompt/output, nunca el contenido crudo.
-7. Imprime un **comando hand-off** detallado para pegar en tu asistente y generar el código con TDD.
+4. The AI generates `specs/NNN-feature/{spec,plan,tasks}.md` (in `full`, also data-model/research/quickstart/contracts).
+5. Chalc validates the output: `R#` requirements, references in tasks, minimal structure, and pending clarifications.
+6. It saves a reproducible trace in `specs/<feature>/.chalc/ai-trace.jsonl` with prompt/output hashes, never the raw content.
+7. It prints a detailed **hand-off command** to paste into your assistant and generate the code with TDD.
 
-### Harness de fidelidad (la IA NO inventa)
+### Fidelity harness (the AI does NOT make things up)
 
-El prompt (`lib/prompts/spec-gen.prompt.xml`) tiene un cerco estricto: la IA es un **estructurador, no un
-autor**. Si algo no está en el documento, **no va al spec** — va como `[NEEDS CLARIFICATION]`. Nunca
-inventa requisitos, campos, entidades, reglas, edge cases ni tecnología. Un documento corto produce un
-spec corto lleno de preguntas abiertas — y eso es **correcto**, no un fallo.
+The prompt (`lib/prompts/spec-gen.prompt.xml`) has a strict fence: the AI is a **structurer, not an
+author**. If something isn't in the document, **it doesn't go into the spec** — it goes as `[NEEDS CLARIFICATION]`. It never
+invents requirements, fields, entities, rules, edge cases, or technology. A short document produces a
+short spec full of open questions — and that's **correct**, not a failure.
 
-## Test-First + Mutation testing (calidad)
+## Test-First + Mutation testing (quality)
 
-El método SDD impone **Test-First** (Red → Green → Refactor) y **mutation testing** en 4 capas
-(constitución, reglas del asistente, plantilla `tasks.md`, y el prompt de `spec-ia`). El skill universal
-`mutation-testing` está cableado a la regla `global`, así que **todo proyecto lo recibe**, con la
-herramienta correcta por stack (instalación **project-local**, nunca global):
+The SDD method enforces **Test-First** (Red → Green → Refactor) and **mutation testing** across 4 layers
+(constitution, assistant rules, the `tasks.md` template, and the `spec-ia` prompt). The universal skill
+`mutation-testing` is wired to the `global` rule, so **every project receives it**, with the
+right tool per stack (**project-local** install, never global):
 
-| Stack | Herramienta | Instalar (project-local) |
+| Stack | Tool | Install (project-local) |
 |---|---|---|
 | JS/TS (Angular, Nest, Node) | Stryker | `npm i -D @stryker-mutator/core` + el runner (jest/karma/…) |
 | .NET / C# | Stryker.NET | `dotnet new tool-manifest` → `dotnet tool install dotnet-stryker` |
 | Python | mutmut | `uv add --dev mutmut` |
 | Java · Go · Rust · PHP | PIT · Gremlins · cargo-mutants · Infection | (ver el skill) |
 
-Objetivo: **mutation score ≥ 80%** en la lógica crítica. Son herramientas **dev-only** (no van a
-producción); audítalas con `npm audit` / `dotnet list package --vulnerable` / `pip-audit` / `composer audit`.
+Goal: **mutation score ≥ 80%** on critical logic. These are **dev-only** tools (they don't go to
+production); audit them with `npm audit` / `dotnet list package --vulnerable` / `pip-audit` / `composer audit`.
 
-## Internacionalización
+## Internationalization
 
-- **CLI bilingüe (es/en)**: toda la salida al usuario pasa por `lib/i18n.mjs` y sale en el idioma elegido.
-- **Fijar el idioma una sola vez**: `chalc lang es` o `chalc lang en` lo guarda en `~/.chalc/config.json`
-  y se aplica a todos tus proyectos. `chalc lang` sin argumento abre el menú interactivo.
-- **Precedencia del idioma**: `--lang` > `CHALC_LANG` > config guardada (`chalc lang`) > `LANG`/`LC_*` del SO > `en`.
-- **Idioma del spec**: `chalc spec-ia --lang es|en|pt|…` (o el menú) — independiente del idioma del CLI.
-- El método SDD (constitución, plantillas, reglas, gráfico explicativo) está en **es y en**.
+- **Bilingual CLI (es/en)**: all user-facing output goes through `lib/i18n.mjs` and comes out in the chosen language.
+- **Set the language once**: `chalc lang es` or `chalc lang en` saves it in `~/.chalc/config.json`
+  and applies to all your projects. `chalc lang` with no argument opens the interactive menu.
+- **Language precedence**: `--lang` > `CHALC_LANG` > saved config (`chalc lang`) > `LANG`/`LC_*` of the OS > `en`.
+- **Spec language**: `chalc spec-ia --lang es|en|pt|…` (or the menu) — independent of the CLI language.
+- The SDD method (constitution, templates, rules, explanatory diagram) is in **es and en**.
 
-## Seguridad
+## Security
 
-- La **API key** vive en `~/.chalc/config.json` (permisos `600`), **nunca** en el proyecto ni en `.chalc.json`; entrada enmascarada.
-- Las fuentes remotas para `spec-ia` usan timeout, límite de tamaño y validación de redirects; se bloquean protocolos no HTTP(S), `localhost` e IPs privadas/locales.
-- Las llamadas a proveedores de IA tienen timeout para evitar procesos colgados.
-- Las trazas IA guardan hashes, conteos y metadatos; no guardan prompts, documentos fuente ni secretos.
-- Los ids de targets, skills, MCP, rules y métodos se validan como kebab-case seguro antes de usarse como rutas o imports.
-- Instalar skills desde Git/GitHub o `skills.sh` requiere confirmación interactiva o `--allow-exec` en modo no interactivo.
-- Las **herramientas de mutación** se instalan **project-local** (dev-dependency / tool-manifest), nunca `-g` global.
-- Chalc **no sobrescribe** tu `CLAUDE.md`: solo edita su bloque entre `<!-- chalc:start -->` y `<!-- chalc:end -->`; el resto se conserva.
-- Las skills se **vendorizan** (contenido real, sin symlinks) y traen `.chalc-skill.json` con fuente, fecha y hash.
+- The **API key** lives in `~/.chalc/config.json` (`600` permissions), **never** in the project or in `.chalc.json`; masked input.
+- Remote sources for `spec-ia` use timeout, size limit, and redirect validation; non-HTTP(S) protocols, `localhost`, and private/local IPs are blocked.
+- Calls to AI providers have a timeout to avoid hung processes.
+- AI traces store hashes, counts, and metadata; they don't store prompts, source documents, or secrets.
+- The ids of targets, skills, MCP, rules, and methods are validated as safe kebab-case before being used as paths or imports.
+- Installing skills from Git/GitHub or `skills.sh` requires interactive confirmation or `--allow-exec` in non-interactive mode.
+- The **mutation tools** are installed **project-local** (dev-dependency / tool-manifest), never `-g` global.
+- Chalc **doesn't overwrite** your `CLAUDE.md`: it only edits its block between `<!-- chalc:start -->` and `<!-- chalc:end -->`; the rest is preserved.
+- Skills are **vendored** (real content, no symlinks) and ship with `.chalc-skill.json` containing source, date, and hash.
 
-## Tests y CI
+## Tests and CI
 
-Chalc usa el runner nativo de Node:
+Chalc uses Node's native runner:
 
 ```bash
 npm test
 ```
 
-La suite cubre parser de argumentos, detección de stacks con fixtures versionados en `test/fixtures/`,
-bloqueos de seguridad (`target` inseguro, instalación externa sin `--allow-exec`, URLs locales) y
-`doctor`. Para CI, el mínimo recomendado es:
+The suite covers the argument parser, stack detection with fixtures versioned in `test/fixtures/`,
+security blocks (unsafe `target`, external install without `--allow-exec`, local URLs), and
+`doctor`. For CI, the recommended minimum is:
 
 ```bash
 npm test
@@ -634,15 +619,15 @@ npm run doctor -- --yes
 node bin/chalc.mjs eval-ia --yes
 ```
 
-## Targets (asistentes) soportados
+## Supported targets (assistants)
 
-El mismo catálogo neutro se proyecta al formato nativo de cada herramienta. Eliges el target en el flujo interactivo o con `--target`.
+The same neutral catalog is projected to each tool's native format. You pick the target in the interactive flow or with `--target`.
 
-| Target | Instrucciones | Skills | MCP |
+| Target | Instructions | Skills | MCP |
 |---|---|---|---|
 | **Claude Code** | `CLAUDE.md` | `.claude/skills/<id>/` | `.mcp.json` |
-| **GitHub Copilot** | `.github/copilot-instructions.md` | `.chalc/skills/<id>/` (referenciados) | `.vscode/mcp.json` (`servers`, type `stdio`) |
-| **Gemini CLI** | `GEMINI.md` | `.chalc/skills/<id>/` (referenciados) | `.gemini/settings.json` (`mcpServers`) |
-| **Cursor** | `.cursor/rules/chalc-*.mdc` | `.chalc/skills/<id>/` + un `.mdc` por skill | `.cursor/mcp.json` (`mcpServers`) |
+| **GitHub Copilot** | `.github/copilot-instructions.md` | `.chalc/skills/<id>/` (referenced) | `.vscode/mcp.json` (`servers`, type `stdio`) |
+| **Gemini CLI** | `GEMINI.md` | `.chalc/skills/<id>/` (referenced) | `.gemini/settings.json` (`mcpServers`) |
+| **Cursor** | `.cursor/rules/chalc-*.mdc` | `.chalc/skills/<id>/` + a `.mdc` per skill | `.cursor/mcp.json` (`mcpServers`) |
 
-Todos escriben además `.chalc.json` (manifiesto). Agregar otro asistente = un `targets/<nombre>.mjs` con `apply()`, reusando catálogo y reglas.
+All of them also write `.chalc.json` (manifest). Adding another assistant = one `targets/<nombre>.mjs` with `apply()`, reusing the catalog and rules.

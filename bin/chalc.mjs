@@ -34,6 +34,8 @@ import { buildPrompt, generateSpec } from '../lib/specgen.mjs';
 import { assertSafeId, isSafeId } from '../lib/ids.mjs';
 import { parseArgs } from '../lib/cli/args.mjs';
 import { detectContext, formatDetect, matchRules, ruleReasons } from '../lib/detect.mjs';
+import { verifyProject } from '../lib/verify.mjs';
+import { tokenSummary } from '../lib/tokenmeter.mjs';
 import { buildStartCommand, detectAuth, detectSurface, findEnvironmentOptions, guessBaseUrls, listSpecs, normalizeQaUrl, probeDocker, probePlaywright, qaAgentTestPath, qaComposeProjectName, qaPlanPath, qaResultsPath, readQaInputs, readSpecContext, requirements, selectEnvironment, writeBrowserTests, writeQaInputs, writeQaPlan } from '../lib/qa.mjs';
 import { buildAgentReplaySpec, buildRepairPlanMarkdown, buildResultsMarkdown, createBrowserExecutor, httpExecutor, parseResultsMarkdown, runQaAgent } from '../lib/qaagent.mjs';
 import { appendAiTrace, makeAiTrace } from '../lib/aitrace.mjs';
@@ -59,7 +61,8 @@ const verb = ['lang', 'config-lang', 'idioma', 'language'].includes(first) ? 'la
   : ['init', 'new', 'create'].includes(first) ? 'init'
   : ['install', 'add'].includes(first) ? 'install'
   : ['inspect', 'explain'].includes(first) ? 'inspect'
-    : ['doctor', 'check'].includes(first) ? 'doctor'
+    : ['verify', 'check', 'audit'].includes(first) ? 'verify'
+    : ['doctor'].includes(first) ? 'doctor'
       : ['configure', 'config', 'setup'].includes(first) ? 'configure'
         : ['config-ia', 'config-ai', 'configia', 'ai', 'provider'].includes(first) ? 'ai'
           : ['ai-doctor', 'doctor-ia'].includes(first) ? 'aidoctor'
@@ -1476,6 +1479,25 @@ function detectFlutterVersion() {
   });
 }
 
+// Etiqueta i18n de cada chequeo estructural (la capa de datos devuelve solo `key`).
+const VERIFY_LABEL = { folders: 'vChkFolders', folderDocs: 'vChkFolderDocs', architectureDoc: 'vChkArchitectureDoc', specs: 'vChkSpecs', manifest: 'vChkManifest', assistant: 'vChkAssistant' };
+
+// Presenta (localizado) el resultado de verifyProject: chequeos estructurales + fronteras. Devuelve si pasó.
+function printVerification(result) {
+  console.log('\n' + c.bold('🔎 ' + t('verifyHdr')));
+  for (const ch of result.checks) {
+    const extra = (!ch.ok && ch.items?.length) ? c.dim('  · ' + t('vMissing', ch.items.join(', '))) : '';
+    console.log('  ' + (ch.ok ? c.green('✓') : c.yellow('✗')) + ' ' + t(VERIFY_LABEL[ch.key] || ch.key) + extra);
+  }
+  if (!result.violations.length) {
+    console.log('  ' + c.green('✓') + ' ' + t('vBoundariesOk'));
+  } else {
+    console.log('  ' + c.yellow('✗') + ' ' + t('vBoundariesBad', result.violations.length));
+    for (const v of result.violations.slice(0, 20)) console.log(c.dim('      · ' + t('vViolation', v.file, v.from, v.to)));
+  }
+  return result.ok;
+}
+
 async function runInit() {
   console.log('\n' + c.bold('⚙️  chalc init') + (dryRun ? c.dim('  (dry-run)') : '') + '\n');
   const prompter = interactive ? makePrompter() : null;
@@ -1656,7 +1678,11 @@ async function runInit() {
   console.log(c.green('✓ ' + t('initEquipped', equipped.skills.length, equipped.mcps.length, equipped.methods.length, targetName)));
   console.log(c.dim('  ' + t('initEquipNote')));
 
-  // 9) Build check opcional.
+  // 9) Verificación determinista (sin tokens): ¿está todo en su sitio y respeta las fronteras?
+  const verification = await verifyProject(dest, { expectFolders: reshaped.folders, target: targetName });
+  const verifiedOk = printVerification(verification);
+
+  // 10) Build check opcional (--verify).
   if (doVerify) {
     for (const step of verifySteps(stackId)) {
       console.log('\n▶ ' + c.bold(t('initVerifyStep', step.label)) + c.dim(`  · ${step.command} ${step.args.join(' ')}`));
@@ -1664,9 +1690,24 @@ async function runInit() {
       if (r.code !== 0) { console.log(c.yellow('  ' + t('initVerifyFail', step.label, r.code))); break; }
     }
     console.log(c.green('\n✓ ' + t('initVerifyDone')));
-  } else {
-    console.log(c.dim('\n  ' + t('initNextStep', projectName) + '\n'));
   }
+
+  // 11) Cierre.
+  console.log('\n' + (verifiedOk ? c.green('✓ ' + t('initCreatedOk')) : c.yellow('! ' + t('initCreatedWarn'))));
+  console.log(c.dim('  ' + t('initNextStep', projectName) + '\n'));
+}
+
+// ---------- comando: chalc verify / check (verifica un proyecto existente) ----------
+// Determinista, sin tokens: completitud estructural + linter de fronteras. `--strict` sale con código 1 (CI).
+async function runVerify() {
+  const proj = resolve(cleanPath(String(positional[1] || flags.path || '.')));
+  console.log('\n' + c.bold('⚙️  ' + t('checkHdr')) + c.dim('  ·  ' + proj) + '\n');
+  if (!existsSync(proj)) { console.log(c.red('✗ ' + t('pathMissing', proj))); process.exit(1); }
+  const verification = await verifyProject(proj);
+  const ok = printVerification(verification);
+  const findings = verification.checks.filter((ch) => !ch.ok).length + verification.violations.length;
+  console.log('\n' + (ok ? c.green('✓ ' + t('checkOk')) : c.yellow('! ' + t('checkFindings', findings))) + '\n');
+  if (!ok && flags.strict) process.exit(1);
 }
 
 // ---------- comando: chalc configure ----------
@@ -2171,5 +2212,12 @@ async function runSpecGen() {
   console.log(c.cyan(handoffCommand(rel, equippedSkills, specLang)) + '\n');
 }
 
-(verb === 'lang' ? runConfigLang() : verb === 'init' ? runInit() : verb === 'install' ? runInstall() : verb === 'inspect' ? runInspect() : verb === 'doctor' ? runDoctor() : verb === 'configure' ? runConfigure() : verb === 'ai' ? runAi() : verb === 'aidoctor' ? runAiDoctor() : verb === 'aieval' ? runAiEval() : verb === 'specgen' ? runSpecGen() : verb === 'spec' ? runSpec() : verb === 'qa' ? runQa() : runApply())
-  .catch((err) => { console.error(c.red('✗ ' + err.message)); process.exit(1); });
+// Muestra el consumo de tokens SIEMPRE que se haya consultado la IA en este comando (transparencia de gasto).
+function printTokenUsage() {
+  const s = tokenSummary();
+  if (s.calls > 0) console.log('\n' + c.dim(t('tokensUsed', s.total, s.input, s.output, s.calls)));
+}
+
+(verb === 'lang' ? runConfigLang() : verb === 'init' ? runInit() : verb === 'verify' ? runVerify() : verb === 'install' ? runInstall() : verb === 'inspect' ? runInspect() : verb === 'doctor' ? runDoctor() : verb === 'configure' ? runConfigure() : verb === 'ai' ? runAi() : verb === 'aidoctor' ? runAiDoctor() : verb === 'aieval' ? runAiEval() : verb === 'specgen' ? runSpecGen() : verb === 'spec' ? runSpec() : verb === 'qa' ? runQa() : runApply())
+  .then(() => printTokenUsage())
+  .catch((err) => { printTokenUsage(); console.error(c.red('✗ ' + err.message)); process.exit(1); });

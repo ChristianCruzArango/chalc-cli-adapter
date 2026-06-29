@@ -1,11 +1,37 @@
 {
   "name": "chalc",
   "version": "0.1.0",
-  "description": "Equipa cualquier proyecto con las skills/MCP/métodos correctos. Interactivo, sin IA, sin tokens.",
+  "description": "CLI local para crear y equipar proyectos con skills, MCP, reglas, SDD, specs y QA agent; IA opcional y provider-agnóstica.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChristianCruzArango/chalc-cli-adapter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ChristianCruzArango/chalc-cli-adapter/issues"
+  },
+  "homepage": "https://github.com/ChristianCruzArango/chalc-cli-adapter#readme",
+  "keywords": [
+    "ai",
+    "agents",
+    "cli",
+    "mcp",
+    "sdd",
+    "skills"
+  ],
   "bin": {
     "chalc": "bin/chalc.mjs"
   },
+  "files": [
+    "bin/",
+    "catalog/",
+    "lib/",
+    "rules/",
+    "targets/",
+    "README.md",
+    "README.es.md",
+    "skills-lock.json"
+  ],
   "scripts": {
     "start": "node bin/chalc.mjs",
     "lang": "node bin/chalc.mjs lang",
@@ -18,6 +44,8 @@
     "ai-doctor": "node bin/chalc.mjs ai-doctor",
     "eval-ia": "node bin/chalc.mjs eval-ia",
     "spec-ia": "node bin/chalc.mjs spec-ia",
+    "pack:check": "npm pack --dry-run",
+    "prepublishOnly": "npm test && npm run doctor -- --yes && npm run eval-ia && npm run pack:check",
     "test": "node --test"
   },
   "engines": {

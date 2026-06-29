@@ -264,7 +264,7 @@ proyecto  ──►  detecta señales        ──►  aplica reglas      ─�
                (package.json, archivos)     (rules/*.json)          los archivos del asistente
 ```
 
-1. **Detecta** el stack por señales reales (`@angular/core`, `nest-cli.json`, etc.), incluyendo proyectos anidados típicos de monorepos.
+1. **Detecta** el stack por señales reales ancladas a la raíz del proyecto (`package.json`, `angular.json`, `nest-cli.json`, globs raíz, etc.). En monorepos, ejecuta `chalc` dentro del paquete/app que quieras equipar.
 2. **Resuelve** del `catalog/` las skills + MCP que la regla indica.
 3. **Proyecta** con el `target` elegido a los archivos correctos.
 
@@ -277,6 +277,7 @@ chalc/
 │   ├── cli/args.mjs         parser de banderas/argumentos testeable
 │   ├── i18n.mjs             textos bilingües (es/en) + `chalc lang` (idioma persistente)
 │   ├── ids.mjs              validación de ids seguros (kebab-case)
+│   ├── detect.mjs           detección de stack/reglas desde señales raíz del proyecto
 │   ├── net.mjs              fetch con timeout/límites y validación de URLs externas
 │   ├── install.mjs          instalar/vendorizar skills (Git/skills.sh/local)
 │   ├── targetkit.mjs        utilidades compartidas por los targets (principios, arquitectura, bloques)

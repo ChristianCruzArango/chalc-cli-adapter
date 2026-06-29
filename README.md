@@ -11,7 +11,7 @@ AI is **opt-in** and used only in three commands, always with the API key config
 - **`chalc spec-ia`** — turns a user story or document into SDD files (`spec.md`, `plan.md`, `tasks.md`).
 - **`chalc qa --agent`** — verifies each `R#` requirement against the live app.
 
-If you don't use those commands, Chalc needs no AI provider or tokens. AI calls use **CCR** (reversible compression) to save tokens and are provider-agnostic (OpenRouter, Anthropic, OpenAI, Gemini, or Ollama).
+If you don't use those commands, Chalc needs no AI provider or tokens. AI calls use **CCR** (reversible compression) to save tokens and are provider-agnostic (OpenRouter, Anthropic, OpenAI, Gemini, or Ollama). And **whenever the AI is consulted, Chalc shows how many tokens it used** (input/output/total and number of calls), so you know the cost.
 
 ## The idea in one sentence
 
@@ -33,6 +33,7 @@ This way, an Angular project can receive its Angular skills, a NestJS one its ba
 | `chalc init` | Creates a new project from scratch with a user-chosen architecture and equips it | opt-in (suggests arch.; `--no-ai` disables it) |
 | `chalc` | Detects the stack and equips skills/MCP/method (interactive) | no |
 | `chalc inspect` | Explains what it detects and why, without writing | no |
+| `chalc verify [path]` | Verifies a project: completeness (folders/README, architecture.md, specs/) + **architecture boundaries** (layers) | no |
 | `chalc doctor` | Validates the catalog (rules, skills, MCP, methods, targets) | no |
 | `chalc configure` | Manages the catalog (rules/skills/MCP) via menu | no |
 | `chalc install <source>` | Installs a skill into the catalog and wires it to a rule | no |
@@ -152,6 +153,7 @@ Available architectures (the AI recommends the lightest one that fits; you decid
 - **Detailed `docs/architecture.md`:** folder map, dependency rules, and how to add a feature.
 - **The assistant reads it first:** `CLAUDE.md` (and equivalents) opens with a **Mandatory principles
   (always)** block and a reference to `docs/architecture.md` so the AI respects the architecture before creating files.
+- **Automatic verification at the end** (no tokens): checks that everything is in place (folders with README, `docs/architecture.md`, `specs/`, manifest, assistant file) and the **architecture boundaries**, closing with a **✓ Project created successfully**. The same runs later with `chalc verify` on any project.
 - **`--verify`** runs the build/analysis (`npm run build` / `dotnet build` / `flutter analyze`) to confirm the project compiles at birth.
 - **Bilingual (es/en)** following `chalc lang` or the system language.
 
@@ -287,9 +289,12 @@ chalc/
 │   ├── init.mjs             stack registry: architectures, official scaffolder, CLI version per Node
 │   ├── init-folders.mjs     per-folder guides (README.md) + folder map for architecture.md
 │   ├── init-scaffold.mjs    reshapes the project to the architecture + writes docs/architecture.md
+│   ├── verify.mjs           project completeness verification (folders, docs, specs, manifest)
+│   ├── verify-boundaries.mjs architecture boundary linter (layers, no AI) — `chalc verify`
 │   ├── initai.mjs           optional AI layer that suggests architecture (CCR + recall, clarifications)
 │   ├── ── spec generation (`chalc spec-ia`) ──
 │   ├── ai.mjs               multi-provider AI client (fetch) + ~/.chalc config (per-task profiles)
+│   ├── tokenmeter.mjs       measures the tokens the AI consumed and shows them to the user
 │   ├── ccr.mjs              reversible compression (CCR) to save tokens, provider-agnostic
 │   ├── specgen.mjs          orchestrates spec generation
 │   ├── specvalidate.mjs     validates the output (R#, traceability, minimum structure)

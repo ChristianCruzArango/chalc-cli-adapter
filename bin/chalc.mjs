@@ -33,6 +33,7 @@ import { fetchAzureDevOps, fetchJira, fetchUrl } from '../lib/sources.mjs';
 import { buildPrompt, generateSpec } from '../lib/specgen.mjs';
 import { assertSafeId, isSafeId } from '../lib/ids.mjs';
 import { parseArgs } from '../lib/cli/args.mjs';
+import { detectContext, formatDetect, matchRules, ruleReasons } from '../lib/detect.mjs';
 import { buildStartCommand, detectAuth, detectSurface, findEnvironmentOptions, guessBaseUrls, listSpecs, normalizeQaUrl, probeDocker, probePlaywright, qaAgentTestPath, qaComposeProjectName, qaPlanPath, qaResultsPath, readQaInputs, readSpecContext, requirements, selectEnvironment, writeBrowserTests, writeQaInputs, writeQaPlan } from '../lib/qa.mjs';
 import { buildAgentReplaySpec, buildRepairPlanMarkdown, buildResultsMarkdown, createBrowserExecutor, httpExecutor, parseResultsMarkdown, runQaAgent } from '../lib/qaagent.mjs';
 import { appendAiTrace, makeAiTrace } from '../lib/aitrace.mjs';
@@ -49,12 +50,6 @@ const PROFILES_DIR = join(CATALOG, 'profiles');
 const RULES_DIR = join(CHALC_ROOT, 'rules');
 const METHODS_DIR = join(CATALOG, 'methods');
 const TARGETS_DIR = join(CHALC_ROOT, 'targets');
-const DETECT_MAX_DEPTH = 4;
-const DETECT_SKIP_DIRS = new Set([
-  '.git', '.hg', '.svn', 'node_modules', 'vendor', '.venv', 'venv',
-  'dist', 'build', 'out', 'target', '.next', '.nuxt', '.angular',
-  '.terraform', '.dart_tool', '.gradle', '.idea', '.vscode'
-]);
 
 // ---------- args ----------
 const argv = process.argv.slice(2);
@@ -236,108 +231,8 @@ async function addSkillToRule(ruleId, skillId) {
   await writeFile(file, JSON.stringify(rule, null, 2) + '\n');
 }
 
-async function detectContext(dir) {
-  let deps = {};
-  const pkg = join(dir, 'package.json');
-  if (existsSync(pkg)) {
-    try {
-      const json = JSON.parse(await readFile(pkg, 'utf8'));
-      deps = { ...(json.dependencies || {}), ...(json.devDependencies || {}) };
-    } catch { /* package.json inválido: se ignora */ }
-  }
-  // La detección se ANCLA A LA RAÍZ: el stack se define por las dependencias del package.json
-  // raíz y por archivos/globs en la raíz. Escanear en profundidad daba falsos positivos
-  // (cualquier archivo anidado —catálogos, ejemplos, scripts— disparaba un stack).
-  const entries = existsSync(dir) ? await readdir(dir) : [];
-  const globMatches = (pattern) => {
-    const re = new RegExp('^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
-    return entries.filter((f) => re.test(f));   // solo nombres de la raíz
-  };
-  return {
-    deps,
-    entries,
-    files: entries,
-    hasFile: (name) => entries.includes(name),  // solo raíz
-    glob: (pattern) => globMatches(pattern).length > 0,
-    globMatches
-  };
-}
-
-function ruleReasons(rule, ctx) {
-  if (rule.always) return ['regla global'];
-  const d = rule.detect || {};
-  const reasons = [];
-  const missingAll = [];
-  for (const dep of d.allDependency || []) {
-    if (ctx.deps[dep]) reasons.push(`dependency ${dep}`);
-    else missingAll.push(`dependency ${dep}`);
-  }
-  for (const file of d.allFile || []) {
-    if (ctx.hasFile(file)) reasons.push(`file ${file}`);
-    else missingAll.push(`file ${file}`);
-  }
-  for (const pattern of d.allGlob || []) {
-    const matches = ctx.globMatches(pattern);
-    if (matches.length) reasons.push(`glob ${pattern}: ${matches.join(', ')}`);
-    else missingAll.push(`glob ${pattern}`);
-  }
-  if (missingAll.length) return [];
-  const anyReasons = [];
-  for (const dep of d.anyDependency || []) {
-    if (ctx.deps[dep]) anyReasons.push(`dependency ${dep}`);
-  }
-  for (const file of d.anyFile || []) {
-    if (ctx.hasFile(file)) anyReasons.push(`file ${file}`);
-  }
-  for (const pattern of d.anyGlob || []) {
-    const matches = ctx.globMatches(pattern);
-    if (matches.length) anyReasons.push(`glob ${pattern}: ${matches.join(', ')}`);
-  }
-  const hasAnyConfig = !!(d.anyDependency?.length || d.anyFile?.length || d.anyGlob?.length);
-  if (hasAnyConfig && !anyReasons.length) return [];
-  return reasons.concat(anyReasons);
-}
-
-function ruleMatches(rule, ctx) {
-  if (rule.always) return true;                            // regla global: siempre aplica
-  const d = rule.detect || {};
-  if (d.allDependency?.some((x) => !ctx.deps[x])) return false;
-  if (d.allFile?.some((f) => !ctx.hasFile(f))) return false;
-  if (d.allGlob?.some((g) => !ctx.glob(g))) return false;
-  const hasAllConfig = !!(d.allDependency?.length || d.allFile?.length || d.allGlob?.length);
-  const hasAnyConfig = !!(d.anyDependency?.length || d.anyFile?.length || d.anyGlob?.length);
-  const anyMatches = !!(
-    d.anyDependency?.some((x) => ctx.deps[x])
-    || d.anyFile?.some((f) => ctx.hasFile(f))
-    || d.anyGlob?.some((g) => ctx.glob(g))                 // *.csproj, *.sln, etc.
-  );
-  if (hasAllConfig && !hasAnyConfig) return true;
-  if (hasAllConfig && hasAnyConfig) return anyMatches;
-  return anyMatches;
-}
-
-// Reglas que aplican, suprimiendo los lenguajes genéricos que un stack específico ya implica
-// (ej. Angular implica javascript/typescript → no se muestran por separado).
-function matchRules(rules, ctx) {
-  const all = rules.filter((r) => ruleMatches(r, ctx));
-  const implied = new Set(all.flatMap((r) => r.implies || []));
-  return all.filter((r) => !implied.has(r.id));
-}
-
 function formatList(items, empty = '—') {
   return items.length ? items.join(', ') : empty;
-}
-
-function formatDetect(rule) {
-  const d = rule.detect || {};
-  const parts = [];
-  if (d.allDependency?.length) parts.push(`all deps: ${d.allDependency.join(', ')}`);
-  if (d.allFile?.length) parts.push(`all files: ${d.allFile.join(', ')}`);
-  if (d.allGlob?.length) parts.push(`all globs: ${d.allGlob.join(', ')}`);
-  if (d.anyDependency?.length) parts.push(`deps: ${d.anyDependency.join(', ')}`);
-  if (d.anyFile?.length) parts.push(`files: ${d.anyFile.join(', ')}`);
-  if (d.anyGlob?.length) parts.push(`globs: ${d.anyGlob.join(', ')}`);
-  return formatList(parts);
 }
 
 function slugifyFeatureName(name) {

@@ -20,14 +20,15 @@
 import { access, cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync, constants } from 'node:fs';
 import { join, dirname, resolve, basename } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createInterface } from 'node:readline/promises';
 import { emitKeypressEvents } from 'node:readline';
 import { spawn } from 'node:child_process';
 import { stdin, stdout } from 'node:process';
 import { installSkill } from '../lib/install.mjs';
 import { t, lang, saveLang } from '../lib/i18n.mjs';
-import { PROVIDERS, configForTask, loadConfig, modelForTask, saveConfig, isConfigured, CONFIG_PATH } from '../lib/ai.mjs';
+import { PROVIDERS, applyProfileModels, configForTask, loadConfig, modelForTask, saveConfig, isConfigured, listModels, CONFIG_PATH } from '../lib/ai.mjs';
 import { readDocument } from '../lib/docread.mjs';
 import { fetchAzureDevOps, fetchJira, fetchUrl } from '../lib/sources.mjs';
 import { buildPrompt, generateSpec } from '../lib/specgen.mjs';
@@ -45,6 +46,7 @@ import { runLocalAiEvals } from '../lib/aieval.mjs';
 import { summarizeValidation } from '../lib/specvalidate.mjs';
 import { analyzeProjectProposal, architectureSkills, archText, buildArchitectureDecision, dartPackageName, getStack, listStacks, localizeComplexity, localizeType, MANDATORY_DESIGN_PRINCIPLES, resolveScaffoldTool, scaffoldSteps, slugifyProjectName, suggestArchitectures, verifySteps } from '../lib/init.mjs';
 import { reshapeProject } from '../lib/init-scaffold.mjs';
+import { procOpts } from '../lib/proc.mjs';
 import { analyzeArchitectureWithAi } from '../lib/initai.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -114,13 +116,19 @@ function cleanPath(p) {
     .trim()
     .replace(/^(['"])(.*)\1$/, '$2')   // quita comillas envolventes ' o "
     .replace(/\\ /g, ' ')               // espacios escapados \  →  espacio
-    .replace(/^~(?=\/|$)/, process.env.HOME || '')
+    .replace(/^~(?=[/\\]|$)/, homedir())  // ~ → HOME del usuario (USERPROFILE en Windows)
     .trim();
 }
 
 function looksLikePath(p) {
   const s = cleanPath(p);
-  return s.startsWith('/') || s.startsWith('./') || s.startsWith('../') || s.startsWith('~/') || s.includes('/');
+  return s.startsWith('/') || s.startsWith('./') || s.startsWith('../') || s.startsWith('~/') ||
+    s.includes('/') || s.includes('\\') || /^[a-zA-Z]:/.test(s);  // también rutas de Windows (\, C:\)
+}
+
+// Muestra una ruta con '/' para que la salida del CLI sea idéntica en cualquier SO.
+function disp(p) {
+  return String(p).replace(/\\/g, '/');
 }
 
 function deepSub(obj, vars) {
@@ -186,7 +194,7 @@ async function loadTargets() {
   const files = (await readdir(TARGETS_DIR)).filter((f) => f.endsWith('.mjs'));
   return Promise.all(files.map(async (file) => {
     const id = file.replace(/\.mjs$/, '');
-    const mod = await import(join(TARGETS_DIR, file));
+    const mod = await import(pathToFileURL(join(TARGETS_DIR, file)).href);
     return { id, label: mod.label || id };
   }));
 }
@@ -204,15 +212,6 @@ async function listAiProfiles() {
   if (!existsSync(PROFILES_DIR)) return [];
   const files = (await readdir(PROFILES_DIR)).filter((f) => f.endsWith('.json'));
   return Promise.all(files.map(async (file) => JSON.parse(await readFile(join(PROFILES_DIR, file), 'utf8'))));
-}
-
-function applyProfileModels(cfg, profile) {
-  if (!profile?.models || !cfg?.provider) return cfg;
-  const models = { ...(cfg.models || {}) };
-  for (const task of ['spec', 'qa', 'repair']) {
-    if (!models[task] && profile.models?.[task]?.[cfg.provider]) models[task] = profile.models[task][cfg.provider];
-  }
-  return { ...cfg, profile: profile.id, models };
 }
 
 async function resolveAiTaskConfig(task) {
@@ -453,7 +452,9 @@ async function equipForSpec(proj, mode, targetName, specLang) {
   const m = sdd && (sdd.modes.find((x) => x.id === mode) || sdd.modes[0]);
   const methods = m ? [{ id: sdd.id, label: sdd.label, mode: m.id, scaffoldDir: m.scaffoldDir, rulesText: m.rulesText }] : [];
   const targetFile = join(TARGETS_DIR, `${targetName}.mjs`);
-  const target = existsSync(targetFile) ? await import(targetFile) : await import(join(TARGETS_DIR, 'claude.mjs'));
+  const target = existsSync(targetFile)
+    ? await import(pathToFileURL(targetFile).href)
+    : await import(pathToFileURL(join(TARGETS_DIR, 'claude.mjs')).href);
   await target.apply({ projectPath: proj, CATALOG, skills, mcps, methods, stacks, dryRun: false });
   return skills;
 }
@@ -475,7 +476,7 @@ async function equipCreatedProject(proj, { targetName = 'claude', methodMode = '
   const methods = m ? [{ id: sdd.id, label: sdd.label, mode: m.id, scaffoldDir: m.scaffoldDir, rulesText: m.rulesText }] : [];
   const targetFile = join(TARGETS_DIR, `${targetName}.mjs`);
   if (!existsSync(targetFile)) throw new Error(`Target no existe: ${targetName}`);
-  const target = await import(targetFile);
+  const target = await import(pathToFileURL(targetFile).href);
   const applied = await target.apply({ projectPath: proj, CATALOG, skills, mcps, methods, stacks, architecture, dryRun: false });
   return { skills, mcps, methods, stacks, plan: applied.plan };
 }
@@ -730,8 +731,8 @@ async function runInstall() {
 
 // ---------- comando: chalc inspect ----------
 async function runInspect() {
-  console.log('\n' + c.bold('⚙️  chalc inspect') + c.dim(`  ·  ${projectPath}`) + '\n');
-  if (!existsSync(projectPath)) { console.error(c.red(`✗ La ruta no existe: ${projectPath}`)); process.exit(1); }
+  console.log('\n' + c.bold('⚙️  chalc inspect') + c.dim(`  ·  ${disp(projectPath)}`) + '\n');
+  if (!existsSync(projectPath)) { console.error(c.red(`✗ La ruta no existe: ${disp(projectPath)}`)); process.exit(1); }
 
   const ctx = await detectContext(projectPath);
   const rules = await loadJsonDir(RULES_DIR);
@@ -871,9 +872,9 @@ async function runDoctor() {
       if (!existsSync(skillFile)) issues.push(makeIssue('error', 'skills', `${id} no tiene SKILL.md`));
       else {
         const text = await readFile(skillFile, 'utf8');
-        if (!/^---\n[\s\S]*?\n---/.test(text)) issues.push(makeIssue('warn', 'skills', `${id} no tiene frontmatter YAML`));
-        if (!/^name:\s*.+$/m.test(text)) issues.push(makeIssue('warn', 'skills', `${id} no declara name`));
-        if (!/^description:\s*.+$/m.test(text)) issues.push(makeIssue('warn', 'skills', `${id} no declara description`));
+        if (!/^---\r?\n[\s\S]*?\r?\n---/.test(text)) issues.push(makeIssue('warn', 'skills', `${id} no tiene frontmatter YAML`));
+        if (!/^name:[^\S\r\n]*\S/m.test(text)) issues.push(makeIssue('warn', 'skills', `${id} no declara name`));
+        if (!/^description:[^\S\r\n]*\S/m.test(text)) issues.push(makeIssue('warn', 'skills', `${id} no declara description`));
       }
     }
     for (const m of mcpFiles) {
@@ -965,7 +966,7 @@ async function runDoctor() {
       const id = file.replace(/\.mjs$/, '');
       if (!isSafeId(id)) issues.push(makeIssue('error', 'targets', `${file} usa id inseguro`));
       try {
-        const mod = await import(join(TARGETS_DIR, file));
+        const mod = await import(pathToFileURL(join(TARGETS_DIR, file)).href);
         if (!mod.label) issues.push(makeIssue('warn', 'targets', `${file} no exporta label`));
         if (typeof mod.apply !== 'function') issues.push(makeIssue('error', 'targets', `${file} no exporta apply()`));
       } catch (e) {
@@ -1007,7 +1008,7 @@ async function runSpec() {
       featureName = await prompter.text(t('specFolderNameQ'));
     }
   } else {
-    console.log('\n' + c.bold('⚙️  chalc spec') + c.dim(`  ·  ${proj}`) + '\n');
+    console.log('\n' + c.bold('⚙️  chalc spec') + c.dim(`  ·  ${disp(proj)}`) + '\n');
     if (!featureName) throw new Error(t('specUsage'));
   }
   if (!existsSync(proj)) { if (prompter) prompter.close(); throw new Error(t('pathMissing', proj)); }
@@ -1047,7 +1048,7 @@ async function startEnvironment(env, proj, healthUrls) {
   const candidates = (Array.isArray(healthUrls) ? healthUrls : [healthUrls]).filter(Boolean);
   const start = buildStartCommand(env);   // lanza si el entorno no es arrancable
   const runToEnd = (cmd, args) => new Promise((res) => {
-    const p = spawn(cmd, args, { cwd: proj, stdio: 'ignore' });
+    const p = spawn(cmd, args, procOpts({ cwd: proj, stdio: 'ignore' }));
     p.on('error', () => res(-1));
     p.on('exit', (code) => res(code ?? -1));
   });
@@ -1065,7 +1066,7 @@ async function startEnvironment(env, proj, healthUrls) {
     for (const line of text.split('\n')) if (/error|failed|cannot|compiled|Port \d+ is already/i.test(line)) { const t = line.trim(); if (t) console.log(c.dim(`  │ ${t.slice(0, 160)}`)); }
   };
   // NG_CLI_ANALYTICS=false evita el prompt de analytics de Angular que cuelga en modo no interactivo.
-  const child = spawn(start.command, start.args, { cwd: proj, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32', env: { ...process.env, NG_CLI_ANALYTICS: 'false' } });
+  const child = spawn(start.command, start.args, procOpts({ cwd: proj, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32', env: { ...process.env, NG_CLI_ANALYTICS: 'false' } }));
   child.stdout?.on('data', onData);
   child.stderr?.on('data', onData);
   child.on('error', (e) => { spawnError = e; childExited = true; });
@@ -1091,7 +1092,10 @@ async function startEnvironment(env, proj, healthUrls) {
     console.log(c.dim('  ' + t('qaStoppingEnv')));
     if (start.down) await runToEnd(start.down.command, start.down.args);
     else if (!childExited && !child.killed) {
-      if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGTERM');
+      if (process.platform === 'win32' && child.pid) {
+        // shell:true envuelve el proceso en cmd.exe; taskkill /T baja todo el árbol (incluido el dev server).
+        try { spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { child.kill(); }
+      } else if (child.pid) process.kill(-child.pid, 'SIGTERM');
       else child.kill('SIGTERM');
     }
   };
@@ -1136,11 +1140,11 @@ async function promptAuthIfNeeded(prompter, proj) {
 // Ejecuta un spec con el CLI de Playwright del proyecto (la app debe estar viva). Devuelve el exit code.
 function runPlaywrightSpec(proj, testFile, baseUrl) {
   return new Promise((resolve) => {
-    const child = spawn('npx', ['playwright', 'test', testFile, '--reporter=line'], {
+    const child = spawn('npx', ['playwright', 'test', testFile, '--reporter=line'], procOpts({
       cwd: proj,
       stdio: 'inherit',
       env: { ...process.env, PLAYWRIGHT_BASE_URL: baseUrl, BASE_URL: baseUrl }
-    });
+    }));
     child.on('error', () => resolve(-1));
     child.on('exit', (code) => resolve(code ?? -1));
   });
@@ -1150,6 +1154,7 @@ function runPlaywrightSpec(proj, testFile, baseUrl) {
 async function runAgentAgainstLiveApp(context, proj, baseUrl, surfaceOverride, auth) {
   const cfg = await resolveAiTaskConfig('qa');
   if (!isConfigured(cfg)) throw new Error(t('qaAgentNeedsAi'));
+  printAiLine(cfg);   // muestra qué proveedor/modelo se usará
 
   const detected = await detectSurface(proj);
   const surface = (surfaceOverride || detected.surface);
@@ -1218,6 +1223,7 @@ async function runAgentAgainstLiveApp(context, proj, baseUrl, surfaceOverride, a
     console.log('  ' + t('qaPassSummary', pass, result.verdicts.length) + (result.error ? c.yellow(`  (${result.error})`) : ''));
     if (flags['repair-plan']) {
       const repairCfg = await resolveAiTaskConfig('repair');
+      printAiLine(repairCfg);   // el modelo de repair puede diferir del de qa
       const reqTexts = Object.fromEntries(requirements(context.files['spec.md']).map((r) => [r.id.toUpperCase(), r.text]));
       const repairPath = join(proj, 'specs', context.id, 'qa', 'repair-plan.md');
       await writeFile(repairPath, buildRepairPlanMarkdown(context.id, { result, requirementTexts: reqTexts }), 'utf8');
@@ -1272,7 +1278,7 @@ async function runQa() {
   }
   if (!existsSync(proj)) { if (prompter) prompter.close(); throw new Error(t('pathMissing', proj)); }
 
-  console.log('\n' + c.bold('⚙️  chalc qa') + c.dim(`  ·  ${proj}`) + '\n');
+  console.log('\n' + c.bold('⚙️  chalc qa') + c.dim(`  ·  ${disp(proj)}`) + '\n');
 
   // 1) Verificar specs disponibles.
   const specs = await listSpecs(proj);
@@ -1463,7 +1469,8 @@ async function runConfigLang() {
 function runInitStep(step, { parentDir, projectDir }) {
   return new Promise((res) => {
     const cwd = step.cwd === 'project' ? projectDir : parentDir;
-    const child = spawn(step.command, step.args, { cwd, stdio: 'inherit', env: { ...process.env, NG_CLI_ANALYTICS: 'false' } });
+    // shell:true en Windows: npx/npm/flutter son shims .cmd/.bat y spawn no los resuelve sin shell (ENOENT).
+    const child = spawn(step.command, step.args, procOpts({ cwd, stdio: 'inherit', env: { ...process.env, NG_CLI_ANALYTICS: 'false' } }));
     child.on('error', (e) => res({ code: -1, error: e }));
     child.on('exit', (code) => res({ code: code ?? -1 }));
   });
@@ -1474,7 +1481,7 @@ function detectFlutterVersion() {
   return new Promise((res) => {
     try {
       let out = '';
-      const child = spawn('flutter', ['--version'], { stdio: ['ignore', 'pipe', 'ignore'] });
+      const child = spawn('flutter', ['--version'], procOpts({ stdio: ['ignore', 'pipe', 'ignore'] }));
       child.stdout.on('data', (d) => { out += d; });
       child.on('error', () => res(null));
       child.on('exit', () => { const m = out.match(/Flutter\s+(\d+\.\d+\.\d+)/i); res(m ? m[1] : null); });
@@ -1563,6 +1570,7 @@ async function runInit() {
     if (!isConfigured(cfg)) {
       console.log(c.dim('  ' + t('initAiNotConf')));
     } else {
+      printAiLine(configForTask(cfg, 'qa'));   // init usa el modelo económico (perfil 'qa')
       console.log(c.dim('  ' + t('initAiAnalyzing')));
       try {
         aiHint = await analyzeArchitectureWithAi({ cfg, stackId, proposal, principles: MANDATORY_DESIGN_PRINCIPLES, language: lang === 'en' ? 'English' : 'español' });
@@ -1660,7 +1668,8 @@ async function runInit() {
   if (!interactive && !allowExternalExec) throw new Error(t('initNeedsExec'));
 
   // 6) Scaffolder oficial (ng new / nest new / dotnet new). Aseguramos la carpeta padre (cwd del scaffolder).
-  await mkdir(parentDir, { recursive: true });
+  // Solo si no existe: en Windows, mkdir sobre la raíz del disco (p. ej. D:\, padre de D:\prueba) lanza EPERM.
+  if (!existsSync(parentDir)) await mkdir(parentDir, { recursive: true });
   if (steps.some((s) => s.cwd === 'project')) await mkdir(dest, { recursive: true });
   for (const step of steps) {
     console.log('\n▶ ' + c.bold(step.label) + c.dim(`  · ${step.command} ${step.args.join(' ')}`));
@@ -1785,11 +1794,11 @@ async function runApply() {
       break;
     }
   } else {
-    console.log('\n' + c.bold('⚙️  chalc') + c.dim(`  ·  ${proj}`) + (dryRun ? c.dim('  (dry-run)') : '') + '\n');
+    console.log('\n' + c.bold('⚙️  chalc') + c.dim(`  ·  ${disp(proj)}`) + (dryRun ? c.dim('  (dry-run)') : '') + '\n');
     const err = await validatePath(proj);
     if (err) { err(); process.exit(1); }
   }
-  console.log(c.dim(`  ${t('project')}: ${proj}`));
+  console.log(c.dim(`  ${t('project')}: ${disp(proj)}`));
 
   // 1) detectar
   const ctx = await detectContext(proj);
@@ -1887,7 +1896,7 @@ async function runApply() {
     const def = await loadMcp(id);
     return { id: def.id, description: def.description, server: deepSub(def.server, { PROJECT: proj }) };
   }));
-  const target = await import(targetFile);
+  const target = await import(pathToFileURL(targetFile).href);
   const { plan } = await target.apply({ projectPath: proj, CATALOG, skills, mcps, methods, stacks, dryRun });
 
   console.log('\n' + c.bold(dryRun ? t('planDry') : t('applied')));
@@ -1898,6 +1907,15 @@ async function runApply() {
   } else {
     console.log('\n' + c.dim(t('removeDryrun') + '\n'));
   }
+}
+
+// Muestra qué proveedor/modelo de IA se usará (para que el usuario sepa si está sobre Ollama local, nube, etc.).
+function printAiLine(cfg) {
+  if (!cfg?.provider) return;
+  const prov = PROVIDERS[cfg.provider];
+  const base = cfg.baseURL || prov?.baseURL || '';
+  const local = prov && !prov.needsKey;   // ollama u otro local: mostramos también el endpoint
+  console.log(c.dim('  ' + t('aiActiveLine', cfg.provider, cfg.model || prov?.defaultModel || '?')) + (local && base ? c.dim(`  · ${base}`) : '')) ;
 }
 
 // ---------- configuración de la IA (solo para generar specs SDD) ----------
@@ -1921,10 +1939,24 @@ async function configureAi(prompter) {
   if (prov.needsBaseURL) out.baseURL = (await prompter.text(t('aiBaseUrlQ') + ':')).trim() || cfg.baseURL || '';
   if (prov.needsKey) out.apiKey = (await prompter.secret(t('aiKeyQ') + ':')) || cfg.apiKey || '';
   else console.log(c.dim('  ' + t('aiNoKeyNeeded')));
-  const modelQ = prov.needsDeployment ? t('aiDeploymentQ') : t('aiModelQ', prov.defaultModel);
-  out.model = (await prompter.text(modelQ + ':')).trim() || cfg.model || prov.defaultModel;
+  // Para providers locales (Ollama, LM Studio…) listamos los modelos REALMENTE instalados y dejamos elegir,
+  // en vez de pedir texto libre con un default que puede no existir y reventar al llamar.
+  const installed = prov.needsKey ? [] : await listModels({ provider, baseURL: out.baseURL });
+  if (installed.length) {
+    const otherIdx = installed.length;
+    const di = Math.max(0, installed.indexOf(cfg.model));
+    const pick = await prompter.select(t('aiModelPickQ'), [...installed.map((m) => ({ label: m })), { label: t('aiModelOther') }], di);
+    out.model = pick < otherIdx ? installed[pick] : ((await prompter.text(t('aiModelQ', installed[0]) + ':')).trim() || cfg.model || installed[0]);
+  } else {
+    if (!prov.needsKey) console.log(c.dim('  ' + t('aiModelListEmpty')));
+    const modelQ = prov.needsDeployment ? t('aiDeploymentQ') : t('aiModelQ', prov.defaultModel);
+    out.model = (await prompter.text(modelQ + ':')).trim() || cfg.model || prov.defaultModel;
+  }
   const profile = await loadAiProfile(out.profile || 'chalc-default');
-  const profiled = applyProfileModels({ ...out, models: cfg.models || {} }, profile);
+  // En providers locales NO arrastramos modelos por tarea previos (podrían ser un default obsoleto tipo llama3.1
+  // que pisa el modelo que el usuario acaba de elegir); el modelo elegido manda salvo que pida personalizar.
+  const baseModels = prov.needsKey ? (cfg.models || {}) : {};
+  const profiled = applyProfileModels({ ...out, models: baseModels }, profile);
   const askPerTask = await prompter.yesno(t('aiPerTaskQ'), false);
   out.models = { ...(profiled.models || {}) };
   if (askPerTask) {
@@ -2157,15 +2189,17 @@ async function acquireUserStory(prompter) {
 async function runSpecGen() {
   console.log('\n' + c.bold('⚙️  chalc spec-ia') + (dryRun ? c.dim('  (dry-run)') : '') + '\n');
   const prompter = interactive ? makePrompter() : null;
-  // Si la HU tiene backend, esto es full-stack: delega al orquestador (contrato + spec back + spec front).
-  if (prompter && !dryRun && !flags.back && await prompter.yesno(t('featHasBackQ'), false)) {
-    prompter.close();
-    return runFeature({ assumeBack: true });
-  }
+  // Resolvemos la IA PRIMERO y mostramos proveedor/modelo, antes de cualquier pregunta (que el usuario sepa qué usa).
   let cfg = await resolveAiTaskConfig('spec');
   if (!dryRun && !isConfigured(cfg)) {
     if (!prompter) { console.error(c.red('✗ ' + t('aiNotConfigured'))); process.exit(1); }
     cfg = configForTask(await configureAi(prompter), 'spec');   // primera vez: configura la IA aquí mismo
+  }
+  printAiLine(cfg);   // muestra qué proveedor/modelo se usará
+  // Si la HU tiene backend, esto es full-stack: delega al orquestador (contrato + spec back + spec front).
+  if (prompter && !dryRun && !flags.back && await prompter.yesno(t('featHasBackQ'), false)) {
+    prompter.close();
+    return runFeature({ assumeBack: true });
   }
 
   let proj = positional[1] ? resolve(cleanPath(positional[1])) : (prompter ? await askExistingPath(prompter, t('pathQ')) : process.cwd());
@@ -2314,6 +2348,7 @@ async function runFeature(opts = {}) {
     if (!prompter) { console.error(c.red('✗ ' + t('aiNotConfigured'))); process.exit(1); }
     cfg = configForTask(await configureAi(prompter), 'spec');
   }
+  printAiLine(cfg);   // muestra qué proveedor/modelo se usará
 
   // 1) Rutas: front y back. Obligatorias: si las dejas vacías o inexistentes, re-pregunta (no deja pasar).
   let frontPath = positional[1] ? resolve(cleanPath(positional[1])) : (prompter ? await askExistingPath(prompter, t('featFrontQ')) : process.cwd());
@@ -2442,4 +2477,9 @@ function printTokenUsage() {
 
 (verb === 'lang' ? runConfigLang() : verb === 'init' ? runInit() : verb === 'verify' ? runVerify() : verb === 'install' ? runInstall() : verb === 'inspect' ? runInspect() : verb === 'doctor' ? runDoctor() : verb === 'configure' ? runConfigure() : verb === 'ai' ? runAi() : verb === 'aidoctor' ? runAiDoctor() : verb === 'aieval' ? runAiEval() : verb === 'specgen' ? runSpecGen() : verb === 'feature' ? runFeature() : verb === 'spec' ? runSpec() : verb === 'qa' ? runQa() : runApply())
   .then(() => printTokenUsage())
-  .catch((err) => { printTokenUsage(); console.error(c.red('✗ ' + err.message)); process.exit(1); });
+  .catch((err) => {
+    printTokenUsage();
+    const message = err instanceof Error ? err.message : String(err?.message ?? err);
+    console.error(c.red('✗ ' + message));
+    process.exit(1);
+  });

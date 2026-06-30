@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+
+# chalc no tiene dependencias de runtime ni de dev: no se ejecuta `npm install`.
+# Solo verificamos que la suite pase en los 3 SO (esto es lo que atrapa los bugs de portabilidad).
+jobs:
+  test:
+    name: test (${{ matrix.os }} · node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Run tests
+        run: node --test
+
+  doctor:
+    name: doctor (valida catálogo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate bundled catalog
+        run: node bin/chalc.mjs doctor --yes

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { configForTask, modelForTask, PROVIDERS } from '../lib/ai.mjs';
+import { configForTask, modelForTask, applyProfileModels, PROVIDERS } from '../lib/ai.mjs';
 import { makeAiTrace } from '../lib/aitrace.mjs';
 import { validateGeneratedSpec, summarizeValidation } from '../lib/specvalidate.mjs';
 import { runLocalAiEvals } from '../lib/aieval.mjs';
@@ -16,6 +16,22 @@ test('configForTask resolves task-specific models before default model', () => {
   assert.equal(modelForTask(cfg, 'spec'), 'spec-model');
   assert.equal(configForTask(cfg, 'spec').model, 'spec-model');
   assert.equal(configForTask(cfg, 'qa').model, 'default-model');
+});
+
+test('applyProfileModels fills per-task models for cloud providers', () => {
+  const profile = { id: 'p', models: { spec: { openai: 'gpt-4o' }, qa: { openai: 'gpt-4o-mini' } } };
+  const out = applyProfileModels({ provider: 'openai', model: 'x' }, profile);
+  assert.equal(out.models.spec, 'gpt-4o');
+  assert.equal(out.models.qa, 'gpt-4o-mini');
+});
+
+test('applyProfileModels never imposes a fixed model on local providers (Ollama): chosen model wins', () => {
+  const profile = { id: 'p', models: { spec: { ollama: 'llama3.1' }, qa: { ollama: 'llama3.1' } } };
+  const out = applyProfileModels({ provider: 'ollama', model: 'qwen2.5-coder:7b' }, profile);
+  // No debe quedar models.spec = llama3.1 (que quizá no esté instalado y reventaría).
+  assert.equal(out.models?.spec, undefined);
+  assert.equal(modelForTask(out, 'spec'), 'qwen2.5-coder:7b');
+  assert.equal(modelForTask(out, 'qa'), 'qwen2.5-coder:7b');
 });
 
 test('AI traces hash prompt/output content without storing raw text', () => {

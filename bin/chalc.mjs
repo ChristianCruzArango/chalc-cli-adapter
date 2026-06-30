@@ -18,7 +18,7 @@
 // del catálogo -> el target los proyecta a los archivos del asistente. Cero IA, cero tokens.
 
 import { access, cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { existsSync, constants } from 'node:fs';
+import { existsSync, readFileSync, constants } from 'node:fs';
 import { join, dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline/promises';
@@ -36,6 +36,8 @@ import { parseArgs } from '../lib/cli/args.mjs';
 import { detectContext, formatDetect, matchRules, ruleReasons } from '../lib/detect.mjs';
 import { verifyProject } from '../lib/verify.mjs';
 import { tokenSummary } from '../lib/tokenmeter.mjs';
+import { orchestrateFeature } from '../lib/featureorch.mjs';
+import { safePull, createFeatureBranch } from '../lib/gitprep.mjs';
 import { buildStartCommand, detectAuth, detectSurface, findEnvironmentOptions, guessBaseUrls, listSpecs, normalizeQaUrl, probeDocker, probePlaywright, qaAgentTestPath, qaComposeProjectName, qaPlanPath, qaResultsPath, readQaInputs, readSpecContext, requirements, selectEnvironment, writeBrowserTests, writeQaInputs, writeQaPlan } from '../lib/qa.mjs';
 import { buildAgentReplaySpec, buildRepairPlanMarkdown, buildResultsMarkdown, createBrowserExecutor, httpExecutor, parseResultsMarkdown, runQaAgent } from '../lib/qaagent.mjs';
 import { appendAiTrace, makeAiTrace } from '../lib/aitrace.mjs';
@@ -68,7 +70,8 @@ const verb = ['lang', 'config-lang', 'idioma', 'language'].includes(first) ? 'la
           : ['ai-doctor', 'doctor-ia'].includes(first) ? 'aidoctor'
             : ['eval-ia', 'eval-ai', 'ai-eval'].includes(first) ? 'aieval'
           : ['spec-ia', 'spec-ai', 'spec-gen', 'specgen', 'gen'].includes(first) ? 'specgen'
-      : ['spec', 'specs', 'feature'].includes(first) ? 'spec'
+        : ['feature', 'hu', 'fullstack'].includes(first) ? 'feature'
+      : ['spec', 'specs'].includes(first) ? 'spec'
         : ['qa', 'quality'].includes(first) ? 'qa'
     : 'apply';
 const installSource = verb === 'install' ? positional[1] : null;
@@ -2004,7 +2007,7 @@ function langName(v) {
   return map[String(v).toLowerCase()] || v;
 }
 
-function handoffCommand(specPath, skills = [], specLang = '') {
+function handoffCommand(specPath, skills = [], specLang = '', opts = {}) {
   // El hand-off sigue el idioma del SPEC (lo que elegiste con --lang), no el del CLI.
   const code = String(specLang).toLowerCase();
   const isEs = /espa|spanish|castell/.test(code) || code === 'es' || (!specLang && lang === 'es');
@@ -2015,13 +2018,17 @@ function handoffCommand(specPath, skills = [], specLang = '') {
   const skillsLine = en
     ? `Use the project's skills when a task needs one (they live in .claude/skills or .chalc/skills) — open only the one the current task needs, don't preload them all.`
     : `Usa las skills del proyecto cuando una tarea lo pida (están en .claude/skills o .chalc/skills); abre solo la que necesita la tarea activa, no las pre-cargues todas.`;
-  // Una rama por spec, con convención estándar: feature/<NNN-nombre> (kebab-case). El número liga la rama al spec.
-  const branch = 'feature/' + specPath.replace(/^specs[/\\]/, '');
+  // Rama de la feature. Si chalc ya la creó (opts.branchCreated) el paso 1 lo refleja; si no, pide crearla.
+  // opts.branch fija el nombre exacto (para coincidir con el que creó chalc); por defecto feature/<NNN-nombre>.
+  const branch = opts.branch || ('feature/' + specPath.replace(/^specs[/\\]/, ''));
+  const step1 = opts.branchCreated
+    ? (en ? `1. You're already on branch \`${branch}\` (chalc created it) — commit your work there.` : `1. Ya estás en la rama \`${branch}\` (la creó chalc) — commitea tu trabajo ahí.`)
+    : (en ? `1. Create a branch for this feature (one branch per spec): \`git checkout -b ${branch}\`.` : `1. Crea una rama para esta feature (una rama por spec): \`git checkout -b ${branch}\`.`);
   if (en) {
     return [
       `Implement the feature in \`${specPath}/\` using Spec-Driven Development with strict TDD.`,
       ``,
-      `1. Create a branch for this feature (one branch per spec): \`git checkout -b ${branch}\`.`,
+      step1,
       `2. First read \`specs/constitution.md\` (non-negotiable principles) and \`${specPath}/spec.md\` (the EARS requirements R1, R2…).`,
       `3. Follow \`${specPath}/plan.md\` (architecture & decisions) and execute \`${specPath}/tasks.md\` in order, ONE task at a time: before each task state which R# it implements; when it's done, stop and wait for my OK before the next.`,
       `4. For each task, strict TDD: write the failing test first (Red) → minimum code to pass (Green) → refactor. Never write code without a failing test first.`,
@@ -2035,7 +2042,7 @@ function handoffCommand(specPath, skills = [], specLang = '') {
   return [
     `Implementa la feature en \`${specPath}/\` con Spec-Driven Development y TDD estricto.`,
     ``,
-    `1. Crea una rama para esta feature (una rama por spec): \`git checkout -b ${branch}\`.`,
+    step1,
     `2. Lee primero \`specs/constitution.md\` (principios no negociables) y \`${specPath}/spec.md\` (los requisitos R1, R2… en EARS).`,
     `3. Sigue \`${specPath}/plan.md\` (arquitectura y decisiones) y ejecuta \`${specPath}/tasks.md\` en orden, UNA tarea a la vez: antes de cada tarea di qué R# implementa; al terminarla, párate y espera mi OK antes de la siguiente.`,
     `4. Por cada tarea, TDD estricto: escribe el test que falla primero (Red) → el mínimo código para pasarlo (Green) → refactoriza. Nunca escribas código sin un test que falle primero.`,
@@ -2044,6 +2051,56 @@ function handoffCommand(specPath, skills = [], specLang = '') {
     `7. Herramientas/tests: usa el framework de pruebas que el proyecto YA tiene; no inventes configuración. Si falta tooling, el registro es privado o algo no compila, repórtalo como blocker y pregúntame — no improvises ni cambies de herramienta por tu cuenta.`,
     `8. Si un requisito está marcado [NEEDS CLARIFICATION], pregúntame antes de implementarlo.`,
     `La spec es la fuente de verdad: si cambia el alcance, actualiza la spec primero.`
+  ].join('\n');
+}
+
+// Hand-off ÚNICO para el orquestador full-stack: un solo mensaje que coordina los dos repos alrededor del
+// contrato. No son dos mensajes por repo: es la instrucción del orquestador. Sigue el idioma del spec.
+function featureHandoff({ backPath, backRel, frontPath, frontRel, branch, backBranchCreated, frontBranchCreated, specLang }) {
+  const code = String(specLang).toLowerCase();
+  const en = !(/espa|spanish|castell/.test(code) || code === 'es' || (!specLang && lang === 'es'));
+  const both = backBranchCreated && frontBranchCreated;
+  const none = !backBranchCreated && !frontBranchCreated;
+  const branchNote = en
+    ? (both ? `chalc already created it in both` : none ? `create it in each repo: git checkout -b ${branch}` : `chalc created it where the tree was clean; create it where missing: git checkout -b ${branch}`)
+    : (both ? `chalc ya la creó en ambos` : none ? `créala en cada repo: git checkout -b ${branch}` : `chalc la creó donde el árbol estaba limpio; donde falte, créala: git checkout -b ${branch}`);
+  if (en) {
+    return [
+      `You are the ORCHESTRATOR of this full-stack feature. You coordinate TWO repos around a single API contract, with Spec-Driven Development and strict TDD.`,
+      ``,
+      `📜 Contract (source of truth, identical in both specs): \`contracts/api.md\`. Every endpoint, request/response and error comes from there — invent nothing outside it.`,
+      ``,
+      `Repos:`,
+      `- BACKEND (exposes the API):  \`${backPath}\`  → spec: \`${backRel}/\``,
+      `- FRONTEND (consumes the API): \`${frontPath}\`  → spec: \`${frontRel}/\``,
+      ``,
+      `How to orchestrate:`,
+      `1. Start with the BACKEND (it owns the contract). Read \`${backRel}/contracts/api.md\`, \`specs/constitution.md\` and \`${backRel}/spec.md\` (R1, R2… in EARS). Follow \`${backRel}/plan.md\` and execute \`${backRel}/tasks.md\` ONE task at a time. Implement EXACTLY the contract's endpoints.`,
+      `2. Then the FRONTEND. Same with \`${frontRel}/\`, but CONSUMING the contract (same routes/shapes); don't reimplement backend logic.`,
+      `3. R# are SHARED: the same R# is satisfied on backend and/or frontend — keep cross-repo traceability.`,
+      `4. Per task, strict TDD: failing test (Red) → minimum code (Green) → refactor. Never code without a failing test first.`,
+      `5. Before each task, state which R# and which repo; when done, stop and wait for my OK.`,
+      `6. Branch \`${branch}\` in each repo (${branchNote}).`,
+      `7. If something is [NEEDS CLARIFICATION] in the contract or a spec, ask me first. The spec is the source of truth: if scope changes, update spec and contract first.`
+    ].join('\n');
+  }
+  return [
+    `Eres el ORQUESTADOR de esta feature full-stack. Coordinas DOS repos alrededor de un único contrato de API, con Spec-Driven Development y TDD estricto.`,
+    ``,
+    `📜 Contrato (fuente de verdad, idéntico en ambas specs): \`contracts/api.md\`. Todo endpoint, request/response y error sale de ahí — no inventes nada fuera del contrato.`,
+    ``,
+    `Repos:`,
+    `- BACKEND (expone la API):  \`${backPath}\`  → spec: \`${backRel}/\``,
+    `- FRONTEND (consume la API): \`${frontPath}\`  → spec: \`${frontRel}/\``,
+    ``,
+    `Cómo orquestar:`,
+    `1. Empieza por el BACKEND (es dueño del contrato). Lee \`${backRel}/contracts/api.md\`, \`specs/constitution.md\` y \`${backRel}/spec.md\` (R1, R2… en EARS). Sigue \`${backRel}/plan.md\` y ejecuta \`${backRel}/tasks.md\` UNA tarea a la vez. Implementa EXACTAMENTE los endpoints del contrato.`,
+    `2. Sigue con el FRONTEND. Igual con \`${frontRel}/\`, pero CONSUMIENDO el contrato (mismas rutas/shapes); no reimplementes la lógica del back.`,
+    `3. Los R# son COMPARTIDOS: el mismo R# se cumple en back y/o front — mantén la trazabilidad cruzada.`,
+    `4. Por tarea, TDD estricto: test que falla (Red) → mínimo código (Green) → refactor. Nunca código sin un test que falle primero.`,
+    `5. Antes de cada tarea di qué R# y en qué repo; al terminar, párate y espera mi OK.`,
+    `6. Rama \`${branch}\` en cada repo (${branchNote}).`,
+    `7. Si algo está [NEEDS CLARIFICATION] en el contrato o una spec, pregúntame antes. La spec es la fuente de verdad: si cambia el alcance, actualiza spec y contrato primero.`
   ].join('\n');
 }
 
@@ -2059,20 +2116,59 @@ function stopSpinner(id) {
   if (id) { clearInterval(id); stdout.write('\r\x1b[2K'); }
 }
 
+// Pregunta una ruta OBLIGATORIA: re-pregunta si la dejas vacía o si no existe. No deja pasar nada. (Ctrl+C cancela.)
+async function askExistingPath(prompter, question) {
+  while (true) {
+    const ans = (await prompter.text(question + ':')).trim();
+    if (!ans) { console.log(c.yellow('  ! ' + t('pathRequired'))); continue; }
+    const p = resolve(cleanPath(ans));
+    if (!existsSync(p)) { console.log(c.yellow('  ! ' + t('pathMissing', p))); continue; }
+    return p;
+  }
+}
+
+// Obtiene el texto de la HU/documento desde la fuente elegida (interactivo o por flags). Reusado por spec-ia y feature.
+async function acquireUserStory(prompter) {
+  if (prompter) {
+    const sources = [
+      { v: 'file', label: t('srcFile') }, { v: 'azure', label: t('srcAzure') },
+      { v: 'jira', label: t('srcJira') }, { v: 'url', label: t('srcUrl') }, { v: 'paste', label: t('srcPaste') }
+    ];
+    const src = sources[await prompter.select(t('sourceQ'), sources.map((s) => ({ label: s.label })), 0)].v;
+    if (src === 'file') return readDocument(resolve(cleanPath(await prompter.text(t('docQ') + ':'))));
+    if (src === 'paste') { console.log(c.dim('  ' + t('pasteQ'))); return readPasted(); }
+    if (src === 'azure') {
+      const url = await prompter.text(t('azureUrlQ') + ':'); const pat = await prompter.secret(t('patQ') + ':');
+      console.log(c.dim('  ' + t('fetching'))); return fetchAzureDevOps({ url, pat });
+    }
+    if (src === 'jira') {
+      const url = await prompter.text(t('jiraUrlQ') + ':'); const email = await prompter.text(t('emailQ') + ':'); const token = await prompter.secret(t('tokenQ') + ':');
+      console.log(c.dim('  ' + t('fetching'))); return fetchJira({ url, email, token });
+    }
+    const url = await prompter.text(t('urlQ') + ':'); console.log(c.dim('  ' + t('fetching'))); return fetchUrl(url);
+  }
+  if (flags.doc) return readDocument(resolve(cleanPath(String(flags.doc))));
+  if (flags.azure) return fetchAzureDevOps({ url: String(flags.azure), pat: String(flags.pat || process.env.CHALC_PAT || '') });
+  if (flags.jira) return fetchJira({ url: String(flags.jira), email: String(flags.email || ''), token: String(flags.token || process.env.CHALC_TOKEN || '') });
+  if (flags.url) return fetchUrl(String(flags.url));
+  return '';
+}
+
 async function runSpecGen() {
   console.log('\n' + c.bold('⚙️  chalc spec-ia') + (dryRun ? c.dim('  (dry-run)') : '') + '\n');
   const prompter = interactive ? makePrompter() : null;
+  // Si la HU tiene backend, esto es full-stack: delega al orquestador (contrato + spec back + spec front).
+  if (prompter && !dryRun && !flags.back && await prompter.yesno(t('featHasBackQ'), false)) {
+    prompter.close();
+    return runFeature({ assumeBack: true });
+  }
   let cfg = await resolveAiTaskConfig('spec');
   if (!dryRun && !isConfigured(cfg)) {
     if (!prompter) { console.error(c.red('✗ ' + t('aiNotConfigured'))); process.exit(1); }
     cfg = configForTask(await configureAi(prompter), 'spec');   // primera vez: configura la IA aquí mismo
   }
 
-  let proj = positional[1] ? resolve(cleanPath(positional[1])) : process.cwd();
-  if (prompter) {
-    const ans = await prompter.text(`${t('pathQ')} ${c.dim(`[${proj}]`)}:`);
-    if (ans) proj = resolve(cleanPath(ans));
-  }
+  let proj = positional[1] ? resolve(cleanPath(positional[1])) : (prompter ? await askExistingPath(prompter, t('pathQ')) : process.cwd());
   if (!existsSync(proj)) { if (prompter) prompter.close(); console.error(c.red('✗ ' + t('pathMissing', proj))); process.exit(1); }
 
   // .chalc.json es OPCIONAL: un proyecto puede no estar equipado. 
@@ -2115,46 +2211,7 @@ async function runSpecGen() {
   };
   const constitution = await readIf(join(specsDir, 'constitution.md'), join(catSpecs, 'constitution.md'));
 
-  let documentText = '';
-  if (prompter) {
-    const sources = [
-      { v: 'file', label: t('srcFile') },
-      { v: 'azure', label: t('srcAzure') },
-      { v: 'jira', label: t('srcJira') },
-      { v: 'url', label: t('srcUrl') },
-      { v: 'paste', label: t('srcPaste') }
-    ];
-    const src = sources[await prompter.select(t('sourceQ'), sources.map((s) => ({ label: s.label })), 0)].v;
-    if (src === 'file') {
-      documentText = await readDocument(resolve(cleanPath(await prompter.text(t('docQ') + ':'))));
-    } else if (src === 'paste') {
-      console.log(c.dim('  ' + t('pasteQ')));
-      documentText = await readPasted();
-    } else if (src === 'azure') {
-      const url = await prompter.text(t('azureUrlQ') + ':');
-      const pat = await prompter.secret(t('patQ') + ':');
-      console.log(c.dim('  ' + t('fetching')));
-      documentText = await fetchAzureDevOps({ url, pat });
-    } else if (src === 'jira') {
-      const url = await prompter.text(t('jiraUrlQ') + ':');
-      const email = await prompter.text(t('emailQ') + ':');
-      const token = await prompter.secret(t('tokenQ') + ':');
-      console.log(c.dim('  ' + t('fetching')));
-      documentText = await fetchJira({ url, email, token });
-    } else if (src === 'url') {
-      const url = await prompter.text(t('urlQ') + ':');
-      console.log(c.dim('  ' + t('fetching')));
-      documentText = await fetchUrl(url);
-    }
-  } else if (flags.doc) {
-    documentText = await readDocument(resolve(cleanPath(String(flags.doc))));
-  } else if (flags.azure) {
-    documentText = await fetchAzureDevOps({ url: String(flags.azure), pat: String(flags.pat || process.env.CHALC_PAT || '') });
-  } else if (flags.jira) {
-    documentText = await fetchJira({ url: String(flags.jira), email: String(flags.email || ''), token: String(flags.token || process.env.CHALC_TOKEN || '') });
-  } else if (flags.url) {
-    documentText = await fetchUrl(String(flags.url));
-  }
+  const documentText = await acquireUserStory(prompter);
   if (!documentText.trim()) { if (prompter) prompter.close(); console.error(c.red('✗ ' + t('docEmpty'))); process.exit(1); }
 
   const feature = flags.feature ? String(flags.feature) : '';   // la IA lo infiere; no se pregunta
@@ -2212,12 +2269,177 @@ async function runSpecGen() {
   console.log(c.cyan(handoffCommand(rel, equippedSkills, specLang)) + '\n');
 }
 
+// Carga plantillas + constitución de un proyecto (del repo si existen; si no, del catálogo en el idioma del spec).
+async function loadSpecScaffold(proj, mode, specLang) {
+  const specsDir = join(proj, 'specs');
+  const base = mode === 'full' ? 'scaffold-full' : 'scaffold-lite';
+  const scName = (langCode(specLang) === 'en' && existsSync(join(METHODS_DIR, 'sdd', `${base}-en`))) ? `${base}-en` : base;
+  const catSpecs = join(METHODS_DIR, 'sdd', scName, 'specs');
+  const tplDir = join(specsDir, '_template');
+  const readIf = async (p, fb) => (existsSync(p) ? readFile(p, 'utf8') : (fb && existsSync(fb) ? readFile(fb, 'utf8') : ''));
+  const templates = {
+    spec: await readIf(join(tplDir, 'spec.md'), join(catSpecs, '_template', 'spec.md')),
+    plan: await readIf(join(tplDir, 'plan.md'), join(catSpecs, '_template', 'plan.md')),
+    tasks: await readIf(join(tplDir, 'tasks.md'), join(catSpecs, '_template', 'tasks.md'))
+  };
+  const constitution = await readIf(join(specsDir, 'constitution.md'), join(catSpecs, 'constitution.md'));
+  return { templates, constitution, specsDir };
+}
+
+// Etiqueta del stack de un repo (las reglas que aplican, sin la global). '' si no reconoce nada.
+async function detectStackLabel(dir) {
+  const matched = matchRules(await loadJsonDir(RULES_DIR), await detectContext(dir)).filter((r) => !r.always);
+  return matched.map((r) => r.name).join(' + ');
+}
+
+// Escribe la spec de un lado en specs/NNN-slug/. En full, copia primero las plantillas del modo
+// (data-model/research/contracts/quickstart) y luego sobreescribe spec/plan/tasks con lo que generó la IA.
+async function writeSideSpec(proj, slug, files) {
+  const num = await nextFeatureNumber(join(proj, 'specs'));
+  const rel = join('specs', `${num}-${slug}`);
+  const dest = join(proj, rel);
+  await mkdir(dest, { recursive: true });
+  const tplSrc = join(proj, 'specs', '_template');
+  if (existsSync(tplSrc)) await cp(tplSrc, dest, { recursive: true, force: false, errorOnExist: false, dereference: true });
+  for (const [name, content] of Object.entries(files)) await writeFile(join(dest, name), String(content).replace(/\s*$/, '') + '\n');
+  return { rel, dest, id: `${num}-${slug}` };
+}
+
+// ---------- comando: chalc feature (orquestador full-stack: HU → contrato + spec back + spec front) ----------
+async function runFeature(opts = {}) {
+  console.log('\n' + c.bold('⚙️  ' + t('featHdr')) + (dryRun ? c.dim('  (dry-run)') : '') + '\n');
+  const prompter = interactive ? makePrompter() : null;
+  let cfg = await resolveAiTaskConfig('spec');
+  if (!isConfigured(cfg)) {
+    if (!prompter) { console.error(c.red('✗ ' + t('aiNotConfigured'))); process.exit(1); }
+    cfg = configForTask(await configureAi(prompter), 'spec');
+  }
+
+  // 1) Rutas: front y back. Obligatorias: si las dejas vacías o inexistentes, re-pregunta (no deja pasar).
+  let frontPath = positional[1] ? resolve(cleanPath(positional[1])) : (prompter ? await askExistingPath(prompter, t('featFrontQ')) : process.cwd());
+  let backPath = flags.back ? resolve(cleanPath(String(flags.back))) : '';
+  if (!backPath && prompter && (opts.assumeBack || await prompter.yesno(t('featHasBackQ'), true))) {
+    backPath = await askExistingPath(prompter, t('featBackPathQ'));
+  }
+  if (!backPath) { if (prompter) prompter.close(); console.error(c.yellow('! ' + t('featNoBack'))); process.exit(1); }
+  for (const p of [frontPath, backPath]) {
+    if (!existsSync(p)) { if (prompter) prompter.close(); console.error(c.red('✗ ' + t('pathMissing', p))); process.exit(1); }
+  }
+  // Identifica los stacks YA, para que el usuario confirme que reconoció bien cada repo antes de seguir.
+  const frontStack = await detectStackLabel(frontPath);
+  const backStack = await detectStackLabel(backPath);
+  console.log('  ' + c.green('✓') + ' ' + t('featDetect', frontStack || c.yellow(t('featUnknownStack')), backStack || c.yellow(t('featUnknownStack'))));
+  if (!frontStack || !backStack) console.log(c.dim('  ' + t('featUnknownHint')));
+  const wantBranch = flags.branch || (prompter ? await prompter.yesno(t('featBranchQ'), false) : false);   // se decide ahora; se crea al final (el nombre sale del slug)
+
+  // 2) Idioma del spec + modo (del back si está equipado).
+  let specLang = flags.lang ? langName(String(flags.lang)) : null;
+  if (prompter && !specLang) {
+    const optsL = [{ label: 'Español', value: 'español' }, { label: 'English', value: 'English' }, { label: t('otherLang'), value: '__other' }];
+    const idx = await prompter.select(t('specLangQ'), optsL.map((o) => ({ label: o.label })), lang === 'en' ? 1 : 0);
+    specLang = optsL[idx].value;
+    if (specLang === '__other') specLang = (await prompter.text(t('otherLangQ') + ':')).trim() || langName(lang);
+  }
+  if (!specLang) specLang = langName(lang);
+  const readTarget = (p) => { try { return JSON.parse(readFileSync(join(p, '.chalc.json'), 'utf8')).target || 'claude'; } catch { return 'claude'; } };
+  const readMode = (p) => { try { const m = (JSON.parse(readFileSync(join(p, '.chalc.json'), 'utf8')).methods || []).find((x) => String(x).startsWith('sdd')); return m && String(m).includes(':') ? String(m).split(':')[1] : 'lite'; } catch { return 'lite'; } };
+  // Modo SDD: --full/--mode mandan; si no, lee el modo ACTUAL del back y pregunta si quieres cambiarlo.
+  let mode = flags.full ? 'full' : String(flags.mode || '').toLowerCase();
+  if (mode !== 'lite' && mode !== 'full') {
+    const current = readMode(backPath);                          // lo que ya tiene equipado el back (default lite)
+    if (prompter) {
+      const other = current === 'full' ? 'lite' : 'full';
+      mode = (await prompter.yesno(t('sddModeCurrentQ', current, other), false)) ? other : current;
+    } else { mode = current; }
+  }
+
+  // 3) HU.
+  const userStory = await acquireUserStory(prompter);
+  if (!userStory.trim()) { if (prompter) prompter.close(); console.error(c.red('✗ ' + t('docEmpty'))); process.exit(1); }
+
+  // 4) Estado Git PREVIO + readiness. El git va PRIMERO: equipar escribe archivos y ensuciaría el árbol,
+  // así que capturamos aquí el estado real (limpio/sucio) para decidir luego si es seguro crear la rama.
+  if (prompter) prompter.close();
+  console.log('\n' + c.bold('🔎 ' + t('featReadiness')));
+  const gitState = {};
+  for (const [name, p] of [['front', frontPath], ['back', backPath]]) {
+    const pull = await safePull(p);
+    gitState[name] = pull;
+    const mark = pull.ok ? c.green('✓') : c.yellow('!');
+    console.log('  ' + mark + ' ' + t('featGit', name, t('gitReason_' + pull.reason.replace(/-/g, '_'))));
+  }
+  const skillsFront = await equipForSpec(frontPath, mode, readTarget(frontPath), specLang);
+  const skillsBack = await equipForSpec(backPath, mode, readTarget(backPath), specLang);
+  console.log('  ' + c.green('✓') + ' ' + t('featReadyRepo', 'front', skillsFront.length));
+  console.log('  ' + c.green('✓') + ' ' + t('featReadyRepo', 'back', skillsBack.length));
+
+  // 6) Contexto del back para el contrato (architecture.md si existe). Los stacks ya se detectaron arriba.
+  const backContext = existsSync(join(backPath, 'docs', 'architecture.md')) ? await readFile(join(backPath, 'docs', 'architecture.md'), 'utf8') : '';
+
+  // 7) Orquestar: contrato → spec back → spec front.
+  const backScaffold = await loadSpecScaffold(backPath, mode, specLang);
+  const frontScaffold = await loadSpecScaffold(frontPath, mode, specLang);
+  const spin = startSpinner(t('featOrchestrating'));
+  let result;
+  try {
+    result = await orchestrateFeature({
+      cfg, userStory, language: specLang, mode, backContext,
+      back: { stack: backStack, templates: backScaffold.templates, constitution: backScaffold.constitution },
+      front: { stack: frontStack, templates: frontScaffold.templates, constitution: frontScaffold.constitution }
+    });
+  } finally { stopSpinner(spin); }
+
+  // 8) Escribir: back (spec + contrato) y front (spec + copia del contrato para consumirlo).
+  const slug = (result.front.feature || result.back.feature || 'feature').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'feature';
+  const backOut = await writeSideSpec(backPath, slug, result.back.files);
+  const frontOut = await writeSideSpec(frontPath, slug, result.front.files);
+  for (const out of [backOut, frontOut]) {
+    await mkdir(join(out.dest, 'contracts'), { recursive: true });
+    await writeFile(join(out.dest, 'contracts', 'api.md'), result.contract.replace(/\s*$/, '') + '\n');
+  }
+  await appendAiTrace(backPath, backOut.id, makeAiTrace({ task: 'feature-back', provider: cfg.provider, model: cfg.model, system: result.back.trace?.system, user: result.back.trace?.user, output: result.back.trace?.raw }));
+  await appendAiTrace(frontPath, frontOut.id, makeAiTrace({ task: 'feature-front', provider: cfg.provider, model: cfg.model, system: result.front.trace?.system, user: result.front.trace?.user, output: result.front.trace?.raw }));
+
+  console.log('\n' + c.green('✓ ' + t('featSpecWritten', 'back', join(backOut.rel))));
+  console.log(c.green('✓ ' + t('featSpecWritten', 'front', join(frontOut.rel))));
+  console.log(c.dim('  ' + t('featContractAt', 'contracts/api.md')));
+
+  // 9) Rama de feature (opt-in), nombrada por el slug. SOLO se crea si el repo estaba limpio antes
+  // (si tenía cambios sin commitear, no la creo para no arrastrar tu trabajo pendiente). Los specs nuevos viajan con ella.
+  const branchName = `feat/${slug}`;
+  const branchCreated = { front: false, back: false };
+  if (wantBranch) {
+    // TODO O NADA: la feature debe quedar en la MISMA rama en ambos repos. Si alguno está sucio, no creo ninguna.
+    const dirty = [['front', frontPath], ['back', backPath]].filter(([name]) => gitState[name]?.reason === 'dirty').map(([name]) => name);
+    if (dirty.length) {
+      console.log('  ' + c.yellow('!') + ' ' + t('featBranchSkipDirty', dirty.join(' / ')));
+    } else {
+      for (const [name, p] of [['front', frontPath], ['back', backPath]]) {
+        const b = await createFeatureBranch(p, branchName);
+        branchCreated[name] = b.ok;
+        console.log('  ' + (b.ok ? c.green('✓') : c.yellow('!')) + ' ' + t('featBranch', name, b.branch, t('gitBranch_' + b.reason.replace(/-/g, '_'))));
+      }
+    }
+  } else {
+    console.log(c.dim('\n  ' + t('featBranchHint', branchName)));
+  }
+
+  console.log('\n' + c.green('✓ ' + t('featDone')));
+
+  // Hand-off ÚNICO del orquestador: un solo mensaje que coordina ambos repos alrededor del contrato.
+  console.log('\n' + c.bold(t('handoff')) + '\n');
+  console.log(c.cyan(featureHandoff({
+    backPath, backRel: backOut.rel, frontPath, frontRel: frontOut.rel, branch: branchName,
+    backBranchCreated: branchCreated.back, frontBranchCreated: branchCreated.front, specLang
+  })) + '\n');
+}
+
 // Muestra el consumo de tokens SIEMPRE que se haya consultado la IA en este comando (transparencia de gasto).
 function printTokenUsage() {
   const s = tokenSummary();
   if (s.calls > 0) console.log('\n' + c.dim(t('tokensUsed', s.total, s.input, s.output, s.calls)));
 }
 
-(verb === 'lang' ? runConfigLang() : verb === 'init' ? runInit() : verb === 'verify' ? runVerify() : verb === 'install' ? runInstall() : verb === 'inspect' ? runInspect() : verb === 'doctor' ? runDoctor() : verb === 'configure' ? runConfigure() : verb === 'ai' ? runAi() : verb === 'aidoctor' ? runAiDoctor() : verb === 'aieval' ? runAiEval() : verb === 'specgen' ? runSpecGen() : verb === 'spec' ? runSpec() : verb === 'qa' ? runQa() : runApply())
+(verb === 'lang' ? runConfigLang() : verb === 'init' ? runInit() : verb === 'verify' ? runVerify() : verb === 'install' ? runInstall() : verb === 'inspect' ? runInspect() : verb === 'doctor' ? runDoctor() : verb === 'configure' ? runConfigure() : verb === 'ai' ? runAi() : verb === 'aidoctor' ? runAiDoctor() : verb === 'aieval' ? runAiEval() : verb === 'specgen' ? runSpecGen() : verb === 'feature' ? runFeature() : verb === 'spec' ? runSpec() : verb === 'qa' ? runQa() : runApply())
   .then(() => printTokenUsage())
   .catch((err) => { printTokenUsage(); console.error(c.red('✗ ' + err.message)); process.exit(1); });

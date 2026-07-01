@@ -38,6 +38,7 @@ import { detectContext, formatDetect, matchRules, ruleReasons } from '../lib/det
 import { verifyProject } from '../lib/verify.mjs';
 import { tokenSummary } from '../lib/tokenmeter.mjs';
 import { orchestrateFeature } from '../lib/featureorch.mjs';
+import { resolveFeatureFolder, sharedNumber, contractFingerprint, contractStamp, stampFiles, readContractLock, writeContractLock } from '../lib/specfolder.mjs';
 import { safePull, createFeatureBranch } from '../lib/gitprep.mjs';
 import { buildStartCommand, detectAuth, detectSurface, findEnvironmentOptions, guessBaseUrls, listSpecs, normalizeQaUrl, probeDocker, probePlaywright, qaAgentTestPath, qaComposeProjectName, qaPlanPath, qaResultsPath, readQaInputs, readSpecContext, requirements, selectEnvironment, writeBrowserTests, writeQaInputs, writeQaPlan } from '../lib/qa.mjs';
 import { buildAgentReplaySpec, buildRepairPlanMarkdown, buildResultsMarkdown, createBrowserExecutor, httpExecutor, parseResultsMarkdown, runQaAgent } from '../lib/qaagent.mjs';
@@ -2022,16 +2023,7 @@ function readPasted() {
   });
 }
 
-async function nextFeatureNumber(specsDir) {
-  let max = 0;
-  if (existsSync(specsDir)) {
-    for (const e of await readdir(specsDir)) {
-      const m = e.match(/^(\d{1,4})-/);
-      if (m) max = Math.max(max, parseInt(m[1], 10));
-    }
-  }
-  return String(max + 1).padStart(3, '0');
-}
+// La numeración e idempotencia de carpetas de spec vive en lib/specfolder.mjs (resolveFeatureFolder).
 
 // Nombre de idioma para el spec: mapea códigos comunes (es→español), o usa el texto tal cual.
 function langName(v) {
@@ -2278,8 +2270,10 @@ async function runSpecGen() {
   }
 
   const feat = (feature || result.feature || 'feature').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'feature';
-  const num = await nextFeatureNumber(specsDir);
-  const rel = join('specs', `${num}-${feat}`);
+  // Idempotente: re-generar la misma feature actualiza su carpeta en sitio, no crea un NNN+1 duplicado.
+  const folder = await resolveFeatureFolder(specsDir, feat);
+  if (folder.reused) console.log('  ' + c.yellow('!') + ' ' + t('specReusingFolder', folder.name));
+  const rel = join('specs', folder.name);
   const dest = join(proj, rel);
   await mkdir(dest, { recursive: true });
   // En full, la feature debe traer también data-model/research/quickstart/contracts: copio las
@@ -2289,7 +2283,7 @@ async function runSpecGen() {
   for (const [name, content] of Object.entries(result.files)) {
     await writeFile(join(dest, name), String(content).replace(/\s*$/, '') + '\n');
   }
-  await appendAiTrace(proj, `${num}-${feat}`, makeAiTrace({
+  await appendAiTrace(proj, folder.name, makeAiTrace({
     task: 'spec',
     provider: cfg.provider,
     model: cfg.model,
@@ -2328,15 +2322,17 @@ async function detectStackLabel(dir) {
 
 // Escribe la spec de un lado en specs/NNN-slug/. En full, copia primero las plantillas del modo
 // (data-model/research/contracts/quickstart) y luego sobreescribe spec/plan/tasks con lo que generó la IA.
-async function writeSideSpec(proj, slug, files) {
-  const num = await nextFeatureNumber(join(proj, 'specs'));
-  const rel = join('specs', `${num}-${slug}`);
+async function writeSideSpec(proj, slug, files, preferredNum = null) {
+  // Idempotente: si ya existe carpeta para este slug se REÚSA (no se crea NNN+1 duplicado);
+  // si es nueva, usa el número compartido entre repos (preferredNum) para alinear front/back.
+  const folder = await resolveFeatureFolder(join(proj, 'specs'), slug, preferredNum);
+  const rel = join('specs', folder.name);
   const dest = join(proj, rel);
   await mkdir(dest, { recursive: true });
   const tplSrc = join(proj, 'specs', '_template');
   if (existsSync(tplSrc)) await cp(tplSrc, dest, { recursive: true, force: false, errorOnExist: false, dereference: true });
   for (const [name, content] of Object.entries(files)) await writeFile(join(dest, name), String(content).replace(/\s*$/, '') + '\n');
-  return { rel, dest, id: `${num}-${slug}` };
+  return { rel, dest, id: folder.name, reused: folder.reused };
 }
 
 // ---------- comando: chalc feature (orquestador full-stack: HU → contrato + spec back + spec front) ----------
@@ -2425,12 +2421,23 @@ async function runFeature(opts = {}) {
   } finally { stopSpinner(spin); }
 
   // 8) Escribir: back (spec + contrato) y front (spec + copia del contrato para consumirlo).
+  // Un mismo NNN para ambos repos (IDs alineados front/back) en features nuevas; si un repo ya
+  // tenía la carpeta del slug, writeSideSpec la reúsa. El contrato se estampa en cada spec y se
+  // guarda un lock: así spec/plan/tasks NUNCA quedan desincronizados del contrato que los originó.
   const slug = (result.front.feature || result.back.feature || 'feature').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'feature';
-  const backOut = await writeSideSpec(backPath, slug, result.back.files);
-  const frontOut = await writeSideSpec(frontPath, slug, result.front.files);
-  for (const out of [backOut, frontOut]) {
+  const fp = contractFingerprint(result.contract);
+  const generatedAt = new Date().toISOString();
+  const stamp = contractStamp(fp, generatedAt);
+  const sharedNum = await sharedNumber([join(frontPath, 'specs'), join(backPath, 'specs')]);
+  const backOut = await writeSideSpec(backPath, slug, stampFiles(result.back.files, stamp), sharedNum);
+  const frontOut = await writeSideSpec(frontPath, slug, stampFiles(result.front.files, stamp), sharedNum);
+  for (const [role, out] of [['back', backOut], ['front', frontOut]]) {
+    if (out.reused) console.log('  ' + c.yellow('!') + ' ' + t('featReusingFolder', role, out.id));
+    const prev = await readContractLock(out.dest);
+    if (prev && prev.contractHash !== fp) console.log('  ' + c.yellow('!') + ' ' + t('featContractRefreshed', role));
     await mkdir(join(out.dest, 'contracts'), { recursive: true });
     await writeFile(join(out.dest, 'contracts', 'api.md'), result.contract.replace(/\s*$/, '') + '\n');
+    await writeContractLock(out.dest, { slug, contractHash: fp, generatedAt, role });
   }
   await appendAiTrace(backPath, backOut.id, makeAiTrace({ task: 'feature-back', provider: cfg.provider, model: cfg.model, system: result.back.trace?.system, user: result.back.trace?.user, output: result.back.trace?.raw }));
   await appendAiTrace(frontPath, frontOut.id, makeAiTrace({ task: 'feature-front', provider: cfg.provider, model: cfg.model, system: result.front.trace?.system, user: result.front.trace?.user, output: result.front.trace?.raw }));

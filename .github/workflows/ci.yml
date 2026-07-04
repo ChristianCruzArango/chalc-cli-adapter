@@ -15,7 +15,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        node: ['18', '20', '22']
+        # Node 18 es EOL (abril 2025); engines exige >=20. Se prueba 20 (mínimo), 22 (LTS) y 24 (actual).
+        node: ['20', '22', '24']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

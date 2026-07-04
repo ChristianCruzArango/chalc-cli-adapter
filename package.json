@@ -2,6 +2,8 @@
   "name": "chalc",
   "version": "0.1.0",
   "description": "CLI local para crear y equipar proyectos con skills, MCP, reglas, SDD, specs y QA agent; IA opcional y provider-agnóstica.",
+  "license": "MIT",
+  "author": "Christian Alexis Cruz Arango <christiancruzarango@gmail.com>",
   "type": "module",
   "repository": {
     "type": "git",
@@ -20,11 +22,13 @@
     "skills"
   ],
   "bin": {
-    "chalc": "bin/chalc.mjs"
+    "chalc": "bin/chalc.mjs",
+    "chalc-cli": "cli/index.mjs"
   },
   "files": [
     "bin/",
     "catalog/",
+    "cli/",
     "lib/",
     "rules/",
     "targets/",
@@ -44,11 +48,12 @@
     "ai-doctor": "node bin/chalc.mjs ai-doctor",
     "eval-ia": "node bin/chalc.mjs eval-ia",
     "spec-ia": "node bin/chalc.mjs spec-ia",
+    "cli": "node cli/index.mjs",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm test && npm run doctor -- --yes && npm run eval-ia && npm run pack:check",
     "test": "node --test"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   }
 }

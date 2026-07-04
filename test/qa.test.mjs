@@ -87,6 +87,9 @@ test('QA generates runnable browser tests only for observable cases and fixmes f
   const code = buildBrowserTests(context, { cases: [{ id: 'R1', path: '/login', expected: 'Welcome' }] });
   assert.match(code, /page\.goto\("\/login"\)/);
   assert.match(code, /test\.fixme\('R2/);
+  // El spec generado debe ser Playwright válido: runner correcto y fixme con función, no string.
+  assert.match(code, /from '@playwright\/test'/);
+  assert.match(code, /test\.fixme\('R2[^\n]*', \(\) => \{\}\);/);
 });
 
 test('QA plan marks the table BLOCKED when the spec declares no requirements', () => {

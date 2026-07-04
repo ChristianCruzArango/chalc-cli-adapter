@@ -33,12 +33,12 @@ import { readDocument } from '../lib/docread.mjs';
 import { fetchAzureDevOps, fetchJira, fetchUrl } from '../lib/sources.mjs';
 import { buildPrompt, generateSpec } from '../lib/specgen.mjs';
 import { assertSafeId, isSafeId } from '../lib/ids.mjs';
-import { parseArgs } from '../lib/cli/args.mjs';
+import { parseArgs } from '../lib/args.mjs';
 import { detectContext, formatDetect, matchRules, ruleReasons } from '../lib/detect.mjs';
 import { verifyProject } from '../lib/verify.mjs';
 import { tokenSummary } from '../lib/tokenmeter.mjs';
 import { orchestrateFeature } from '../lib/featureorch.mjs';
-import { resolveFeatureFolder, sharedNumber, contractFingerprint, contractStamp, stampFiles, readContractLock, writeContractLock } from '../lib/specfolder.mjs';
+import { resolveFeatureFolder, sharedNumber, nextNumber, contractFingerprint, contractStamp, stampFiles, readContractLock, writeContractLock } from '../lib/specfolder.mjs';
 import { safePull, createFeatureBranch } from '../lib/gitprep.mjs';
 import { buildStartCommand, detectAuth, detectSurface, findEnvironmentOptions, guessBaseUrls, listSpecs, normalizeQaUrl, probeDocker, probePlaywright, qaAgentTestPath, qaComposeProjectName, qaPlanPath, qaResultsPath, readQaInputs, readSpecContext, requirements, selectEnvironment, writeBrowserTests, writeQaInputs, writeQaPlan } from '../lib/qa.mjs';
 import { buildAgentReplaySpec, buildRepairPlanMarkdown, buildResultsMarkdown, createBrowserExecutor, httpExecutor, parseResultsMarkdown, runQaAgent } from '../lib/qaagent.mjs';
@@ -379,8 +379,18 @@ async function createMcpWizard(prompter) {
   };
   if (requiresSecret) {
     const envName = await prompter.text(t('mcpEnvNameQ'));
-    const envValue = await prompter.text(t('mcpEnvValueQ'));
-    if (envName && envValue) server.env = { [envName]: envValue };
+    if (envName) {
+      // Los secretos se guardan POR REFERENCIA (${VAR}), nunca el valor: catalog/mcp/<id>.json se
+      // proyecta al .mcp.json de cada proyecto equipado, que suele commitearse. deepSub deja las
+      // referencias desconocidas intactas, así que ${VAR} llega tal cual y se resuelve del entorno.
+      if (await prompter.yesno(t('mcpEnvIsSecretQ'), true)) {
+        server.env = { [envName]: `\${${envName}}` };
+        console.log(c.dim('  ' + t('mcpSecretByRef', envName)));
+      } else {
+        const envValue = await prompter.text(t('mcpEnvValueQ'));
+        if (envValue) server.env = { [envName]: envValue };
+      }
+    }
   }
   const mcp = {
     id,
@@ -408,16 +418,6 @@ async function addMcpWizard(prompter) {
   const optional = await prompter.yesno(t('cfgAsOptionalQ'), true);
   await addMcpToRule(rule.id, mcpId, optional);
   console.log(c.green(t('mcpAddedToRule', mcpId, optional ? 'optionalMcp' : 'mcp', rule.id)));
-}
-
-async function nextSpecNumber(specsDir) {
-  if (!existsSync(specsDir)) return '001';
-  const dirs = (await readdir(specsDir, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
-  const max = dirs.reduce((n, name) => {
-    const m = name.match(/^(\d{3})-/);
-    return m ? Math.max(n, Number(m[1])) : n;
-  }, 0);
-  return String(max + 1).padStart(3, '0');
 }
 
 async function ensureSddScaffold(projectPath, mode = 'lite') {
@@ -579,7 +579,7 @@ function makePrompter() {
         if (key.name === 'up' || key.name === 'k') idx = (idx - 1 + options.length) % options.length;
         else if (key.name === 'down' || key.name === 'j') idx = (idx + 1) % options.length;
         else if (key.name === 'return' || key.name === 'enter') return done();
-        else if (key.ctrl && key.name === 'c') { done(); stdout.write('\n'); process.exit(0); }
+        else if (key.ctrl && key.name === 'c') { done(); stdout.write('\n'); process.exit(130); }   // 130: cancelado, no éxito
         else return;
         stdout.write(`\x1b[${options.length}A`);   // sube N líneas y redibuja las opciones
         draw();
@@ -634,7 +634,7 @@ function makePrompter() {
         if (key.name === 'up') idx = view.length ? (idx - 1 + view.length) % view.length : 0;
         else if (key.name === 'down') idx = view.length ? (idx + 1) % view.length : 0;
         else if (key.name === 'return' || key.name === 'enter') { if (view.length) return done(view[idx].i); return; }
-        else if (key.ctrl && key.name === 'c') { done(view.length ? view[idx].i : 0); stdout.write('\n'); process.exit(0); }
+        else if (key.ctrl && key.name === 'c') { done(view.length ? view[idx].i : 0); stdout.write('\n'); process.exit(130); }   // 130: cancelado, no éxito
         else if (key.name === 'backspace') { query = query.slice(0, -1); view = match(); idx = 0; }
         else if (ch && !key.ctrl && ch >= ' ') { query += ch; view = match(); idx = 0; }
         else return;
@@ -1026,7 +1026,7 @@ async function runSpec() {
 
   const specsDir = await ensureSddScaffold(proj, mode);
   const slug = slugifyFeatureName(featureName);
-  const number = await nextSpecNumber(specsDir);
+  const number = await nextNumber(specsDir);
   const featureDir = join(specsDir, `${number}-${slug}`);
   if (existsSync(featureDir)) { if (prompter) prompter.close(); throw new Error(t('specAlreadyExists', featureDir)); }
 
@@ -1566,7 +1566,7 @@ async function runInit() {
   // y re-analiza con las respuestas. Usa modelo económico + CCR. --no-ai la desactiva.
   let aiHint = null;
   const clarificationsQA = [];
-  if (!architectureId && !flags['no-ai']) {
+  if (!architectureId && flags.ai !== false) {
     const cfg = await loadConfig();
     if (!isConfigured(cfg)) {
       console.log(c.dim('  ' + t('initAiNotConf')));
@@ -1958,27 +1958,148 @@ async function configureAi(prompter) {
   // que pisa el modelo que el usuario acaba de elegir); el modelo elegido manda salvo que pida personalizar.
   const baseModels = prov.needsKey ? (cfg.models || {}) : {};
   const profiled = applyProfileModels({ ...out, models: baseModels }, profile);
-  const askPerTask = await prompter.yesno(t('aiPerTaskQ'), false);
+  // Los modelos por tarea vienen del perfil; se afinan APARTE con `config-ia spec|qa|repair` (por paquetes:
+  // este wizard base solo configura proveedor + key + modelo — no interroga por cosas que no vas a usar).
   out.models = { ...(profiled.models || {}) };
-  if (askPerTask) {
-    out.models.spec = (await prompter.text(t('aiModelForTask', 'spec-ia', out.models.spec || out.model) + ':')).trim() || out.models.spec || out.model;
-    out.models.qa = (await prompter.text(t('aiModelForTask', 'qa --agent', out.models.qa || out.model) + ':')).trim() || out.models.qa || out.model;
-    out.models.repair = (await prompter.text(t('aiModelForTask', 'repair-plan', out.models.repair || out.model) + ':')).trim() || out.models.repair || out.model;
-  }
   if (provider === 'azure') out.apiVersion = (await prompter.text(t('aiVersionQ', '2024-10-21') + ':')).trim() || cfg.apiVersion || '2024-10-21';
-  const path = await saveConfig(out);
+  // Merge sobre la config existente: config-ia solo gobierna SUS claves — lang, cli.* y cualquier otra
+  // preferencia guardada en ~/.chalc/config.json deben sobrevivir a una reconfiguración.
+  const merged = { ...cfg, ...out };
+  if (!prov.needsKey) delete merged.apiKey;   // provider local: no persistir una key heredada del entorno
+  const path = await saveConfig(merged);
   console.log('\n' + c.green('✓ ' + t('aiSaved', path)));
-  console.log(c.dim(`  ${provider} · default ${out.model} · spec ${out.models?.spec || out.model} · qa ${out.models?.qa || out.model}${out.apiKey ? ' · key ' + out.apiKey.slice(0, 4) + '…' : ''}\n`));
+  console.log(c.dim(`  ${provider} · default ${out.model} · spec ${out.models?.spec || out.model} · qa ${out.models?.qa || out.model}${out.apiKey ? ' · key ' + out.apiKey.slice(0, 4) + '…' : ''}`));
+  console.log(c.dim('  ' + t('aiScopesTip')));
+  console.log('');
   return out;
 }
 
-// ---------- comando: chalc config-ia (configurar el cerebro: proveedor + key) ----------
+// Selector de UN modelo sobre un proveedor dado: lista los instalados si es local (flechas + "otro
+// nombre…"); texto libre con default si es cloud. Reutilizado por los paquetes cli/spec/qa/repair.
+async function pickModelOn(prompter, { provider, baseURL, label, current }) {
+  const prov = PROVIDERS[provider];
+  const installed = prov?.needsKey ? [] : await listModels({ provider, baseURL });
+  if (installed.length) {
+    const mi = Math.max(0, installed.indexOf(current));
+    const pick = await prompter.select(label, [...installed.map((m) => ({ label: m })), { label: t('aiModelOther') }], mi);
+    return pick < installed.length ? installed[pick] : ((await prompter.text(t('aiModelQ', current) + ':')).trim() || current);
+  }
+  return (await prompter.text(label + ` [${current}]:`)).trim() || current;
+}
+
+// ---------- chalc config-ia cli — el EQUIPO de la shell: líder / desarrollador / revisor ----------
+// Pregunta solo lo del cli, con nombres entendibles y una línea que explica qué hace cada rol.
+// Cada rol puede quedarse en el proveedor base (se guarda el nombre del modelo) o irse a otro
+// proveedor con su propia key ({provider, model, apiKey}).
+async function configureAiRoles(prompter) {
+  const cfg = await loadConfig();
+  if (!isConfigured(cfg)) { console.error(c.red('✗ ' + t('aiNotBaseConfigured'))); return; }
+  console.log(c.dim('  ' + t('aiRolesIntro')) + '\n');
+  const ids = Object.keys(PROVIDERS);
+  const provider = cfg.provider;
+  const prevRoles = cfg.cli?.roles || {};
+  const roleKeys = {};   // keys ya tecleadas por proveedor en ESTA pasada: no pedir la misma 3 veces
+  const roles = {};
+  // Mini-banner por agente: ícono + nombre en su color + regla, y la descripción desplegada debajo
+  // (partida en sus frases) — que se LEA quién es antes de preguntar dónde corre y con qué modelo.
+  const ICONS = { planner: '🧠', coder: '⚙️ ', reviewer: '🔍' };
+  const PAINT = { planner: c.cyan, coder: c.green, reviewer: c.yellow };
+  for (const role of ['planner', 'coder', 'reviewer']) {
+    const name = t('aiRoleShort', role);
+    const title = t('aiTeamName', role);
+    console.log('\n  ' + c.dim('──') + ' ' + ICONS[role] + ' ' + PAINT[role](c.bold(title)) + ' ' + c.dim('─'.repeat(Math.max(6, 46 - title.length))));
+    for (const line of t('aiRoleDesc', role).split('; ')) console.log('     ' + c.dim(line.trim()));
+    console.log('');
+    const prev = prevRoles[role];
+    const prevObj = prev && typeof prev === 'object' ? prev : null;
+    const others = ids.filter((id) => id !== provider);
+    const where = await prompter.select(t('aiRoleWhereQ', name), [
+      { label: t('aiRoleSameProv', provider) },
+      ...others.map((id) => ({ label: `${id} — ${PROVIDERS[id].label}` }))
+    ], prevObj ? Math.max(0, others.indexOf(prevObj.provider) + 1) : 0);
+    if (where === 0) {
+      roles[role] = await pickModelOn(prompter, {
+        provider, baseURL: cfg.baseURL,
+        label: t('aiRoleModelQ', name), current: (typeof prev === 'string' && prev) || cfg.model
+      });
+      continue;
+    }
+    const rid = others[where - 1];
+    const rprov = PROVIDERS[rid];
+    const saved = prevObj?.provider === rid ? prevObj : {};   // reconfigurar conserva key/modelo previos del MISMO proveedor
+    const entry = { provider: rid };
+    if (rprov.needsBaseURL) entry.baseURL = (await prompter.text(t('aiBaseUrlQ') + ':')).trim() || saved.baseURL || '';
+    if (rprov.needsKey) {
+      const reuse = roleKeys[rid] || saved.apiKey || (rid === cfg.provider ? cfg.apiKey : '') || '';
+      entry.apiKey = (await prompter.secret(t('aiRoleKeyQ', rid) + ':')) || reuse;
+      roleKeys[rid] = entry.apiKey;
+    }
+    entry.model = await pickModelOn(prompter, {
+      provider: rid, baseURL: entry.baseURL,
+      label: t('aiRoleModelQ', name), current: saved.model || rprov.defaultModel
+    });
+    roles[role] = entry;
+  }
+  const path = await saveConfig({ ...cfg, cli: { ...(cfg.cli || {}), roles } });
+  console.log('\n' + c.green('✓ ' + t('aiSaved', path)));
+  printTeam(roles, cfg);
+}
+
+// Tarjeta GRÁFICA del equipo (líder → desarrollador → revisor): al cerrar la config, el usuario ve de
+// un vistazo quién es quién, con qué modelo y dónde corre (nube ☁ / local ⌂) — no una línea de texto.
+function printTeam(roles, cfg) {
+  const bar = (s = '') => console.log('   ' + c.dim('│') + (s ? '  ' + s : ''));
+  const icons = { planner: '🧠', coder: '⚙️ ', reviewer: '🔍' };
+  const paint = { planner: c.cyan, coder: c.green, reviewer: c.yellow };
+  const where = (provider) => {
+    const cloud = PROVIDERS[provider]?.needsKey;
+    return c.dim((cloud ? '☁  ' : '⌂  ') + t(cloud ? 'aiTeamCloud' : 'aiTeamLocal', provider));
+  };
+  console.log('\n   ' + c.dim('╭──── ') + c.bold(t('aiTeamTitle')) + c.dim(' ────────────────────────'));
+  bar();
+  for (const role of ['planner', 'coder', 'reviewer']) {
+    const v = roles[role];
+    if (!v) continue;
+    const model = typeof v === 'string' ? v : v.model;
+    const provider = typeof v === 'string' ? cfg.provider : v.provider;
+    bar(`${icons[role]} ${paint[role](c.bold(t('aiTeamName', role)))}  ${c.bold(model)}`);
+    bar(`   ${where(provider)}`);
+    bar(`   ${c.dim(t('aiRoleDesc', role))}`);
+    if (role !== 'reviewer') bar(c.dim('      ↓'));
+  }
+  bar();
+  console.log('   ' + c.dim('╰──────────────────────────────────────────────') + '\n');
+}
+
+// ---------- chalc config-ia spec|qa|repair — el modelo de UNA tarea, sin interrogatorio ----------
+const AI_TASK_LABELS = { spec: 'spec-ia', qa: 'qa --agent', repair: 'repair-plan' };
+async function configureAiTask(prompter, task) {
+  const cfg = await loadConfig();
+  if (!isConfigured(cfg)) { console.error(c.red('✗ ' + t('aiNotBaseConfigured'))); return; }
+  const label = AI_TASK_LABELS[task];
+  console.log(c.dim('  ' + t('aiTaskIntro', label)) + '\n');
+  const current = cfg.models?.[task] || cfg.model;
+  const model = await pickModelOn(prompter, {
+    provider: cfg.provider, baseURL: cfg.baseURL,
+    label: t('aiModelForTask', label, current), current
+  });
+  const path = await saveConfig({ ...cfg, models: { ...(cfg.models || {}), [task]: model } });
+  console.log('\n' + c.green('✓ ' + t('aiSaved', path)));
+  console.log(c.dim(`  ${label} → ${model}`) + '\n');
+}
+
+// ---------- comando: chalc config-ia [cli|spec|qa|repair|doctor] — por PAQUETES ----------
+// Sin argumento: solo lo base (proveedor + key + modelo). Cada paquete pregunta ÚNICAMENTE lo suyo:
+// `cli` el equipo líder/desarrollador/revisor de la shell; `spec|qa|repair` el modelo de esa tarea.
 async function runAi() {
-  console.log('\n' + c.bold('⚙️  chalc config-ia') + '\n');
-  if (flags.doctor || positional[1] === 'doctor') return runAiDoctor();
+  const scope = positional[1];
+  console.log('\n' + c.bold('⚙️  chalc config-ia' + (scope && scope !== 'doctor' ? ' ' + scope : '')) + '\n');
+  if (flags.doctor || scope === 'doctor') return runAiDoctor();
   if (!interactive) { console.error(c.red('✗ ' + t('aiNeedsTty'))); process.exit(1); }
   const prompter = makePrompter();
-  await configureAi(prompter);
+  if (scope === 'cli') await configureAiRoles(prompter);
+  else if (AI_TASK_LABELS[scope]) await configureAiTask(prompter, scope);
+  else await configureAi(prompter);
   prompter.close();
 }
 
@@ -2361,7 +2482,8 @@ async function runFeature(opts = {}) {
   const backStack = await detectStackLabel(backPath);
   console.log('  ' + c.green('✓') + ' ' + t('featDetect', frontStack || c.yellow(t('featUnknownStack')), backStack || c.yellow(t('featUnknownStack'))));
   if (!frontStack || !backStack) console.log(c.dim('  ' + t('featUnknownHint')));
-  const wantBranch = flags.branch || (prompter ? await prompter.yesno(t('featBranchQ'), false) : false);   // se decide ahora; se crea al final (el nombre sale del slug)
+  // Se decide ahora; se crea al final (el nombre sale del slug). --no-branch evita la pregunta.
+  const wantBranch = flags.branch ?? (prompter ? await prompter.yesno(t('featBranchQ'), false) : false);
 
   // 2) Idioma del spec + modo (del back si está equipado).
   let specLang = flags.lang ? langName(String(flags.lang)) : null;

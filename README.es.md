@@ -38,10 +38,12 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 | `chalc configure` | Administra el catálogo (rules/skills/MCP) por menú | no |
 | `chalc install <fuente>` | Instala un skill al catálogo y lo cablea a una regla | no |
 | `chalc spec` | Crea una carpeta/plantilla vacía `specs/NNN-feature` | no |
-| `chalc config-ia` | Configura el proveedor de IA + API key (una vez) | sí (setup) |
+| `chalc config-ia` | Configura la IA por paquetes: base (proveedor + key), `cli` (equipo líder/desarrollador/revisor), `spec`, `qa`, `repair` | sí (setup) |
 | `chalc ai-doctor` | Muestra proveedor, perfil y modelos resueltos por tarea | no |
 | `chalc eval-ia` | Ejecuta evals locales de prompts/parsers sin llamar al proveedor | no |
 | `chalc spec-ia` | HU (Azure DevOps/Jira/Drive/Word/pegar) → spec/plan/tasks | sí |
+| `chalc feature` | Orquestador full-stack: UNA HU → contrato de API + spec del back + spec del front (mismo `NNN` en ambos repos) | sí |
+| `chalc-cli` | Shell interactiva del agente sobre tu proyecto equipado (tools con aprobación, skills y MCP) | sí |
 | `chalc qa <ruta>` | Lista specs y valida el preflight QA (Docker + documentación) | no |
 | `chalc qa <ruta> --spec 004-login --plan` | Genera el plan QA trazable a los requisitos de una spec | no |
 | `chalc qa <ruta> --spec 004-login --env qa:up --plan` | Registra en el plan el entorno de arranque elegido (sin ejecutarlo aún) | no |
@@ -50,7 +52,8 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 | `chalc qa <ruta> ... --agent --repair-plan` | Además genera `qa/repair-plan.md` desde FAIL/BLOCKED | sí |
 | `chalc qa <ruta> ... --agent --surface web\|api` | Fuerza la superficie (navegador vs HTTP) si la autodetección no acierta | sí |
 
-Cada comando tiene su equivalente `npm run <comando>` (ej. `npm run spec-ia`) por si no haces `npm link`.
+Casi todos los comandos tienen su equivalente `npm run <comando>` (ej. `npm run spec-ia`) por si no haces
+`npm link`; las excepciones son `qa`, `verify`, `install` y `feature`, que se invocan como `npm start -- <comando> …`.
 Todo el CLI es **bilingüe (es/en)**. Por defecto sigue el idioma del sistema operativo, pero puedes
 fijarlo una sola vez con **`chalc lang es`** o **`chalc lang en`** (queda guardado y se aplica a todos
 tus proyectos, sin tener que tocar variables de entorno cada vez).
@@ -128,7 +131,8 @@ chalc init dotnet mi-svc --architecture clean-architecture --verify   # --verify
 #### Paso a paso (flujo interactivo)
 1. **Stack** — eliges Angular / NestJS / .NET.
 2. **Nombre y carpeta** — dónde se crea el proyecto (`--dir` para fijarla sin preguntar).
-3. **Propuesta** — describes la idea por texto o adjuntas un documento (`--doc` lee Word/PDF/Markdown/TXT).
+3. **Propuesta** — describes la idea por texto o adjuntas un documento (`--doc` lee Word/PDF/Markdown/TXT;
+   Word/PDF requieren herramientas del sistema — ver la nota en `spec-ia` —; en Windows usa `.md`/`.txt`).
 4. **La IA sugiere la arquitectura** (calibrada a tu propuesta) y, si tiene dudas que cambian la decisión,
    **te las pregunta**. Tú eliges la arquitectura final de la lista. Con `--no-ai` usas solo el análisis determinista.
 5. **Resumen y confirmación** — Chalc te muestra qué va a hacer (incluida la versión del CLI elegida) antes de crear.
@@ -501,13 +505,30 @@ La constitución, plantillas y reglas están en **es y en** (siguen el idioma de
 El núcleo de Chalc no usa IA. Pero dos comandos **opt-in** (con tu API key) convierten una historia de
 usuario en una especificación SDD. La IA aquí **solo estructura** lo que le pasas — no inventa.
 
-### 1) `chalc config-ia` — configurar el cerebro (una vez)
+### 1) `chalc config-ia` — configurar el cerebro (una vez), por paquetes
+
+La configuración está dividida en **paquetes**: cada comando pregunta ÚNICAMENTE lo que estás
+configurando — sin interrogatorios sobre tareas que no vas a usar:
 
 ```bash
-chalc config-ia        # o: npm run config-ia
+chalc config-ia          # base: proveedor + API key + modelo default (empieza aquí)
+chalc config-ia cli      # el EQUIPO de la shell: modelos líder / desarrollador / revisor
+chalc config-ia spec     # solo el modelo de spec-ia
+chalc config-ia qa       # solo el modelo de qa --agent
+chalc config-ia repair   # solo el modelo de repair-plan
+chalc config-ia doctor   # inspecciona la resolución final, sin gastar tokens
 ```
 
-Elige el proveedor de LLM y pega tu API key:
+`config-ia cli` configura tu **equipo de agentes** y habla claro: cada agente se presenta con su
+nombre y qué hace (el **AGENTE LÍDER** planea la tarea y escribe las órdenes de trabajo; el
+**AGENTE DESARROLLADOR** escribe el código, orden por orden; el **AGENTE REVISOR** controla la
+calidad de lo entregado). Por cada agente eliges dónde corre — el proveedor base u otro distinto
+con su propia API key — así un líder/revisor en la nube puede dirigir a un desarrollador local
+gratuito. Al guardar se muestra la **tarjeta del equipo** (agente → modelo → nube ☁ / local ⌂).
+Ojo: en OpenRouter los modelos llevan prefijo del fabricante (`anthropic/claude-sonnet-4.6`, no
+`claude-sonnet-4.6`).
+
+El wizard base te pide elegir el proveedor de LLM y pegar tu API key:
 
 | Proveedor | Notas |
 |---|---|
@@ -552,6 +573,9 @@ Flujo:
    | Fuente | Qué te pide |
    |---|---|
    | Archivo local | ruta a `.md` / `.txt` (recomendado: se leen directo, sin herramientas extra) / Word / PDF / Excel→CSV |
+
+   > **Nota (Word/PDF):** leer `.docx` depende de `textutil` (solo macOS) y `.pdf` de `pdftotext`. En
+   > Windows (y en Linux sin esas herramientas) usa `.md`/`.txt` o pega el texto directamente.
    | **Azure DevOps** | URL del work item + PAT → trae título + descripción + criterios |
    | **Jira** | URL del issue + email + token |
    | **Google Drive / URL** | la URL (export a texto) |
@@ -562,12 +586,105 @@ Flujo:
 6. Guarda una traza reproducible en `specs/<feature>/.chalc/ai-trace.jsonl` con hashes de prompt/output, nunca el contenido crudo.
 7. Imprime un **comando hand-off** detallado para pegar en tu asistente y generar el código con TDD.
 
+### 3) `chalc feature` — orquestador full-stack (HU → contrato + spec back + spec front)
+
+```bash
+chalc feature                                    # interactivo (pide rutas de front y back)
+chalc feature /ruta/front --back /ruta/back --lang es --no-branch
+```
+
+Toma **una** historia de usuario y coordina **dos repos** (front y back) alrededor de un contrato de API:
+
+1. Detecta el stack de cada repo, lo confirma contigo y equipa ambos si hace falta (SDD incluido).
+2. Adquiere la HU con las mismas fuentes que `spec-ia` (archivo, Azure DevOps, Jira, URL o pegar).
+3. La IA genera en orden: **contrato de API compartido** → **spec del back** → **spec del front**,
+   para que el front consuma exactamente lo que el back promete.
+4. Escribe `specs/NNN-<slug>/` en AMBOS repos con el **mismo número**, guarda el contrato en
+   `contracts/api.md` y estampa su huella en cada archivo (anti-drift: si regeneras la feature con un
+   contrato distinto, te lo avisa). Re-ejecutar la misma HU es **idempotente**: reusa la carpeta del
+   slug en vez de crear duplicados `NNN+1`.
+5. Opcional: crea la rama `feat/<slug>` en ambos repos — todo o nada, y solo si los dos árboles están
+   limpios. `--branch` / `--no-branch` deciden sin preguntar.
+6. Cierra con un **hand-off único** para tu asistente que coordina la implementación en los dos repos.
+
+Flags: `--back <ruta>`, `--lang es|en`, `--full` o `--mode lite|full` (modo SDD), `--branch`/`--no-branch`.
+
 ### Harness de fidelidad (la IA NO inventa)
 
 El prompt (`lib/prompts/spec-gen.prompt.xml`) tiene un cerco estricto: la IA es un **estructurador, no un
 autor**. Si algo no está en el documento, **no va al spec** — va como `[NEEDS CLARIFICATION]`. Nunca
 inventa requisitos, campos, entidades, reglas, edge cases ni tecnología. Un documento corto produce un
 spec corto lleno de preguntas abiertas — y eso es **correcto**, no un fallo.
+
+## Shell interactiva del agente (`chalc-cli`)
+
+```bash
+npm run cli        # o `chalc-cli` si hiciste npm link
+```
+
+Una shell de agente tipo Claude Code pero **100 % local y provider-agnóstica**: usa exactamente el
+proveedor/modelo que configuraste en `chalc config-ia` (por ejemplo un modelo local de Ollama) y trabaja
+sobre el proyecto que le indiques — idealmente uno ya equipado por chalc.
+
+- **Tools deterministas**: `read`, `list`, `grep`, `write`, `edit` y `bash` (con allowlist de comandos).
+  Escrituras, ediciones y comandos de shell piden **aprobación por acción**: `y` aprueba, `n` rechaza,
+  `a` aprueba todo lo que resta de la instrucción.
+- **Skills equipadas**: el índice compacto entra siempre al prompt; el `SKILL.md` completo solo el de
+  las skills relevantes a la tarea (las obligatorias — clean-code, SOLID… — entran siempre).
+- **MCP del proyecto**: conecta los servidores del `.mcp.json` equipado, mostrándote el comando y
+  pidiendo tu **aprobación por servidor** antes de ejecutarlo (abrir un repo ajeno nunca ejecuta nada a ciegas).
+- **CCR integrado**: comprime observaciones voluminosas (archivos largos, salidas de shell) para no
+  llenar la ventana del modelo local; el agente las expande bajo demanda con `recall`.
+- **Control en runtime** (estilo Claude Code): `/model [nombre]` cambia el modelo **en caliente** sin
+  perder la conversación, `/tools` lista las herramientas disponibles (fs + shell + MCP), `/tokens`
+  muestra el consumo acumulado de la sesión, `/clear` reinicia la conversación, `/skills`, `/mcp`,
+  `/help`, `/exit`.
+- **Interrumpir sin salir**: `ESC` (en la TUI) o `Ctrl+C` (en modo scroll) cancelan el turno en curso —
+  el agente se detiene al terminar el paso actual y NO ejecuta la acción que estuviera proponiendo;
+  la sesión sigue viva. En la TUI además puedes **seguir escribiendo mientras trabaja**: las
+  instrucciones se encolan y se procesan al terminar el turno.
+- La TUI es la vista por defecto: la conversación vive en el buffer NORMAL de la terminal (scroll
+  nativo — la sesión completa queda ahí incluso al salir) con la caja de entrada SIEMPRE fija abajo.
+  La rueda del mouse / PgUp abre un modo lectura sobre el historial con la caja utilizable; si el
+  agente imprime mientras lees, aparece el aviso "↓ N mensajes nuevos" y `End` vuelve al vivo.
+  Con `CHALC_TUI=0` cae al modo scroll clásico (robusto en cualquier terminal).
+
+**Modelos por rol** — el EQUIPO del cli (líder/desarrollador/revisor): se configura con **`chalc config-ia cli`**,
+que pregunta solo lo de la shell (dónde corre cada rol y con qué modelo), con nombres entendibles y una
+línea que explica qué hace cada uno. Cada rol puede vivir incluso en un proveedor DISTINTO con su propia
+API key (p. ej. líder y revisor en la nube vía OpenRouter, y el desarrollador local en Ollama). Sin
+configurar, todos usan el modelo default. `/model <nombre>` lo cambia en caliente dentro de la sesión.
+Los demás paquetes también se configuran por separado: `config-ia spec`, `config-ia qa`, `config-ia repair`
+— cada uno pregunta únicamente su modelo.
+
+### El proceso del equipo (`/plan`): líder → desarrollador → revisor
+
+`/plan <tarea>` ejecuta el equipo completo. Los agentes no chatean entre sí: se comunican por
+artefactos auditables persistidos en el proyecto.
+
+1. **El LÍDER planea y redacta el spec — en UNA sola llamada.** Recibe el contexto completo del
+   proyecto (skills, MCP, archivo de instrucciones, constitución, arquitectura, README de carpetas)
+   más la plantilla de spec del proyecto (`specs/_template/spec.md`) cuando existe. Entrega dos
+   artefactos: `.chalc/plan.md` (el checklist de órdenes de trabajo, incluida la orden LITERAL que
+   recibirá cada tarea) y el **spec** — siguiendo la plantilla del proyecto (requisitos EARS R1, R2…)
+   con una sección `## Task N` por paso — guardado en la carpeta `specs/NNN-slug/` del proyecto
+   (`.chalc/spec.md` de fallback) y enlazado desde el plan. Solo se sobrescriben archivos sellados
+   por chalc: un spec escrito por el usuario (o por `spec-ia`) jamás se toca.
+2. **El DESARROLLADOR ejecuta tarea por tarea.** Cada turno lleva UNA orden con SOLO su sección
+   `## Task N` — contexto pequeño y explícito. Ante dudas debe LEER los specs; nunca los escribe
+   (los pasos de redactar specs se enrutan al líder). El harness — nunca el modelo — marca cada `[x]`
+   del `plan.md` con evidencia real (archivo escrito / comando ejecutado). Un run caído se retoma con
+   `/plan` (sin argumento) desde la primera tarea pendiente, sin volver a pagar al líder.
+3. **El REVISOR cierra el loop de calidad contra el contrato.** Recibe el spec aprobado, el plan de
+   ejecución (con las `[x]` verificadas por el harness) y las skills relevantes, y revisa el diff en
+   solo lectura en dos dimensiones: cumplimiento del contrato (requisitos, tareas completas) y calidad
+   del código (convenciones, arquitectura, imports reales, nada de entregables huecos). Sus hallazgos
+   son trazables ("incumple R2", con archivo y causa); las correcciones las ejecuta siempre el
+   desarrollador con órdenes literales registradas, y cada ronda queda en `.chalc/review.md`. Tras su
+   OK corre el build real del stack como portón determinista final.
+
+Configuración opcional adicional en `~/.chalc/config.json`, bloque `cli`: `numCtx` (ventana del modelo),
+`allow` (allowlist del shell), `budgetTokens` (presupuesto del prompt) y `maxSteps` (pasos por instrucción).
 
 ## Test-First + Mutation testing (calidad)
 

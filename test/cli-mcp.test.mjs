@@ -22,6 +22,20 @@ test('createJsonRpc rechaza ante error JSON-RPC y hace timeout', async () => {
   await assert.rejects(() => rpc.request('y', {}), /timeout/);   // nunca llega respuesta
 });
 
+test('createJsonRpc tras close: lo pendiente rechaza Y un request posterior rechaza AL INSTANTE', async () => {
+  const rpc = createJsonRpc({ send: () => {}, timeoutMs: 5000 });
+  const pendiente = rpc.request('x', {});
+  rpc.close(new Error('el servidor MCP terminó (código 1)'));
+  await assert.rejects(() => pendiente, /terminó/);
+  // request posterior sobre la conexión muerta: rechazo inmediato (sin escribirle al vacío ni esperar timeout)
+  await assert.rejects(() => rpc.request('y', {}), /terminó/);
+});
+
+test('createJsonRpc rechaza al instante si el transporte lanza al enviar (stream destruido)', async () => {
+  const rpc = createJsonRpc({ send: () => { throw new Error('write after destroy'); }, timeoutMs: 5000 });
+  await assert.rejects(() => rpc.request('x', {}), /write after destroy/);
+});
+
 test('createJsonRpc.notify no espera respuesta; handle ignora ids desconocidos', () => {
   const sent = [];
   const rpc = createJsonRpc({ send: (m) => sent.push(m) });

@@ -15,6 +15,10 @@ node_modules/
 CLAUDE.md
 .claude/
 
+# specs de trabajo y plan del CLI: solo locales (no se publican ni se versionan)
+specs/
+cli/PLAN.md
+
 # sistema
 .DS_Store
 

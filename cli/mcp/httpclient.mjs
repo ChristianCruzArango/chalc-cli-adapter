@@ -6,8 +6,19 @@
 // Config del .mcp.json: { "url": "https://...", "headers": { "Authorization": "Bearer ${VAR}" } } —
 // las referencias ${VAR} ya llegan resueltas desde el entorno (cli/project.mjs).
 
+import { assertPublicUrl } from '../../lib/net.mjs';
+import { safeUrlForDisplay } from '../../lib/redact.mjs';
+
 const PROTOCOL_VERSION = '2025-03-26';
 const CLIENT_INFO = { name: 'chalc-cli', version: '0.1.0' };
+
+function anyHttpUrl(value) {
+  let parsed;
+  try { parsed = new URL(String(value)); }
+  catch { throw new Error('URL inválida'); }
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error(`Protocolo no permitido: ${parsed.protocol}`);
+  return parsed;
+}
 
 // Extrae de un cuerpo SSE la respuesta JSON-RPC correlacionada con `id` (eventos "data: {...}").
 function sseResponse(text, id) {
@@ -22,21 +33,36 @@ function sseResponse(text, id) {
   return null;
 }
 
-export function createHttpClient({ url, headers = {}, timeoutMs = 15000, fetchImpl } = {}) {
+export function createHttpClient({ url, headers = {}, timeoutMs = 15000, fetchImpl, allowPrivate = false, validateUrl } = {}) {
   if (!url) throw new Error('MCP HTTP: falta "url" en la configuración del servidor.');
   const doFetch = fetchImpl || fetch;
+  const endpoint = String(url);
+  const displayUrl = safeUrlForDisplay(endpoint);
+  // Público por defecto (incluye DNS completo): un .mcp.json pertenece al proyecto y no puede convertir
+  // la shell en proxy hacia la red privada. El escape `allowPrivate` solo se inyecta desde config local.
+  const validate = validateUrl || (allowPrivate ? async (value) => anyHttpUrl(value) : assertPublicUrl);
+  let validation = null;
   let sessionId = null;
   let nextId = 1;
 
+  async function ensureSafeEndpoint() {
+    if (!validation) validation = Promise.resolve(validate(endpoint));
+    try { await validation; }
+    catch (e) { throw new Error(`MCP HTTP: URL no permitida (${e?.message || e})`); }
+  }
+
   async function post(message, { expectResponse = true, timeoutMs: limit } = {}) {
+    await ensureSafeEndpoint();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), limit || timeoutMs);
     timer.unref?.();
     let res;
     try {
-      res = await doFetch(url, {
+      res = await doFetch(endpoint, {
         method: 'POST',
         signal: controller.signal,
+        // Un redirect podría cambiar el host DESPUÉS de validar DNS y recibir headers con secretos.
+        redirect: 'error',
         headers: {
           'content-type': 'application/json',
           accept: 'application/json, text/event-stream',
@@ -47,13 +73,13 @@ export function createHttpClient({ url, headers = {}, timeoutMs = 15000, fetchIm
         body: JSON.stringify(message)
       });
     } catch (e) {
-      throw new Error(`MCP HTTP: no se pudo contactar ${url} (${e?.name === 'AbortError' ? 'timeout' : e?.message || e})`);
+      throw new Error(`MCP HTTP: no se pudo contactar ${displayUrl} (${e?.name === 'AbortError' ? 'timeout' : e?.message || e})`);
     } finally {
       clearTimeout(timer);
     }
     const sid = res.headers?.get?.('mcp-session-id');
     if (sid) sessionId = sid;
-    if (!res.ok) throw new Error(`MCP HTTP ${res.status} de ${url}`);
+    if (!res.ok) throw new Error(`MCP HTTP ${res.status} de ${displayUrl}`);
     if (!expectResponse || res.status === 202) return null;
     const ctype = res.headers?.get?.('content-type') || '';
     if (ctype.includes('text/event-stream')) {
@@ -87,7 +113,10 @@ export function createHttpClient({ url, headers = {}, timeoutMs = 15000, fetchIm
     async stop() {
       // Cierre de sesión best-effort (DELETE con el session id); los servers sin sesión lo ignoran.
       if (!sessionId) return;
-      try { await doFetch(url, { method: 'DELETE', headers: { 'mcp-session-id': sessionId, ...headers } }); } catch { /* best-effort */ }
+      try {
+        await ensureSafeEndpoint();
+        await doFetch(endpoint, { method: 'DELETE', redirect: 'error', headers: { 'mcp-session-id': sessionId, ...headers } });
+      } catch { /* best-effort */ }
     }
   };
 }

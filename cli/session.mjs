@@ -6,14 +6,15 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { createCcrStore } from '../lib/ccr.mjs';
-import { inspectProject, readMcpServers, projectTree } from './project.mjs';
+import { createAgentRegistry } from './agents/registry.mjs';
+import { inspectProject, readMcpServers, projectTree, mcpEnvironmentAllowlist } from './project.mjs';
 import { createTools } from './tools/registry.mjs';
 import { createRenderPrompt } from './engine/harness.mjs';
 import { frame } from './prompts/text.mjs';
 import { createChatImpl, isOllama } from './engine/model.mjs';
 import { runAgent } from './engine/loop.mjs';
 import { loadSkillMetas, buildSkillSections, relevantBlocks } from './skills/loader.mjs';
-import { connectMcpServers, mcpToolsForAgent, stopMcpConnections, unwrapMcpResult } from './mcp/astools.mjs';
+import { connectMcpServers, mcpToolsForAgent, stopMcpConnections } from './mcp/astools.mjs';
 import { runPlanner, planSection } from './engine/plan.mjs';
 import { runReviewer, collectChanges } from './engine/review.mjs';
 import { specInfo, loadPlan } from './engine/planfile.mjs';
@@ -117,31 +118,6 @@ export async function buildProjectSections(project, language) {
   return sections;
 }
 
-// Buenas prácticas del framework: si un MCP conectado expone una tool de "best practices" (p. ej.
-// angular-cli.get_best_practices), el ORQUESTADOR la consulta UNA vez al abrir la sesión y la inyecta
-// al contexto de los tres roles. Dejarlo a criterio del modelo es lotería — y sin esto genera patrones
-// obsoletos (NgModules en Angular standalone, etc.). Solo tools de lectura evidente; best-effort.
-const MAX_BEST_PRACTICES = 3000;
-async function fetchBestPractices(connections, stacks = []) {
-  // Solo del MCP DEL stack del proyecto (angular-cli ↔ angular): cargar las prácticas de un framework
-  // en un proyecto de otro stack (o sin stack) contaminaría el contexto sin aportar nada.
-  if (!stacks.length) return null;
-  const ofStack = connections.filter(({ id }) =>
-    stacks.some((s) => String(id).toLowerCase().includes(String(s).toLowerCase())));
-  for (const { id, client, tools } of ofStack) {
-    const t = (tools || []).find((x) => /best[_-]?practices|instructions/i.test(x?.name || ''));
-    if (!t) continue;
-    try {
-      const out = unwrapMcpResult(await client.callTool(t.name, {}));
-      if (out.text) {
-        const text = out.text.length > MAX_BEST_PRACTICES ? out.text.slice(0, MAX_BEST_PRACTICES) + '\n[…truncated]' : out.text;
-        return { key: 'best-practices', required: false, text: `### framework best practices (from MCP ${id} — FOLLOW THESE over your own habits)\n${text}` };
-      }
-    } catch { /* best-effort: sin buenas prácticas la sesión sigue */ }
-  }
-  return null;
-}
-
 // Conversación previa (resúmenes user↔agente) como sección OPCIONAL del harness. Lleva CONTEXTO entre turnos
 // sin arrastrar cada observación: para modelos locales, resumir es lo que evita llenar la ventana. Se acota a
 // los últimos turnos y el budgeter decide si cabe. Devuelve null si aún no hay conversación.
@@ -194,17 +170,21 @@ export async function createSession({
   const approve = (action) => state.approve(action);
 
   // MCP: servidores tomados del PROYECTO (.mcp.json equipado), nada hardcodeado. Falla por-servidor sin tumbar.
-  const mcpServers = project.equipped ? await readMcpServers(project.paths) : {};
+  const mcpServers = project.equipped
+    ? await readMcpServers(project.paths, process.env, { allowedEnv: mcpEnvironmentAllowlist(cfg?.cli, process.env) })
+    : {};
   // cwd: los servers deben operar sobre el PROYECTO, no sobre el directorio desde donde se lanzó el CLI.
   const mcpConnections = await connectMcpServers(mcpServers, {
     connect: mcpConnect, onConnect: onMcpConnect, onWarn: onMcpWarn,
-    approveServer: approveMcpServer, cwd: projectPath
+    approveServer: approveMcpServer,
+    cwd: projectPath,
+    // Solo una preferencia local (~/.chalc/config.json), nunca un campo del proyecto, abre esta excepción.
+    allowPrivateHttp: cfg?.cli?.allowPrivateMcpHttp === true
   });
   const mcpTools = mcpToolsForAgent(mcpConnections, { approve, language });
 
-  // Buenas prácticas del framework al contexto BASE: las ven el planner, el coder y el reviewer.
-  const bestPractices = await fetchBestPractices(mcpConnections, project.stacks || []);
-  if (bestPractices) baseSections.push(bestPractices);
+  // Nunca invocar una tool MCP automáticamente: el nombre que anuncia un servidor no prueba que sea
+  // de lectura. Las prácticas se pueden pedir mediante la tool expuesta y pasan por la política de aprobación.
 
   // Mapa de carpetas de la arquitectura (## Folder map generado por chalc): sus roots alimentan el
   // aviso determinista de ubicación en write/edit — el modelo "olvida" la arquitectura; el path no miente.
@@ -236,6 +216,11 @@ export async function createSession({
 
   // Modelo configurado para un rol (o null = usa el base). Para que la UI muestre el modelo REAL del paso.
   const modelFor = (role) => roleModelLabel(cfg, role);
+  const roleMeta = (role) => {
+    const rc = roleConfig(cfg, role) || cfg || {};
+    return { model: roleModelLabel(cfg, role) || rc.model || cfg?.model || '', provider: rc.provider || cfg?.provider || '' };
+  };
+  const agents = createAgentRegistry({ roles: Object.fromEntries(['planner', 'coder', 'reviewer'].map((role) => [role, roleMeta(role)])) });
 
   // Presupuesto de contexto por ROL: un rol configurado en un proveedor CLOUD (objeto {provider…} no
   // Ollama) recibe presupuesto AMPLIO — su ventana de 100-200k tokens se paga justamente para que lea
@@ -268,14 +253,20 @@ export async function createSession({
   // que a él se le ocurra. Solo el planner la recibe: el coder consume specs, nunca los escribe.
   async function plan(task, { onStep, shouldStop } = {}) {
     if (!task || !String(task).trim()) throw new Error('plan requiere una tarea.');
-    const sections = await sectionsFor(task);
-    const f = frame(language);
-    const tpl = await readSection(join(project.projectPath, 'specs', '_template', 'spec.md'), 'spec-template', f.specTemplateTitle, true, 2500);
-    if (tpl) sections.push(tpl);
-    return runPlanner({
-      chatImpl: roleImpl('planner'), tools, projectSections: sections,
-      task, budgetTokens: budgetFor('planner'), language, onStep, shouldStop, ccr
-    });
+    const id = agents.begin({ role: 'planner', task, ...roleMeta('planner') });
+    try {
+      const sections = await sectionsFor(task);
+      const f = frame(language);
+      const tpl = await readSection(join(project.projectPath, 'specs', '_template', 'spec.md'), 'spec-template', f.specTemplateTitle, true, 2500);
+      if (tpl) sections.push(tpl);
+      const result = await runPlanner({
+        chatImpl: roleImpl('planner'), tools, projectSections: sections,
+        task, budgetTokens: budgetFor('planner'), language,
+        onStep: (step) => { agents.step(id, step); onStep?.(step); }, shouldStop, ccr
+      });
+      agents.finish(id, { done: !result?.interrupted, interrupted: result?.interrupted, error: result?.error });
+      return result;
+    } catch (error) { agents.fail(id, error); throw error; }
   }
   // Compartido entre turnos (refs estables). Preview amplio: con 160 chars el modelo local no podía actuar
   // sin recall y re-llamaba la misma tool en bucle; con ~500 suele bastarle el resumen.
@@ -290,24 +281,30 @@ export async function createSession({
   // de re-derivar la intención desde el texto de la tarea.
   async function review(task, { paths = [], onStep, shouldStop } = {}) {
     if (!task || !String(task).trim()) throw new Error('review requiere la tarea revisada.');
-    const changes = await collectChanges(projectPath, paths);
-    if (!changes) return { ok: true, findings: '', steps: [], empty: true };
-    const sections = await sectionsFor(task);
-    const f = frame(language);
-    const spec = specInfo(projectPath);
-    if (spec.text) {
-      const text = spec.text.length > 4000 ? spec.text.slice(0, 4000) + '\n[…truncated]' : spec.text;
-      sections.push({ key: 'spec', required: true, text: `### ${f.specReviewTitle}\n${text}` });
-    }
-    const saved = loadPlan(projectPath);
-    if (saved?.items?.length) {
-      const planText = saved.items.map((it) => `- ${it.done ? '[x]' : '[ ]'} ${it.text}`).join('\n');
-      sections.push({ key: 'plan', required: true, text: `### ${f.planReviewTitle}\nGoal: ${saved.goal}\n${planText}` });
-    }
-    return runReviewer({
-      chatImpl: roleImpl('reviewer'), tools, projectSections: sections,
-      task, changes, budgetTokens: budgetFor('reviewer'), language, onStep, shouldStop, ccr
-    });
+    const id = agents.begin({ role: 'reviewer', task, ...roleMeta('reviewer') });
+    try {
+      const changes = await collectChanges(projectPath, paths);
+      if (!changes) { const empty = { ok: true, findings: '', steps: [], empty: true }; agents.finish(id, { done: true }); return empty; }
+      const sections = await sectionsFor(task);
+      const f = frame(language);
+      const spec = specInfo(projectPath);
+      if (spec.text) {
+        const text = spec.text.length > 4000 ? spec.text.slice(0, 4000) + '\n[…truncated]' : spec.text;
+        sections.push({ key: 'spec', required: true, text: `### ${f.specReviewTitle}\n${text}` });
+      }
+      const saved = loadPlan(projectPath);
+      if (saved?.items?.length) {
+        const planText = saved.items.map((it) => `- ${it.done ? '[x]' : '[ ]'} ${it.text}`).join('\n');
+        sections.push({ key: 'plan', required: true, text: `### ${f.planReviewTitle}\nGoal: ${saved.goal}\n${planText}` });
+      }
+      const result = await runReviewer({
+        chatImpl: roleImpl('reviewer'), tools, projectSections: sections,
+        task, changes, budgetTokens: budgetFor('reviewer'), language,
+        onStep: (step) => { agents.step(id, step); onStep?.(step); }, shouldStop, ccr
+      });
+      agents.finish(id, { done: !result?.interrupted, interrupted: result?.interrupted, error: result?.error });
+      return result;
+    } catch (error) { agents.fail(id, error); throw error; }
   }
 
   // plan (opcional): plan aprobado por el usuario — entra como sección requerida del harness y el rol
@@ -318,20 +315,27 @@ export async function createSession({
   // redacta los documentos que gobiernan su propio trabajo. El rol define modelo Y presupuesto.
   async function ask(task, { approve, onStep, shouldStop, plan: approvedPlan, focus = false, role = 'coder' } = {}) {
     if (!task || !String(task).trim()) throw new Error('ask requiere una tarea.');
-    state.approve = approve || (async () => true);
-    const sections = await sectionsFor(task, { focus });
-    if (approvedPlan) sections.push(planSection(approvedPlan, language));
-    const renderPrompt = createRenderPrompt({ task, tools, projectSections: sections, budgetTokens: budgetFor(role), language });
-    const result = await runAgent({ chatImpl: roleImpl(role), tools, renderPrompt, ccr, maxSteps, onStep, shouldStop });
-    conversation.push({ role: 'user', content: String(task).trim() });
-    conversation.push({ role: 'assistant', content: result.done ? (result.summary || '(sin resumen)') : (result.error || 'sin resultado') });
-    return result;
+    const id = agents.begin({ role, task, ...roleMeta(role) });
+    try {
+      state.approve = approve || (async () => true);
+      const sections = await sectionsFor(task, { focus });
+      if (approvedPlan) sections.push(planSection(approvedPlan, language));
+      const renderPrompt = createRenderPrompt({ task, tools, projectSections: sections, budgetTokens: budgetFor(role), language });
+      const result = await runAgent({
+        chatImpl: roleImpl(role), tools, renderPrompt, ccr, maxSteps,
+        onStep: (step) => { agents.step(id, step); onStep?.(step); }, shouldStop
+      });
+      conversation.push({ role: 'user', content: String(task).trim() });
+      conversation.push({ role: 'assistant', content: result.done ? (result.summary || '(sin resumen)') : (result.error || 'sin resultado') });
+      agents.finish(id, result);
+      return result;
+    } catch (error) { agents.fail(id, error); throw error; }
   }
 
   // Libera los servidores MCP (mata sus procesos). La shell debe llamarlo al terminar la sesión.
   const close = () => stopMcpConnections(mcpConnections);
 
-  return { project, conversation, language, mcp: mcpConnections.map((c) => c.id), tools: Object.keys(tools), ask, plan, review, close, setModel, modelFor };
+  return { project, conversation, language, mcp: mcpConnections.map((c) => c.id), tools: Object.keys(tools), ask, plan, review, close, setModel, modelFor, agents };
 }
 
 // Atajo sin estado: una sesión + una tarea. Se mantiene para uso programático y tests.

@@ -1,6 +1,9 @@
 // cli/ui/render.mjs — presentación de la CLI en terminal. Sin dependencias: ANSI nativo. Respeta NO_COLOR y
 // salida no-TTY (pipe) → texto plano. Funciones puras que devuelven strings, así se testean sin pintar nada.
 
+import { MCP_READONLY } from '../mcp/approval.mjs';
+import { t } from '../../lib/i18n.mjs';
+
 const COLOR = !!process.stdout.isTTY && !process.env.NO_COLOR;
 const sgr = (code) => (s) => (COLOR ? `\x1b[${code}m${s}\x1b[0m` : String(s));
 
@@ -71,9 +74,9 @@ export function bigTitle(word = 'CHALC', { color = c.cyan } = {}) {
 export function contextBox({ model, provider, inputTokens = 0, outputTokens = 0, numCtx, steps = 0, ccr }) {
   const win = numCtx ? `${k(inputTokens)}/${k(numCtx)}` : k(inputTokens);
   const meta = [
-    `${c.dim('contexto')} ${win} ${c.dim('tokens')}`,
-    `${c.dim('salida')} ${k(outputTokens)}`,
-    `${c.dim('pasos')} ${steps}`,
+    `${c.dim(t('cliCtxContext'))} ${win} ${c.dim('tokens')}`,
+    `${c.dim(t('cliCtxOutput'))} ${k(outputTokens)}`,
+    `${c.dim(t('cliCtxSteps'))} ${steps}`,
     ...(ccr?.entries ? [`${c.dim('CCR')} ${ccr.entries}`] : [])
   ].join(c.dim('  ·  '));
   return box([`${c.bold(model)} ${c.dim('· ' + provider)}`, meta], { color: c.cyan });
@@ -91,12 +94,12 @@ export function summarizeObservation(action, obs = {}) {
   // AUTO-CORRECCIONES del loop: los textos largos ("unknown tool… use the FULL exact name…") son
   // instrucciones PARA EL MODELO (en inglés); al usuario se le muestra solo una línea tenue en su idioma.
   if (obs.error && /unknown tool/.test(obs.error)) {
-    return { correction: true, text: `la IA pidió una herramienta que no existe aquí (${action?.tool}) — se corrige sola` };
+    return { correction: true, text: t('cliObsUnknownTool', action?.tool) };
   }
   if (obs.error && obs.hint) {
-    return { correction: true, text: `argumentos incorrectos en ${action?.tool} — la IA consulta el formato y reintenta` };
+    return { correction: true, text: t('cliObsBadArgs', action?.tool) };
   }
-  if (obs.repeated) return { correction: true, text: 'acción repetida — se reutilizó el resultado del paso anterior' };
+  if (obs.repeated) return { correction: true, text: t('cliObsRepeated') };
   // Si el error trae el comando/ruta que lo causó, mostrarlo: "metacaracteres no permitidos" sin ver QUÉ
   // comando se rechazó no le dice nada a quien mira el tablero.
   if (obs.error) {
@@ -104,19 +107,19 @@ export function summarizeObservation(action, obs = {}) {
     return { error: true, text: cause ? `${truncate(String(cause), 60)} → ${obs.error}` : obs.error };
   }
   const tool = action?.tool || '';
-  if (tool === 'write') return { text: `${obs.path} ${obs.appended ? 'ampliado' : 'escrito'} (${obs.bytes ?? '?'} bytes)` };
-  if (tool === 'edit') return { text: `${obs.path} editado` };
-  if (tool === 'read') return { text: `${obs.path} leído (${String(obs.content ?? '').split('\n').length} líneas)` };
-  if (tool === 'list') return { text: `${obs.entries?.length ?? 0} entradas en ${obs.path}` };
-  if (tool === 'grep') return { text: `${obs.matches?.length ?? 0} coincidencia(s)` };
+  if (tool === 'write') return { text: obs.appended ? t('cliObsAppended', obs.path, obs.bytes ?? '?') : t('cliObsWritten', obs.path, obs.bytes ?? '?') };
+  if (tool === 'edit') return { text: t('cliObsEdited', obs.path) };
+  if (tool === 'read') return { text: t('cliObsRead', obs.path, String(obs.content ?? '').split('\n').length) };
+  if (tool === 'list') return { text: t('cliObsEntries', obs.entries?.length ?? 0, obs.path) };
+  if (tool === 'grep') return { text: t('cliObsMatches', obs.matches?.length ?? 0) };
   if (tool === 'bash') {
-    if (obs.timedOut) return { error: true, text: `timeout — el comando no terminó (¿pedía input interactivo?)` };
+    if (obs.timedOut) return { error: true, text: t('cliObsTimeout') };
     const first = String(obs.stdout || obs.stderr || '').split('\n').find((l) => l.trim()) || '';
     return { text: `exit ${obs.code}${first ? ` · ${truncate(first, 80)}` : ''}` };
   }
   if (tool === 'recall' || typeof obs.content === 'string') return { text: truncate(ccrPreview(obs.content ?? ''), 120) };
   if (typeof obs.text === 'string') return { text: truncate(ccrPreview(obs.text), 120) };   // MCP y afines
-  if (obs.schema) return { text: `esquema de ${obs.tool}` };
+  if (obs.schema) return { text: t('cliObsSchema', obs.tool) };
   if (obs.ok) return { text: 'ok' };
   return { text: truncate(obs, 100) };
 }
@@ -128,9 +131,6 @@ export function stepLine(r) {
   if (s.correction) return `  ${c.dim('⟳ ' + s.text)}`;
   return `  ${c.dim('→')} ${c.blue(r.action.tool)}  ${s.error ? c.red(s.text) : c.dim(s.text)}`;
 }
-
-// Tools MCP con nombre de lectura (list_*, get_*…): no cuentan como mutación.
-export const MCP_READONLY = /^(get|list|read|search|find|show|describe|status|inspect|doc)[_-]?/i;
 
 // Reporte DETERMINISTA de lo que el turno modificó de verdad, a partir de las observaciones (no del summary
 // del modelo, que puede alucinar éxito). files: escritos/editados con éxito; commands: bash con exit 0;
@@ -156,5 +156,5 @@ export function resultLine(result) {
 
 // Texto de la pregunta de aprobación (en amarillo para que resalte).
 export function approveText(label) {
-  return c.yellow(`  ¿Aprobar ${label}? [y/N] `);
+  return c.yellow(t('cliApproveQ', label));
 }

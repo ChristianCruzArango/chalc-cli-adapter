@@ -3,7 +3,22 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildBrowserTests, buildQaPlan, buildStartCommand, detectAuth, detectSurface, duplicateRequirementIds, environmentKey, findEnvironmentOptions, guessBaseUrls, listSpecs, probeDocker, probePlaywright, readSpecContext, requirementIds, requirements, selectEnvironment, waitForAny, waitForHttp, writeQaPlan } from '../lib/qa.mjs';
+import { buildBrowserTests, buildQaPlan, buildStartCommand, detectAuth, detectSurface, duplicateRequirementIds, environmentKey, findEnvironmentOptions, guessBaseUrls, listSpecs, probeDocker, probePlaywright, readSpecContext, requirementIds, requirements, resolveQaAuth, selectEnvironment, waitForAny, waitForHttp, writeQaPlan } from '../lib/qa.mjs';
+
+test('resolveQaAuth arma el header Bearer desde un token explícito, o null si no hay', () => {
+  // token pelado → se le antepone Bearer
+  assert.deepEqual(resolveQaAuth({ token: 'abc.def.ghi' }), { headers: { Authorization: 'Bearer abc.def.ghi' } });
+  // token que ya trae el prefijo (con cualquier caja) → no se duplica
+  assert.deepEqual(resolveQaAuth({ token: 'Bearer abc.def' }), { headers: { Authorization: 'Bearer abc.def' } });
+  assert.deepEqual(resolveQaAuth({ token: 'bearer  xyz' }), { headers: { Authorization: 'Bearer xyz' } });
+  // espacios y comillas envolventes que se cuelan al pegar el token
+  assert.deepEqual(resolveQaAuth({ token: '  "tok123"  ' }), { headers: { Authorization: 'Bearer tok123' } });
+  // sin token → null (nada que inyectar)
+  assert.equal(resolveQaAuth({}), null);
+  assert.equal(resolveQaAuth({ token: '' }), null);
+  assert.equal(resolveQaAuth({ token: '   ' }), null);
+  assert.equal(resolveQaAuth(), null);
+});
 
 test('detectAuth flags apps that require auth and surfaces the storage keys to ask the user', async () => {
   const withAuth = await mkdtemp(join(tmpdir(), 'chalc-auth-'));
@@ -123,6 +138,24 @@ test('QA offers conventional adapters for non-Node projects', async () => {
     assert.ok(options.some((item) => item.type === 'direct' && item.key === 'django'));
     assert.ok(options.some((item) => item.type === 'direct' && item.key === 'go'));
     assert.deepEqual(buildStartCommand(options.find((item) => item.key === 'go')), { command: 'go', args: ['run', '.'], down: null });
+  } finally { await rm(project, { recursive: true, force: true }); }
+});
+
+test('QA detecta el layout .NET estándar (.sln en la raíz, csproj ejecutable bajo src/)', async () => {
+  const project = await mkdtemp(join(tmpdir(), 'chalc-qa-sln-'));
+  try {
+    // micro típico: sln en la raíz; bajo src/ el Api (ejecutable: tiene appsettings) y librerías (no)
+    await writeFile(join(project, 'Mi.Micro.sln'), '');
+    await mkdir(join(project, 'src', 'Mi.Micro.Api'), { recursive: true });
+    await writeFile(join(project, 'src', 'Mi.Micro.Api', 'Mi.Micro.Api.csproj'), '<Project/>');
+    await writeFile(join(project, 'src', 'Mi.Micro.Api', 'appsettings.json'), '{}');
+    await mkdir(join(project, 'src', 'Mi.Micro.Domain'), { recursive: true });
+    await writeFile(join(project, 'src', 'Mi.Micro.Domain', 'Mi.Micro.Domain.csproj'), '<Project/>');
+    const options = await findEnvironmentOptions(project);
+    const dotnet = options.filter((o) => o.type === 'direct' && o.key === 'dotnet');
+    assert.equal(dotnet.length, 1);   // solo el proyecto EJECUTABLE; las librerías no se ofrecen
+    assert.deepEqual(dotnet[0].args, ['run', '--project', join('src', 'Mi.Micro.Api')]);
+    assert.match(dotnet[0].label, /Mi\.Micro\.Api/);
   } finally { await rm(project, { recursive: true, force: true }); }
 });
 

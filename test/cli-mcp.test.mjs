@@ -121,6 +121,9 @@ test('unwrapMcpResult aplana el envoltorio MCP a texto/error para el modelo', ()
   assert.deepEqual(unwrapMcpResult({ content: [{ type: 'text', text: 'boom' }], isError: true }), { error: 'boom' });
   assert.deepEqual(unwrapMcpResult({ content: [] }), { ok: true });
   assert.match(unwrapMcpResult({ content: [{ type: 'image', data: 'x' }] }).text, /no textual/);
+  const safe = unwrapMcpResult({ content: [{ type: 'text', text: 'Authorization: Bearer secret-token\nkey=sk-proj-1234567890abcdefghijklmnop' }] });
+  assert.doesNotMatch(safe.text, /secret-token|sk-proj-1234567890abcdefghijklmnop/);
+  assert.match(safe.text, /\[REDACTED\]/);
 });
 
 test('el índice de tools MCP anuncia los args (con * los obligatorios) y expone argHints', async () => {

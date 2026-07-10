@@ -176,6 +176,70 @@ test('bash bloquea flags de evaluación inline (node -e, python -c, git -c)', as
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test('bash bloquea argumentos de ruta que escapan del proyecto antes de pedir aprobación', async () => {
+  const root = await makeRoot();
+  let approvals = 0;
+  try {
+    const { bash } = createShellTool({
+      root,
+      allow: ['cat', 'type', 'npm'],
+      approve: async () => { approvals++; return true; }
+    });
+    assert.match((await bash.run({ command: 'cat /etc/passwd' })).error, /outside the project/);
+    assert.match((await bash.run({ command: 'cat "/etc/passwd"' })).error, /outside the project/);
+    assert.match((await bash.run({ command: 'cat ../secret.txt' })).error, /outside the project/);
+    assert.match((await bash.run({ command: 'cat ~/.ssh/config' })).error, /outside the project/);
+    assert.match((await bash.run({ command: 'type C:\\Users\\me\\secret.txt' })).error, /outside the project/);
+    assert.match((await bash.run({ command: 'npm --prefix=.. test' })).error, /outside the project/);   // .. escapa aunque sea valor de opción
+    assert.equal(approvals, 0);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('bash NO bloquea valores absolutos de opciones legítimas (base-href), pero sí rutas absolutas posicionales', async () => {
+  const root = await makeRoot();
+  try {
+    // approve:false → si PASA el guard de rutas llega a "not approved" (sin ejecutar); si el guard lo
+    // bloquea, el error sería "outside the project". Así distinguimos sin correr el comando de verdad.
+    const { bash } = createShellTool({ root, allow: ['ng', 'cat'], approve: async () => false });
+    // falsos positivos que ANTES bloqueaban builds Angular legítimos: ahora pasan el guard
+    assert.match((await bash.run({ command: 'ng build --base-href /app/' })).error, /not approved/);
+    assert.match((await bash.run({ command: 'ng build --base-href=/app/' })).error, /not approved/);
+    // pero una ruta absoluta POSICIONAL a un archivo sigue bloqueada por el guard
+    assert.match((await bash.run({ command: 'cat /etc/passwd' })).error, /outside the project/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('bash bloquea rutas absolutas aunque intenten disfrazarse de valor de opción', async () => {
+  const root = await makeRoot();
+  try {
+    // approve:false → "not approved" significa que PASÓ el guard; "outside the project" que lo bloqueó.
+    const { bash } = createShellTool({ root, allow: ['cat'], approve: async () => false });
+    // `--` es el separador POSIX de fin de opciones: lo que sigue es posicional por definición
+    assert.match((await bash.run({ command: 'cat -- /etc/passwd' })).error, /outside the project/);
+    // un flag corto booleano (-v) no convierte al siguiente token en "valor de opción"
+    assert.match((await bash.run({ command: 'cat -v /etc/passwd' })).error, /outside the project/);
+    // ~usuario/ expande al home de OTRO usuario, igual de fuera del proyecto que ~/
+    assert.match((await bash.run({ command: 'cat ~root/.bashrc' })).error, /outside the project/);
+    assert.match((await bash.run({ command: 'cat ~root' })).error, /outside the project/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('bash NO bloquea asignaciones VAR=/ruta ni switches MSBuild /t:x (falsos positivos)', async () => {
+  const root = await makeRoot();
+  try {
+    const { bash } = createShellTool({ root, allow: ['make', 'dotnet', 'git'], approve: async () => false });
+    // asignación estilo make: la ruta absoluta es el VALOR de la variable, no un archivo posicional
+    assert.match((await bash.run({ command: 'make install PREFIX=/usr/local' })).error, /not approved/);
+    // switch estilo MSBuild (/t:Build, /p:Config=Release): no es una ruta
+    assert.match((await bash.run({ command: 'dotnet msbuild /t:Build' })).error, /not approved/);
+    assert.match((await bash.run({ command: 'dotnet build /p:Configuration=Release' })).error, /not approved/);
+    // pero el traversal en el valor de una asignación sigue bloqueado (make PREFIX=.. escapa)
+    assert.match((await bash.run({ command: 'make install PREFIX=../fuera' })).error, /outside the project/);
+    // y una opción larga con valor separado sigue pasando (comportamiento previo intacto)
+    assert.match((await bash.run({ command: 'git log --format=%H' })).error, /not approved/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('bash aplica timeout y lo reporta como timedOut sin colgar el turno', async () => {
   const root = await makeRoot({ 'espera.mjs': 'setInterval(function(){}, 1000);' });
   try {

@@ -51,3 +51,18 @@ test('parseArgs accepts AI workflow flags', () => {
   assert.equal(flags['repair-model'], 'repair-x');
   assert.equal(flags.architecture, 'modular-clean-architecture');
 });
+
+test('parseArgs accepts deliver rerun flag', () => {
+  const { flags, positional } = parseArgs(['deliver', '.', '--spec', '001-login', '--env', 'start', '--rerun']);
+  assert.deepEqual(positional, ['deliver', '.']);
+  assert.equal(flags.spec, '001-login');
+  assert.equal(flags.env, 'start');
+  assert.equal(flags.rerun, true);
+});
+
+test('parseArgs accepts QA security opt-ins', () => {
+  const { flags } = parseArgs(['qa', '--allow-login', '--allow-external-login', '--screenshots']);
+  assert.equal(flags['allow-login'], true);
+  assert.equal(flags['allow-external-login'], true);
+  assert.equal(flags.screenshots, true);
+});

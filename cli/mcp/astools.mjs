@@ -6,6 +6,7 @@
 import { createStdioClient } from './client.mjs';
 import { createHttpClient } from './httpclient.mjs';
 import { frame } from '../prompts/text.mjs';
+import { redactSensitiveText } from '../../lib/redact.mjs';
 
 // Conecta los servidores del proyecto (config { id: {command,args,env} }). Falla por-servidor sin tumbar la
 // sesión: si uno no arranca (o tarda más que timeoutMs), se avisa y se sigue con los demás.
@@ -13,9 +14,12 @@ import { frame } from '../prompts/text.mjs';
 // approveServer(id, cfg): el .mcp.json viene DEL PROYECTO — abrir un repo ajeno no debe ejecutar sus comandos
 // sin que el usuario los vea y apruebe. Si devuelve false, ese servidor se omite.
 // cwd: directorio de trabajo por defecto para los servers (el del proyecto); la config propia puede sobreescribirlo.
-export async function connectMcpServers(servers = {}, { connect, onConnect, onWarn, approveServer, cwd, timeoutMs = 12000 } = {}) {
+export async function connectMcpServers(servers = {}, { connect, onConnect, onWarn, approveServer, cwd, timeoutMs = 12000, allowPrivateHttp = false } = {}) {
   // Transporte por config: { url } → servidor REMOTO (Streamable HTTP); { command } → proceso local (stdio).
-  const make = connect || ((cfg) => (cfg.url ? createHttpClient({ timeoutMs, ...cfg }) : createStdioClient({ timeoutMs, cwd, ...cfg })));
+  // allowPrivateHttp llega solo desde la configuración local del usuario; un .mcp.json nunca puede habilitarlo.
+  const make = connect || ((cfg) => (cfg.url
+    ? createHttpClient({ timeoutMs, ...cfg, allowPrivate: allowPrivateHttp })
+    : createStdioClient({ timeoutMs, cwd, ...cfg })));
   const connections = [];
   for (const [id, cfg] of Object.entries(servers)) {
     if (approveServer && !(await approveServer(id, cfg))) {
@@ -44,7 +48,7 @@ export function unwrapMcpResult(result) {
   const parts = (result?.content || [])
     .map((b) => (b?.type === 'text' ? b.text : `[${b?.type || 'bloque'} no textual]`))
     .filter(Boolean);
-  const text = parts.join('\n').trim();
+  const text = redactSensitiveText(parts.join('\n').trim());
   if (result?.isError) return { error: text || 'el tool MCP reportó un error' };
   return text ? { text } : { ok: true };
 }
@@ -79,7 +83,7 @@ export function mcpToolsForAgent(connections = [], { approve = async () => true,
           try {
             out = unwrapMcpResult(await client.callTool(t.name, args));
           } catch (e) {
-            out = { error: e?.message || String(e) };   // JSON-RPC error (p. ej. -32602 args inválidos)
+            out = { error: redactSensitiveText(e?.message || String(e)) };   // JSON-RPC error (p. ej. -32602 args inválidos)
           }
           if (out.error) {
             out.error = compactError(out.error);

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { t } from '../lib/i18n.mjs';
 import { runAgent } from '../cli/engine/loop.mjs';
 
 // renderPrompt trivial: el motor no depende del texto del harness, así que el test inyecta uno mínimo.
@@ -100,7 +101,7 @@ test('runAgent corta el turno si el modelo repite 3 veces la MISMA acción falli
   ]);
   const r = await runAgent({ chatImpl, tools, renderPrompt, maxSteps: 12 });
   assert.equal(r.done, false);
-  assert.match(r.error, /bucle detectado/);
+  assert.equal(r.error, t('cliLoopDetected', 'mcp__cli', r.steps[1].observation.error));   // cortacircuito, en el idioma activo
   assert.equal(r.steps.length, 2);   // 2 fallos registrados; el 3º corta sin quemar los 12 pasos
   // y el error del nombre truncado trae un ejemplo copiable del nombre completo
   assert.match(r.steps[0].observation.error, /FULL exact name, e\.g\. "mcp__cli__/);
@@ -216,7 +217,7 @@ test('runAgent se detiene entre pasos cuando shouldStop devuelve true (interrupc
   const r = await runAgent({ chatImpl, tools, renderPrompt, shouldStop: () => stop, onStep: () => { stop = true; } });
   assert.equal(r.done, false);
   assert.equal(r.interrupted, true);
-  assert.match(r.error, /interrumpido/);
+  assert.equal(r.error, t('cliLoopInterrupted'));
   assert.equal(calls, 1);   // el primer paso corrió; el segundo ya no
 });
 
@@ -253,7 +254,7 @@ test('runAgent reintenta un turno malformado sin gastar un paso del presupuesto'
 test('runAgent falla limpio si agota los reintentos con respuestas inválidas', async () => {
   const r = await runAgent({ chatImpl: async () => 'basura', tools: {}, renderPrompt, maxSteps: 2, maxRetries: 1 });
   assert.equal(r.done, false);
-  assert.match(r.error, /Sin turno válido tras 2 intentos/);
+  assert.ok(r.error.startsWith(t('cliLoopNoValidTurn', 2, '')));   // "tras 2 intentos", idioma-independiente
 });
 
 test('runAgent se recupera si chatImpl falla una vez (red) y luego responde', async () => {
@@ -271,7 +272,7 @@ test('runAgent se recupera si chatImpl falla una vez (red) y luego responde', as
 test('runAgent reporta el error del modelo si chatImpl siempre falla', async () => {
   const r = await runAgent({ chatImpl: async () => { throw new Error('servidor caído'); }, tools: {}, renderPrompt, maxSteps: 2, maxRetries: 1 });
   assert.equal(r.done, false);
-  assert.match(r.error, /error al llamar al modelo: servidor caído/);
+  assert.ok(r.error.includes(t('cliLoopModelError', 'servidor caído')));
 });
 
 test('runAgent se detiene al agotar los pasos sin done', async () => {
@@ -280,7 +281,7 @@ test('runAgent se detiene al agotar los pasos sin done', async () => {
   const r = await runAgent({ chatImpl, tools, renderPrompt, maxSteps: 3 });
   assert.equal(r.done, false);
   assert.equal(r.steps.length, 3);
-  assert.match(r.error, /agotaron los 3 pasos/);
+  assert.equal(r.error, t('cliLoopStepsExhausted', 3));
 });
 
 test('runAgent emite cada paso por onStep', async () => {
@@ -322,7 +323,7 @@ test('tras 3 "repeated" seguidos con mutación previa exitosa el paso se cierra 
   const turns = [w, w, w, w];   // escribe una vez, luego repite idéntico (3 repeated) — jamás emite done
   const r = await runAgent({ chatImpl: async () => turns[Math.min(i++, turns.length - 1)], tools, renderPrompt });
   assert.equal(r.done, true);
-  assert.match(r.summary, /ya estaba aplicado/);
+  assert.equal(r.summary, t('cliLoopAutoDone'));
   assert.equal(r.steps.filter((s) => s.observation?.repeated).length, 3);
 });
 
@@ -333,7 +334,7 @@ test('tras 3 "repeated" seguidos SIN mutación el turno falla con error claro', 
   const turns = [rTurn, rTurn, rTurn, rTurn];
   const r = await runAgent({ chatImpl: async () => turns[Math.min(i++, turns.length - 1)], tools, renderPrompt });
   assert.equal(r.done, false);
-  assert.match(r.error, /sin producir cambios/);
+  assert.equal(r.error, t('cliLoopRepeatsNoChange'));
 });
 
 test('un error al llamar al modelo emite un evento visible por onStep y NO contamina los steps', async () => {
@@ -349,8 +350,9 @@ test('un error al llamar al modelo emite un evento visible por onStep y NO conta
   // 2 fallos → 2 avisos de reintento con contador, por el MISMO canal que pinta los pasos
   const retries = events.filter((e) => e.action?.tool === 'modelo');
   assert.equal(retries.length, 2);
-  assert.match(retries[0].observation.error, /Timeout.*reintento 1\/3/);
-  assert.match(retries[1].observation.error, /reintento 2\/3/);
+  const modelErr = t('cliLoopModelError', 'Timeout al conectar con http://localhost:11434/api/chat');
+  assert.equal(retries[0].observation.error, t('cliLoopRetry', modelErr, 1, 3));
+  assert.equal(retries[1].observation.error, t('cliLoopRetry', modelErr, 2, 3));
   // ...pero los steps del resultado quedan limpios: el modelo nunca ve estos eventos
   assert.equal(r.steps.length, 0);
 });

@@ -181,7 +181,7 @@ test('buildProjectSections incluye el README (acotado) incluso sin proyecto equi
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('las best practices del MCP DEL stack entran al contexto; las de otro stack NO', async () => {
+test('la sesión nunca invoca best practices MCP automáticamente; la tool queda disponible con aprobación', async () => {
   const mkProject = (stack, mcpId) => makeProject({
     '.chalc.json': JSON.stringify({ target: 'claude', stacks: [stack], skills: [], mcp: [mcpId] }),
     '.mcp.json': JSON.stringify({ mcpServers: { [mcpId]: { command: 'x' } } })
@@ -193,7 +193,7 @@ test('las best practices del MCP DEL stack entran al contexto; las de otro stack
     stop: async () => {}
   });
 
-  // Proyecto Angular + MCP angular-cli → el orquestador consulta las prácticas y las inyecta.
+  // Proyecto Angular + MCP angular-cli: el nombre de la tool no basta para asumir que es de lectura.
   const dirA = await mkProject('angular', 'angular-cli');
   try {
     const calls = [];
@@ -202,14 +202,14 @@ test('las best practices del MCP DEL stack entran al contexto; las de otro stack
       projectPath: dirA, mcpConnect: mkConnect(calls), language: 'es',
       chatImpl: async (m) => { system = m.system; return '{"done":true,"summary":"ok"}'; }
     });
-    assert.deepEqual(calls, ['get_best_practices']);   // consultado UNA vez, por el orquestador
+    assert.deepEqual(calls, []);                       // ninguna llamada automática al abrir el proyecto
     await session.ask('crea un feature');
-    assert.match(system, /framework best practices/);
-    assert.match(system, /do NOT use NgModules/);      // planner/coder/reviewer lo verán
+    assert.doesNotMatch(system, /framework best practices/);
+    assert.ok(session.tools.includes('mcp__angular-cli__get_best_practices'));
     await session.close();
   } finally { await rm(dirA, { recursive: true, force: true }); }
 
-  // Proyecto de OTRO stack (dotnet) con un MCP que no le corresponde → NO se consulta ni se inyecta.
+  // El mismo comportamiento se conserva aunque el MCP no corresponda al stack.
   const dirB = await mkProject('dotnet', 'angular-cli');
   try {
     const calls = [];
@@ -218,7 +218,7 @@ test('las best practices del MCP DEL stack entran al contexto; las de otro stack
       projectPath: dirB, mcpConnect: mkConnect(calls), language: 'es',
       chatImpl: async (m) => { system = m.system; return '{"done":true,"summary":"ok"}'; }
     });
-    assert.deepEqual(calls, []);   // ni una llamada: las prácticas no aplican a este stack
+    assert.deepEqual(calls, []);
     await session.ask('crea un feature');
     assert.doesNotMatch(system, /framework best practices/);
     await session.close();

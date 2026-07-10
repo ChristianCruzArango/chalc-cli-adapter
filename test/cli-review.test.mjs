@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { t } from '../lib/i18n.mjs';
 import { collectChanges, runReviewer, touchedPaths } from '../cli/engine/review.mjs';
 import { savePlan, markStepDone } from '../cli/engine/planfile.mjs';
 import { createSession } from '../cli/session.mjs';
@@ -60,7 +61,7 @@ test('runReviewer sin veredicto (error del modelo) no aprueba ni inventa hallazg
   const r = await runReviewer({ chatImpl: async () => 'basura', tools: {}, task: 't', changes: 'diff', maxSteps: 2 });
   assert.equal(r.ok, false);
   assert.equal(r.findings, '');
-  assert.match(r.error, /Sin turno válido/);
+  assert.ok(r.error.startsWith(t('cliLoopNoValidTurn', 3, '')));   // idioma-independiente (es/en)
 });
 
 test('flujo por sesión: coder escribe → review ve los cambios con rol revisor y SOLO lectura', async () => {

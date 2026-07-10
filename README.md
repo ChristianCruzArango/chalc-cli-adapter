@@ -50,10 +50,13 @@ This way, an Angular project can receive its Angular skills, a NestJS one its ba
 | `chalc qa <path> --spec 004-login --env serve --url http://localhost:3000 --up` | Brings up the environment, waits for the URL to respond, then tears it down | no |
 | `chalc qa <path> --spec 004-login --env serve --url http://localhost:3000 --agent` | Brings up the app, runs the QA agent (verifies each R# against the live app), writes `qa/results.md`, and tears down | yes |
 | `chalc qa <path> ... --agent --repair-plan` | Also generates `qa/repair-plan.md` from FAIL/BLOCKED | yes |
+| `chalc deliver <path> --spec 004-login --env serve --allow-exec` | QA → repair-plan → verify → rerun flow; stops on FAIL/BLOCKED so you can repair and continue with `--rerun` | yes |
 | `chalc qa <path> ... --agent --surface web\|api` | Forces the surface (browser vs HTTP) if autodetection gets it wrong | yes |
+| `chalc tokens <path> [--json]` | Shows the project's accumulated AI spend (tokens + estimated USD) by command, task/role, and model | no |
+| `chalc update [id…] [--check]` | Syncs installed skills with their source (git/skills.sh/local) and regenerates `skills-lock.json`; `--check` only reports | no |
 
 Most commands have an `npm run <command>` equivalent (e.g. `npm run spec-ia`) in case you don't run
-`npm link`; the exceptions are `qa`, `verify`, `install`, and `feature`, which you invoke as `npm start -- <command> …`.
+`npm link`; the exceptions are `qa`, `deliver`, `verify`, `install`, and `feature`, which you invoke as `npm start -- <command> …`.
 The whole CLI is **bilingual (es/en)**. By default it follows the operating system's language, but you can
 set it once with **`chalc lang es`** or **`chalc lang en`** (it's saved and applies to all
 your projects, without having to touch environment variables every time).
@@ -207,8 +210,7 @@ With `--agent`, chalc **brings up your app, tests it like a person, and reports*
 1. **Brings up the environment** without forcing a port and **reads the URL the dev server announces** (`ng serve` → `:4201`,
    Vite → `:5173`…), respecting the app's config (forcing a port breaks Module Federation). `--url` sets it.
 2. **Detects the surface** (web vs API) by stack; `--surface web|api` forces it.
-3. **If the app requires authentication, it ASKS you** (doesn't fail silently): it detects guards/MSAL/Bearer interceptor
-   and asks how to inject the session (token in localStorage/sessionStorage or `Authorization: Bearer` header).
+3. **If the app requires authentication, it gets a session for you** (doesn't fail silently) — see "QA login" below.
 4. **Explores and verifies with an AI agent** (provider-agnostic): the verdict is anchored in observed facts
    (HTTP status, visible text/element), never assumptions — a requirement without evidence stays `BLOCKED`,
    never a fabricated `PASS`. The step budget scales with the `R#` count (`--max-steps` adjusts it).
@@ -222,6 +224,71 @@ chalc qa . --spec 004-login --env start --agent --url http://localhost:3000 --su
 chalc qa . --spec 004-login --env start --agent --repair-plan --allow-exec
 chalc qa . --spec 004-login --repair-plan                 # generates repair-plan from existing qa/results.md
 ```
+
+### QA login: chalc gets the token for you (don't paste JWTs)
+To test protected endpoints the agent needs a session. Pasting a raw JWT is painful (it expires, it's huge), so
+chalc can **log in for you**: declare your app's login contract once and chalc asks *which user* and mints the token.
+
+Session resolution order for `--agent`:
+1. **Direct token** (CI or external token): `--auth-token <jwt>` or `CHALC_QA_TOKEN` — used as-is, wins over everything.
+2. **Login by credentials**: if the project declares a `qa.login` contract, chalc asks for the credentials
+   (interactive) — or reads them from `--auth-<field>` / `CHALC_QA_<FIELD>` (non-interactive) — brings the app up,
+   calls the login endpoint, extracts the token, and injects it. Interactive mode shows and confirms the destination
+   before requesting secrets; non-interactive mode requires `--allow-login`. By default the endpoint must be the app's
+   own origin or loopback (`--allow-external-login` is an explicit HTTPS-only exception). Credentials are never printed or stored.
+3. **Classic**: detects guards/MSAL/Bearer interceptor and asks how to inject the session (storage or header).
+
+Declare the contract in `.chalc.json` (`qa.login`) — or per spec in `specs/<id>/qa/inputs.json` (`login`, takes precedence):
+
+```jsonc
+// .chalc.json — example matching a dev login endpoint that mints a token from a userType
+"qa": { "login": {
+  "url": "http://localhost:5002/api/auth/generate-token",
+  "method": "POST",
+  "query":     { "userType": "${userType}" },   // ${field} is filled from the collected credentials
+  "tokenPath": "datos.token",                    // dot-path to the token in the JSON response
+  "fields":    [{ "name": "userType", "label": "User type", "default": "admin" }]
+} }
+// classic login instead: "body": { "email": "${email}", "password": "${password}" }, "tokenPath": "token",
+//                        "fields": [{ "name": "email" }, { "name": "password", "secret": true }]
+```
+
+```bash
+chalc qa . --spec 012 --env dotnet --agent --allow-exec            # interactive: asks "User type [admin]"
+CHALC_QA_USERTYPE=admin chalc qa . --spec 012 --agent --allow-exec --allow-login  # non-interactive (CI)
+```
+
+A failed login (bad credentials, endpoint down, `tokenPath` missing) aborts the agent with a clear error and still
+tears the environment down — it never runs the agent unauthenticated.
+
+### Deliver flow: QA → repair → verify → rerun
+`chalc deliver` chains a release-quality gate without inventing fixes:
+
+1. Runs `qa --agent --repair-plan`.
+2. If any `FAIL`/`BLOCKED` remains, writes `qa/repair-plan.md` and stops so you can apply the repair.
+3. Continue with `chalc deliver ... --rerun`: it runs `verify` first; if that passes, it reruns QA.
+
+```bash
+chalc deliver . --spec 004-login --env start --allow-exec
+chalc deliver . --spec 004-login --env start --rerun --allow-exec
+```
+
+### AI spend history: `chalc tokens`
+Every AI call (from `spec-ia`, `feature`, `qa`, `deliver`, `init`, and the `chalc-cli` shell) is recorded in the
+project's `.chalc/tokens.jsonl` — date, command, task/role, provider, model, and tokens. `chalc tokens` aggregates
+that history so you can see where the money goes and measure savings:
+
+```bash
+chalc tokens .           # total + breakdown by command, task/role, and model, with estimated USD
+chalc tokens . --json    # same aggregate as clean JSON (for scripts/CI)
+```
+
+- USD amounts are **estimates** from a local price table (per 1M tokens); models without a known price are
+  flagged as such — never guessed. Local providers (Ollama) count as $0.
+- You can set or override prices in `~/.chalc/config.json`:
+  `"prices": { "<model>": { "input": USD_per_1M, "output": USD_per_1M } }`.
+- Logging is best-effort and append-only: it never breaks a command, and the spend is persisted even when a
+  command fails after paying for tokens.
 
 ### Token handling in the QA agent (CCR, built in)
 The agent (`qa --agent`) ships its own **CCR (Reversible Compression)**, inspired by Headroom but **with no
@@ -311,6 +378,19 @@ chalc/
 │       ├── spec-gen.prompt.xml       spec generation (fidelity harness)
 │       ├── init-architect.prompt.xml architecture suggestion (ally, not oracle)
 │       └── qa-agent.prompt.xml       fact-anchored QA verification
+├── cli/                     interactive shell and agent-team orchestrator
+│   ├── index.mjs            REPL, slash commands, live queue, and leader/dev/reviewer coordination
+│   ├── session.mjs          session, per-role models, context, and observable lifecycle
+│   ├── agents/
+│   │   └── registry.mjs     run registry: status, task, tool, timing, and errors
+│   ├── ui/
+│   │   ├── screen.mjs       pinned-input TUI, history, and typing while agents work
+│   │   ├── render.mjs       shared ANSI presentation
+│   │   └── agents.mjs       adaptive `/agents` panel/graph
+│   ├── engine/              plan→action→observation loop, planner, reviewer, and budgeting
+│   ├── tools/               confined filesystem and approval-gated shell
+│   ├── mcp/                 stdio/HTTP MCP clients and agent-tool adaptation
+│   └── skills/loader.mjs    equipped skills → relevant agent context
 ├── catalog/
 │   ├── skills/              the real skills (self-contained, portable)
 │   ├── mcp/                 MCP server definitions
@@ -413,6 +493,21 @@ You can also paste full commands from the new skills CLI:
 ```bash
 chalc install "npx skills add https://github.com/wshobson/agents --skill angular-migration" --allow-exec
 ```
+
+### Keeping installed skills fresh: `chalc update`
+Every installed skill keeps a manifest (`catalog/skills/<id>/.chalc-skill.json`) with its source and a
+content hash. `chalc update` re-downloads each source, compares hashes, and replaces only what actually
+changed — then regenerates `skills-lock.json` as a faithful mirror of the catalog:
+
+```bash
+chalc update --check                 # report only: up to date / outdated / error (writes nothing)
+chalc update                         # apply updates (asks before running git/npx; --allow-exec skips the question)
+chalc update angular-migration       # update only the given skill(s)
+```
+
+- A broken source doesn't abort the rest: it's reported per skill and the run continues.
+- Catalog builtins (no source) are skipped and counted as non-updatable.
+- After updating, re-run `chalc apply` on your projects to propagate the new skill content.
 
 ### Typical flow: adding an MCP
 
@@ -636,7 +731,12 @@ project you point it at — ideally one already equipped by chalc.
   doesn't fill up; the agent expands them on demand with `recall`.
 - **Runtime control** (Claude Code style): `/model [name]` switches the model **hot** without losing
   the conversation, `/tools` lists the available tools (fs + shell + MCP), `/tokens` shows the
-  session's accumulated usage, `/clear` resets the conversation, `/skills`, `/mcp`, `/help`, `/exit`.
+  session's accumulated usage, `/agents` shows the team and its current activity, `/clear` resets
+  the conversation, `/skills`, `/mcp`, `/help`, `/exit`.
+- **Non-blocking agent panel**: `/agents` is handled immediately even while an agent is working or
+  waiting for approval; it is not paused, interrupted, or queued. It shows status, elapsed time,
+  model/provider, task, and the latest real tool used by the leader, developer, and reviewer. The
+  input box remains available for typing or queueing changes.
 - **Interrupt without quitting**: `ESC` (in the TUI) or `Ctrl+C` (in scroll mode) cancel the running
   turn — the agent stops at the end of the current step and does NOT execute whatever action it was
   proposing; the session stays alive. In the TUI you can also **keep typing while it works**:
@@ -681,7 +781,10 @@ auditable artifacts persisted in the project.
    runs as the final deterministic gate.
 
 Additional optional configuration in `~/.chalc/config.json`, under the `cli` block: `numCtx` (model
-window), `allow` (shell allowlist), `budgetTokens` (prompt budget), and `maxSteps` (steps per instruction).
+window), `trust` (`safe`, `dev`, `trusted` shell profile), `allow` (custom shell allowlist),
+`mcpApproval` (`always` by default; use `mutating` only for a trusted server), `mcpEnvAllowlist` (environment
+variables a project MCP may resolve), `allowPrivateMcpHttp` (local opt-in for a private HTTP MCP), `budgetTokens`
+(prompt budget), and `maxSteps` (steps per instruction).
 
 ## Test-First + Mutation testing (quality)
 
@@ -711,12 +814,15 @@ production); audit them with `npm audit` / `dotnet list package --vulnerable` / 
 
 ## Security
 
-- The **API key** lives in `~/.chalc/config.json` (`600` permissions), **never** in the project or in `.chalc.json`; masked input.
+- The **API key** lives in `~/.chalc/config.json` (`600` file / `700` directory permissions), **never** in the project or in `.chalc.json`; masked input and atomic local writes.
 - Remote sources for `spec-ia` use timeout, size limit, and redirect validation; non-HTTP(S) protocols, `localhost`, and private/local IPs are blocked.
 - Calls to AI providers have a timeout to avoid hung processes.
 - AI traces store hashes, counts, and metadata; they don't store prompts, source documents, or secrets.
 - The ids of targets, skills, MCP, rules, and methods are validated as safe kebab-case before being used as paths or imports.
 - Installing skills from Git/GitHub or `skills.sh` requires interactive confirmation or `--allow-exec` in non-interactive mode.
+- Remote MCP HTTP endpoints are validated against public DNS/IPs, redirects are rejected, and every MCP call requires approval by default. Private HTTP MCP is a local-user opt-in, never enabled by a project.
+- QA login confirms its destination before accepting credentials; screenshots are off by default (`--screenshots`) and, when requested, are kept under ignored `.chalc/qa-evidence/`.
+- Skill updates stage, verify and atomically swap the vendored copy, preserving the previous version if validation fails.
 - The **mutation tools** are installed **project-local** (dev-dependency / tool-manifest), never `-g` global.
 - Chalc **doesn't overwrite** your `CLAUDE.md`: it only edits its block between `<!-- chalc:start -->` and `<!-- chalc:end -->`; the rest is preserved.
 - Skills are **vendored** (real content, no symlinks) and ship with `.chalc-skill.json` containing source, date, and hash.

@@ -10,6 +10,7 @@
 import { chat } from '../../lib/ai.mjs';
 import { fetchWithTimeout, readLimitedText } from '../../lib/net.mjs';
 import { recordUsage } from '../../lib/tokenmeter.mjs';
+import { logAiCall } from '../../lib/tokenlog.mjs';
 
 // Timeout de inferencia local: en CPU un modelo 14-20B con prompt largo + razonamiento toma MINUTOS
 // legítimamente (no es un cuelgue). Configurable con cli.timeoutMs para hardware más lento/rápido.
@@ -68,7 +69,9 @@ export async function chatOllama(cfg, { system, user, numCtx = OLLAMA_DEFAULT_CT
   const j = await res.json();
   // Ollama nativo reporta el consumo como prompt_eval_count/eval_count; se normaliza al medidor común.
   if (j.prompt_eval_count != null || j.eval_count != null) {
-    recordUsage({ prompt_tokens: j.prompt_eval_count || 0, completion_tokens: j.eval_count || 0 });
+    const usage = { prompt_tokens: j.prompt_eval_count || 0, completion_tokens: j.eval_count || 0 };
+    recordUsage(usage);
+    logAiCall({ provider: cfg.provider || 'ollama', model: cfg.model, task: cfg.task }, usage);   // histórico por proyecto (R1)
   }
   const msg = j.message || {};
   if (msg.content && msg.content.trim()) return msg.content;

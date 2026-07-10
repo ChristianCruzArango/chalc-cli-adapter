@@ -42,7 +42,7 @@ function fakeMcpServer({ requireSession = true } = {}) {
 
 test('createHttpClient: handshake con sesión, tools/list (JSON) y tools/call (SSE)', async () => {
   const { server, seen, url } = await fakeMcpServer();
-  const client = createHttpClient({ url, timeoutMs: 5000 });
+  const client = createHttpClient({ url, timeoutMs: 5000, allowPrivate: true });
   try {
     await client.start();
     const tools = await client.listTools();
@@ -73,7 +73,7 @@ test('createHttpClient: headers extra (p. ej. Authorization) viajan en cada requ
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const url = `http://127.0.0.1:${server.address().port}/`;
   try {
-    const client = createHttpClient({ url, headers: { authorization: 'Bearer tok-123' }, timeoutMs: 5000 });
+    const client = createHttpClient({ url, headers: { authorization: 'Bearer tok-123' }, timeoutMs: 5000, allowPrivate: true });
     await client.start();
     assert.ok(authSeen.every((a) => a === 'Bearer tok-123'));
   } finally { server.close(); }
@@ -83,13 +83,23 @@ test('createHttpClient: error HTTP y URL inalcanzable lanzan con detalle', async
   const server = createServer((_req, res) => res.writeHead(500).end());
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   try {
-    const bad = createHttpClient({ url: `http://127.0.0.1:${server.address().port}/`, timeoutMs: 3000 });
+    const bad = createHttpClient({ url: `http://127.0.0.1:${server.address().port}/`, timeoutMs: 3000, allowPrivate: true });
     await assert.rejects(() => bad.listTools(), /MCP HTTP 500/);
   } finally { server.close(); }
-  const unreachable = createHttpClient({ url: 'http://127.0.0.1:1/', timeoutMs: 1500 });
+  const unreachable = createHttpClient({ url: 'http://127.0.0.1:1/', timeoutMs: 1500, allowPrivate: true });
   await assert.rejects(() => unreachable.listTools(), /no se pudo contactar/);
 });
 
 test('createHttpClient exige url', () => {
   assert.throws(() => createHttpClient({}), /falta "url"/);
+});
+
+test('createHttpClient bloquea una URL privada antes de hacer la petición salvo opt-in local', async () => {
+  let called = false;
+  const client = createHttpClient({
+    url: 'http://127.0.0.1:12345/mcp',
+    fetchImpl: async () => { called = true; throw new Error('no debería llegar'); }
+  });
+  await assert.rejects(() => client.listTools(), /URL no permitida/);
+  assert.equal(called, false);
 });

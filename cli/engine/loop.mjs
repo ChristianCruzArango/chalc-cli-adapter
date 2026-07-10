@@ -8,6 +8,7 @@
 // Esa inversión de dependencias hace el motor testeable sin tokens y reutilizable por cualquier shell.
 
 import { createCcrStore, compactObject } from '../../lib/ccr.mjs';
+import { t } from '../../lib/i18n.mjs';
 import { readTurn, retryMessage } from './protocol.mjs';
 
 // Ejecuta una herramienta de forma segura: un fallo del executor se vuelve observación, no una excepción
@@ -34,7 +35,7 @@ export async function runAgent({ chatImpl, tools = {}, renderPrompt, ccr, maxSte
   const history = [];
   const finish = (extra) => ({ steps: history, ccr: store?.stats() || null, ...extra });
   const push = (record) => { history.push(record); if (onStep) onStep(record); };
-  const interrupted = () => finish({ done: false, interrupted: true, error: 'interrumpido por el usuario' });
+  const interrupted = () => finish({ done: false, interrupted: true, error: t('cliLoopInterrupted') });
 
   for (let step = 1; step <= maxSteps; step++) {
     if (shouldStop?.()) return interrupted();
@@ -52,11 +53,11 @@ export async function runAgent({ chatImpl, tools = {}, renderPrompt, ccr, maxSte
       try {
         raw = await chatImpl({ system, user });
       } catch (e) {
-        lastError = `error al llamar al modelo: ${e?.message || e}`;
+        lastError = t('cliLoopModelError', e?.message || e);
         retryNote = '';
         // Reintento VISIBLE: sin este aviso, 3 timeouts consecutivos de 5 min dejan la UI muda un cuarto
         // de hora y parece un cuelgue. Evento solo para la UI (NO entra a history: el modelo no lo ve).
-        onStep?.({ action: { tool: 'modelo' }, observation: { error: `${lastError} — reintento ${attempt + 1}/${maxRetries + 1}` } });
+        onStep?.({ action: { tool: 'modelo' }, observation: { error: t('cliLoopRetry', lastError, attempt + 1, maxRetries + 1) } });
         continue;
       }
       const parsed = readTurn(raw);
@@ -64,7 +65,7 @@ export async function runAgent({ chatImpl, tools = {}, renderPrompt, ccr, maxSte
       lastError = parsed.error;
       retryNote = retryMessage(parsed.error);
     }
-    if (!turn) return finish({ done: false, error: `Sin turno válido tras ${maxRetries + 1} intentos: ${lastError}` });
+    if (!turn) return finish({ done: false, error: t('cliLoopNoValidTurn', maxRetries + 1, lastError) });
 
     if (turn.kind === 'done') return finish({ done: true, summary: turn.summary });
 
@@ -77,7 +78,7 @@ export async function runAgent({ chatImpl, tools = {}, renderPrompt, ccr, maxSte
     const sameFailing = (r) => r.observation?.error && r.action?.tool === turn.tool
       && JSON.stringify(r.action?.args || {}) === JSON.stringify(turn.args || {});
     if (history.length >= 2 && history.slice(-2).every(sameFailing)) {
-      return finish({ done: false, error: `bucle detectado: el modelo repitió 3 veces la misma acción fallida (${turn.tool}: ${history[history.length - 1].observation.error}). Reformula la instrucción.` });
+      return finish({ done: false, error: t('cliLoopDetected', turn.tool, history[history.length - 1].observation.error) });
     }
 
     // recall: meta-herramienta del propio loop. Expande una referencia CCR desde la caché, sin ejecutar
@@ -173,8 +174,8 @@ export async function runAgent({ chatImpl, tools = {}, renderPrompt, ccr, maxSte
         const mutated = history.some((r) =>
           (['write', 'edit'].includes(r.action?.tool) && r.observation?.ok) ||
           (r.action?.tool === 'bash' && r.observation?.code === 0));
-        if (mutated) return finish({ done: true, summary: '(auto) el cambio ya estaba aplicado en pasos previos; el modelo repetía una acción ya ejecutada.' });
-        return finish({ done: false, error: 'bucle: el modelo repite acciones ya ejecutadas sin producir cambios.' });
+        if (mutated) return finish({ done: true, summary: t('cliLoopAutoDone') });
+        return finish({ done: false, error: t('cliLoopRepeatsNoChange') });
       }
       continue;
     }
@@ -187,5 +188,5 @@ export async function runAgent({ chatImpl, tools = {}, renderPrompt, ccr, maxSte
     });
   }
 
-  return finish({ done: false, error: `Se agotaron los ${maxSteps} pasos sin un turno "done".` });
+  return finish({ done: false, error: t('cliLoopStepsExhausted', maxSteps) });
 }

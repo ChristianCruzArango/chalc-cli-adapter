@@ -36,6 +36,24 @@ Escribe una instrucción. /exit para salir.
 
 La sesión es **continua**: cada mensaje mantiene el contexto de los anteriores.
 
+### Ver los agentes mientras trabajan
+
+En la TUI, `/agents` es un comando de observación fuera de banda: responde inmediatamente aunque el
+líder, desarrollador o revisor esté ejecutando una tarea. No pausa ni interrumpe el turno y la caja de
+entrada permanece disponible. El panel muestra estado, duración, modelo, tarea y última herramienta real
+utilizada; nunca expone el razonamiento privado del modelo.
+
+```text
+/agents
+
+╭─ AGENTES ─────────────────────────────────────────────────╮
+│ ● Desarrollador trabajando       00:18  qwen (ollama)     │
+│   └─ edit cli/index.mjs                                  │
+│ ○ Líder        inactivo          --:--                    │
+│ ○ Revisor      inactivo          --:--                    │
+╰────────────────────────────────────────────────────────────╯
+```
+
 ## Configuración
 
 Usa **exactamente** el proveedor/modelo que fijaste con `chalc config-ia` (o env `CHALC_PROVIDER`/`CHALC_MODEL`).
@@ -48,7 +66,11 @@ Opcional, en `~/.chalc/config.json`:
   "provider": "ollama",
   "model": "qwen2.5-coder:7b",   // lo eliges tú
   "cli": {
+    "trust": "dev",                    // safe | dev | trusted (perfil del shell)
     "allow": ["git", "npm", "node"],  // comandos que la tool bash puede correr (vacío = bash deshabilitado)
+    "mcpApproval": "always",          // always (default) | mutating (solo MCP confiables)
+    "mcpEnvAllowlist": ["CHALC_MCP_DB_URL"], // secretos que este usuario permite resolver al proyecto
+    "allowPrivateMcpHttp": false,      // solo el usuario local puede habilitar HTTP privado/loopback
     "numCtx": 16384,                  // ventana de Ollama (sube del default 2048)
     "budgetTokens": 6000,             // presupuesto de tokens del prompt
     "maxSteps": 12                    // pasos máximos por tarea
@@ -79,8 +101,13 @@ Idioma: sigue `chalc lang` (es/en). Todo el prompt del agente es bilingüe.
 ## Seguridad
 
 - Filesystem confinado a la raíz del proyecto (sin path traversal).
-- `write`/`edit`/`bash` y **toda** llamada MCP piden **aprobación** por acción.
-- `bash`: allowlist + sin metacaracteres de shell (un comando por acción).
+- `write`/`edit`/`bash` piden **aprobación** por acción.
+- MCP pide aprobación por servidor al conectar y por acción según `cli.mcpApproval`: `always` pregunta por toda llamada (default); `mutating` se reserva para servidores confiables. No hay llamadas MCP automáticas al abrir el proyecto.
+- `bash`: perfil de confianza + allowlist + ejecución sin shell en POSIX (argv estructurado) + guard
+  léxico de rutas (bloquea `..`, `~`/`~usuario` y rutas absolutas posicionales, también tras `--`).
+- `/auto` (auto-aprobación) tiene una **excepción deliberada**: los comandos capaces de ejecutar código
+  arbitrario (`node`/`python`/`npx`/`ruby`/`php` y `npm|pnpm|yarn|bun run·exec·dlx·x`) piden
+  confirmación SIEMPRE — sin ese freno, `/auto` + perfil `dev` anularía la única defensa real del shell.
 
 ## Módulos
 
@@ -88,6 +115,8 @@ Idioma: sigue `chalc lang` (es/en). Todo el prompt del agente es bilingüe.
 index.mjs        REPL interactivo (shell de terminal)
 session.mjs      createSession/ask: ata proyecto + tools + harness + modelo + loop
 project.mjs      acople: .chalc.json + detección de git/skills/MCP
+agents/
+  registry.mjs   estado observable de ejecuciones (rol, tarea, tool, tiempo, estado/error)
 engine/
   loop.mjs       motor plan→acción→observación (+ CCR, reintentos)
   protocol.mjs   contrato JSON del turno
@@ -98,4 +127,8 @@ engine/
 tools/           read/list/grep/write/edit/bash (confinadas, con aprobación)
 skills/loader.mjs  skills equipadas → secciones del harness
 mcp/             cliente MCP stdio nativo → tools del agente
+ui/
+  screen.mjs     TUI con entrada fija, historial y comandos fuera de banda
+  render.mjs     componentes ANSI compartidos
+  agents.mjs     gráfico adaptativo para `/agents`
 ```

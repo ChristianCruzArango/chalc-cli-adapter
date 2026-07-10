@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAgentReplaySpec, buildRepairPlanMarkdown, buildResultsMarkdown, httpExecutor, normalizeVerdicts, parseAgentMessage, parseResultsMarkdown, runQaAgent } from '../lib/qaagent.mjs';
+import { buildAgentReplaySpec, buildRepairPlanMarkdown, buildResultsMarkdown, httpExecutor, normalizeVerdicts, parseAgentMessage, parseResultsMarkdown, redactObservation, redactSensitiveText, runQaAgent } from '../lib/qaagent.mjs';
 
 test('buildAgentReplaySpec emits ONE test per requirement, grouping its verified steps', () => {
   const steps = [
@@ -38,9 +38,65 @@ test('normalizeVerdicts guarantees one verdict per requirement and normalizes st
   assert.match(out[2].evidence, /no emitió veredicto|did not issue a verdict/);
 });
 
+test('redactSensitiveText removes tokens, credentials and secret values from evidence', () => {
+  const input = [
+    'Authorization: Token very.secret-token_123',
+    'Header Bearer loose-token_123',
+    'Header Basic dXNlcjpwYXNz',
+    'jwt=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature',
+    'key=sk_test_1234567890abcdef',
+    'openai=sk-proj-1234567890abcdefghijklmnop',
+    '{"access_token":"abc123","password":"p4ss","apiKey":"k123"}'
+  ].join('\n');
+  const out = redactSensitiveText(input);
+
+  assert.match(out, /Authorization: \[REDACTED\]/);
+  assert.match(out, /Bearer \[REDACTED\]/);
+  assert.match(out, /Basic \[REDACTED\]/);
+  assert.match(out, /\[REDACTED_JWT\]/);
+  assert.match(out, /\[REDACTED_KEY\]/);
+  assert.match(out, /"access_token":"\[REDACTED\]"/);
+  assert.match(out, /"password":"\[REDACTED\]"/);
+  assert.match(out, /"apiKey":"\[REDACTED\]"/);
+  assert.doesNotMatch(out, /very\.secret-token_123|dXNlcjpwYXNz|abc123|p4ss|k123|sk-proj-1234567890abcdefghijklmnop/);
+});
+
+test('redactObservation redacts nested sensitive fields but preserves screenshot payloads', () => {
+  const out = redactObservation({
+    ok: false,
+    headers: { authorization: 'Bearer SESSION' },
+    body: { token: 'secret-token', nested: ['password=abc', { api_key: 'k1' }] },
+    screenshotBase64: 'raw-image-data'
+  });
+
+  assert.deepEqual(out.headers, { authorization: '[REDACTED]' });
+  assert.equal(out.body.token, '[REDACTED]');
+  assert.equal(out.body.nested[0], 'password=[REDACTED]');
+  assert.equal(out.body.nested[1].api_key, '[REDACTED]');
+  assert.equal(out.screenshotBase64, 'raw-image-data');
+});
+
 test('normalizeVerdicts accepts NOT_APPLICABLE only when explicitly emitted', () => {
   const out = normalizeVerdicts([{ id: 'R1', status: 'not_applicable', evidence: 'No surface externa.' }], ['R1']);
   assert.equal(out[0].status, 'NOT_APPLICABLE');
+});
+
+test('normalizeVerdicts redacts evidence before reports can persist it', () => {
+  const out = normalizeVerdicts([{ id: 'R1', status: 'FAIL', evidence: 'token=abc123 Authorization: Bearer live-token' }], ['R1']);
+  assert.equal(out[0].status, 'FAIL');
+  assert.doesNotMatch(out[0].evidence, /abc123|live-token/);
+  assert.match(out[0].evidence, /\[REDACTED\]/);
+});
+
+test('httpExecutor: la sesión inyectada (auth) gana sobre los headers de la acción', async () => {
+  // el agente, sin saber que ya hay sesión, mandó un Authorization propio y malformado ("Bearer" a secas):
+  // el token de sesión NO debe quedar pisado, o toda petición autenticada fallaría con 401.
+  let sent = null;
+  const fetchImpl = async (_url, opts) => { sent = opts.headers; return { status: 200, text: async () => '' }; };
+  const exec = httpExecutor('http://localhost:3000', { fetchImpl, headers: { Authorization: 'Bearer TOKEN-VALIDO' } });
+  await exec({ type: 'http', method: 'GET', path: '/x', headers: { Authorization: 'Bearer', 'X-Extra': '1' } });
+  assert.equal(sent.Authorization, 'Bearer TOKEN-VALIDO');   // la sesión prevalece
+  assert.equal(sent['X-Extra'], '1');                        // otros headers de la acción sí pasan
 });
 
 test('httpExecutor reports deterministic ok based on the expected status', async () => {
@@ -61,6 +117,17 @@ test('httpExecutor reports deterministic ok based on the expected status', async
   const wrongType = await exec({ type: 'browser' });
   assert.equal(wrongType.ok, false);
   assert.match(wrongType.error, /no soportada en api/);
+});
+
+test('httpExecutor redacts response bodies before returning QA observations', async () => {
+  const exec = httpExecutor('http://localhost:3000', {
+    fetchImpl: async () => ({ status: 200, text: async () => '{"refresh_token":"abc123","authorization":"Bearer live-token"}' })
+  });
+
+  const out = await exec({ type: 'http', path: '/me' });
+  assert.equal(out.ok, true);
+  assert.doesNotMatch(out.body, /abc123|live-token/);
+  assert.match(out.body, /\[REDACTED\]/);
 });
 
 test('httpExecutor preserves large evidence for CCR instead of truncating it', async () => {
@@ -108,6 +175,21 @@ test('runQaAgent loops: executes proposed actions, then returns normalized verdi
   assert.match(result.verdicts[1].evidence, /no emitió veredicto|did not issue a verdict/);
 });
 
+test('runQaAgent stores redacted executor observations', async () => {
+  const scripted = [
+    '{"done":false,"thought":"probar R1","action":{"type":"http","method":"GET","path":"/me"}}',
+    '{"done":true,"verdicts":[{"id":"R1","status":"PASS","evidence":"ok"}]}'
+  ];
+  let turn = 0;
+  const chatImpl = async () => scripted[turn++];
+  const executor = async () => ({ ok: true, token: 'secret-token', body: 'password=abc' });
+
+  const result = await runQaAgent({ surface: 'api', baseUrl: 'http://localhost:3000', plan: '- R1', requirementIds: ['R1'], chatImpl, executor, maxSteps: 3 });
+
+  assert.equal(result.steps[0].observation.token, '[REDACTED]');
+  assert.equal(result.steps[0].observation.body, 'password=[REDACTED]');
+});
+
 test('buildResultsMarkdown renders one traceable row per verdict and escapes pipes', () => {
   const md = buildResultsMarkdown('001-login', {
     surface: 'api', baseUrl: 'http://localhost:3000',
@@ -116,6 +198,15 @@ test('buildResultsMarkdown renders one traceable row per verdict and escapes pip
   assert.match(md, /# (Resultados QA|QA results) — 001-login/);
   assert.match(md, /(Superficie|Surface): \*\*api\*\*/);
   assert.match(md, /\| R1 \| PASS \| a \\\| b \|/);
+});
+
+test('buildResultsMarkdown redacts sensitive evidence before writing markdown', () => {
+  const md = buildResultsMarkdown('001-login', {
+    surface: 'api', baseUrl: 'http://localhost:3000',
+    result: { steps: [], verdicts: [{ id: 'R1', status: 'FAIL', evidence: 'Authorization: Bearer live-token' }] }
+  });
+  assert.match(md, /Authorization: \[REDACTED\]/);
+  assert.doesNotMatch(md, /live-token/);
 });
 
 test('repair plan is generated only from FAIL/BLOCKED QA verdicts', () => {

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { t } from '../lib/i18n.mjs';
 import { c, stripAnsi, box, banner, contextBox, stepLine, resultLine, summarizeObservation, mutationReport } from '../cli/ui/render.mjs';
 import { createSpinner } from '../cli/ui/spinner.mjs';
 import { createScreen, wrapAnsi, matchSlash, wheelDelta } from '../cli/ui/screen.mjs';
@@ -30,9 +31,9 @@ test('banner colapsa las skills a un CONTEO (no vuelca los 19 nombres)', () => {
 
 test('contextBox muestra la ventana (tokens/num_ctx) y formatea miles con k', () => {
   const out = contextBox({ model: 'qwen', provider: 'ollama', inputTokens: 3120, numCtx: 16384, steps: 3 });
-  assert.match(out, /contexto/);
+  assert.ok(out.includes(t('cliCtxContext')));   // etiqueta en el idioma activo (es/en)
   assert.match(out, /3\.1k\/16\.4k/);
-  assert.match(out, /pasos/);
+  assert.ok(out.includes(t('cliCtxSteps')));
 });
 
 test('stepLine y resultLine reflejan error/éxito', () => {
@@ -43,16 +44,16 @@ test('stepLine y resultLine reflejan error/éxito', () => {
 });
 
 test('summarizeObservation humaniza cada tool (nunca JSON crudo con escapes)', () => {
-  assert.equal(summarizeObservation({ tool: 'write' }, { path: 'a.ts', bytes: 261, ok: true }).text, 'a.ts escrito (261 bytes)');
-  assert.equal(summarizeObservation({ tool: 'write' }, { path: 'a.ts', bytes: 10, appended: true, ok: true }).text, 'a.ts ampliado (10 bytes)');
-  assert.equal(summarizeObservation({ tool: 'read' }, { path: 'a.ts', content: 'x\ny\nz' }).text, 'a.ts leído (3 líneas)');
-  assert.equal(summarizeObservation({ tool: 'list' }, { path: 'src', entries: [1, 2] }).text, '2 entradas en src');
-  assert.equal(summarizeObservation({ tool: 'grep' }, { matches: [1, 2, 3] }).text, '3 coincidencia(s)');
+  assert.equal(summarizeObservation({ tool: 'write' }, { path: 'a.ts', bytes: 261, ok: true }).text, t('cliObsWritten', 'a.ts', 261));
+  assert.equal(summarizeObservation({ tool: 'write' }, { path: 'a.ts', bytes: 10, appended: true, ok: true }).text, t('cliObsAppended', 'a.ts', 10));
+  assert.equal(summarizeObservation({ tool: 'read' }, { path: 'a.ts', content: 'x\ny\nz' }).text, t('cliObsRead', 'a.ts', 3));
+  assert.equal(summarizeObservation({ tool: 'list' }, { path: 'src', entries: [1, 2] }).text, t('cliObsEntries', 2, 'src'));
+  assert.equal(summarizeObservation({ tool: 'grep' }, { matches: [1, 2, 3] }).text, t('cliObsMatches', 3));
   assert.match(summarizeObservation({ tool: 'bash' }, { code: 0, stdout: 'v20.1.0\n' }).text, /exit 0 · v20\.1\.0/);
   const to = summarizeObservation({ tool: 'bash' }, { code: -1, timedOut: true });
   assert.equal(to.error, true);
-  assert.match(to.text, /timeout/);
-  assert.match(summarizeObservation({ tool: 'x' }, { repeated: true, note: '...' }).text, /repetida/);
+  assert.equal(to.text, t('cliObsTimeout'));
+  assert.equal(summarizeObservation({ tool: 'x' }, { repeated: true, note: '...' }).text, t('cliObsRepeated'));
   const err = summarizeObservation({ tool: 'write' }, { error: 'no aprobada' });
   assert.equal(err.error, true);
 });
@@ -106,13 +107,13 @@ test('las auto-correcciones del loop se muestran humanas y tenues (sin jerga del
   // herramienta desconocida: el texto largo es para el MODELO; el usuario ve una línea entendible
   const unk = summarizeObservation({ tool: 'write' }, { error: 'unknown tool: write. You are in a READ-ONLY role: do NOT execute changes; explore with read/list/grep and deliver your result with {"done":true,"summary":"..."}' });
   assert.equal(unk.correction, true);
-  assert.match(unk.text, /no existe aquí \(write\)/);
-  assert.doesNotMatch(unk.text, /READ-ONLY|done|summary/);   // nada de jerga del protocolo
+  assert.equal(unk.text, t('cliObsUnknownTool', 'write'));
+  assert.doesNotMatch(unk.text, /READ-ONLY|"done"|"summary"/);   // nada de jerga del protocolo
 
   // error de argumentos MCP (trae hint): también se humaniza
   const args = summarizeObservation({ tool: 'mcp__ng__search_documentation' }, { error: 'MCP error -32602: Invalid arguments', hint: 'usa describe…' });
   assert.equal(args.correction, true);
-  assert.match(args.text, /argumentos incorrectos/);
+  assert.equal(args.text, t('cliObsBadArgs', 'mcp__ng__search_documentation'));
 
   // stepLine: sin nombre de tool en azul ni rojo de error — solo la línea tenue con ⟳
   const line = stepLine({ action: { tool: 'write' }, observation: { error: 'unknown tool: write. …' } });

@@ -67,23 +67,44 @@ export async function loadProject(projectPath) {
   };
 }
 
-// Resuelve referencias ${VAR} contra el entorno: el .mcp.json equipado guarda los secretos POR
-// REFERENCIA (nunca el valor, porque el archivo suele commitearse) y aquí se materializan al conectar.
-// Las variables no definidas se dejan intactas (el fallo visible ayuda a diagnosticar).
-function resolveEnvRefs(value, env) {
-  if (typeof value === 'string') return value.replace(/\$\{(\w+)\}/g, (m, k) => env[k] ?? m);
-  if (Array.isArray(value)) return value.map((v) => resolveEnvRefs(v, env));
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, resolveEnvRefs(v, env)]));
+// Solo el usuario puede autorizar variables de entorno para MCP. Un repositorio no debe poder pedir
+// silenciosamente AWS_SESSION_TOKEN/GITHUB_TOKEN y reenviarlo a un servidor remoto. El namespace
+// CHALC_MCP_* permite una configuración portable sin guardar secretos en el proyecto.
+export function mcpEnvironmentAllowlist(cli = {}, env = process.env) {
+  const explicit = Array.isArray(cli?.mcpEnvAllowlist) ? cli.mcpEnvAllowlist : [];
+  return new Set([
+    ...explicit.map(String).filter((name) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name)),
+    ...Object.keys(env).filter((name) => name.startsWith('CHALC_MCP_'))
+  ]);
+}
+
+// Las variables no permitidas/no definidas se dejan intactas: el server falla de forma visible sin exfiltrar
+// secretos. La URL, comando y args NUNCA se interpolan: son control del repositorio y también se muestran al usuario.
+function resolveEnvRefs(value, env, allowedEnv) {
+  if (typeof value === 'string') return value.replace(/\$\{(\w+)\}/g, (m, key) => (allowedEnv.has(key) && env[key] != null ? env[key] : m));
+  if (Array.isArray(value)) return value.map((v) => resolveEnvRefs(v, env, allowedEnv));
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, resolveEnvRefs(v, env, allowedEnv)]));
   return value;
+}
+
+function resolveMcpServerSecrets(server, env, allowedEnv) {
+  if (!server || typeof server !== 'object' || Array.isArray(server)) return server;
+  return {
+    ...server,
+    ...(server.headers ? { headers: resolveEnvRefs(server.headers, env, allowedEnv) } : {}),
+    ...(server.env ? { env: resolveEnvRefs(server.env, env, allowedEnv) } : {})
+  };
 }
 
 // Lee la config de servidores MCP equipados: { id: serverConfig }. Best-effort: {} si no hay archivo o es inválido.
 // La clave del objeto varía por target (mcpServers / servers), por eso se pasa mcpKey.
-export async function readMcpServers({ mcpFile, mcpKey } = {}, env = process.env) {
+export async function readMcpServers({ mcpFile, mcpKey } = {}, env = process.env, { allowedEnv = [] } = {}) {
   if (!mcpFile || !existsSync(mcpFile)) return {};
   try {
     const json = JSON.parse(await readFile(mcpFile, 'utf8'));
-    return resolveEnvRefs(json[mcpKey] || json.mcpServers || json.servers || {}, env);
+    const allowed = new Set(allowedEnv);
+    const servers = json[mcpKey] || json.mcpServers || json.servers || {};
+    return Object.fromEntries(Object.entries(servers).map(([id, server]) => [id, resolveMcpServerSecrets(server, env, allowed)]));
   } catch {
     return {};
   }

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { t } from '../lib/i18n.mjs';
 import { readOnlyTools, runPlanner, planSection, formatPlan, isNumberedPlan, planItems, stepTask, stepNeedsMutation, stepRetryTask, stepIsSpecWork, splitPlanSpec, specSectionFor } from '../cli/engine/plan.mjs';
 import { createSession } from '../cli/session.mjs';
 
@@ -48,7 +49,7 @@ test('runPlanner explora en solo lectura y entrega el plan; write NO existe para
 test('runPlanner reporta error/interrupción con plan vacío (nunca un plan a medias)', async () => {
   const r = await runPlanner({ chatImpl: async () => 'basura no json', tools: {}, task: 'x', maxSteps: 2 });
   assert.equal(r.plan, '');
-  assert.match(r.error, /Sin turno válido/);
+  assert.ok(r.error.startsWith(t('cliLoopNoValidTurn', 3, '')));   // idioma-independiente (es/en)
 });
 
 test('formatPlan separa en líneas un plan que vino pegado en una sola', () => {

@@ -622,6 +622,12 @@ API key — so a cloud leader/reviewer can direct a free local developer. On sav
 **team card** (agent → model → cloud ☁ / local ⌂). Note: on OpenRouter, model ids carry the vendor
 prefix (`anthropic/claude-sonnet-4.6`, not `claude-sonnet-4.6`).
 
+> **Switching provider (e.g. Ollama → OpenRouter):** per-task models and team roles are saved
+> **against the provider they were chosen on**. When you change the base provider, Chalc drops the
+> ones that no longer exist there (`gpt-oss:20b` sent to OpenRouter is a `400 not a valid model ID`)
+> and falls back to the new default model, telling you so. Pick the new ones with `config-ia
+> spec|qa|repair` and `config-ia cli`; `config-ia doctor` lists any leftovers.
+
 The base wizard asks you to choose the LLM provider and paste your API key:
 
 | Provider | Notes |
@@ -668,8 +674,10 @@ Flow:
    |---|---|
    | Local file | path to `.md` / `.txt` (recommended: read directly, no extra tools) / Word / PDF / Excel→CSV |
 
-   > **Note (Word/PDF):** reading `.docx` relies on `textutil` (macOS only) and `.pdf` on `pdftotext`. On
-   > Windows (and on Linux without those tools) use `.md`/`.txt` or paste the text directly.
+   > **Note (Word/PDF):** `.docx`, `.odt`, `.rtf` and `.html` are read with pure Node (zip + zlib), so they
+   > work the same on Windows, macOS and Linux — no extra tools. For `.pdf` Chalc uses `pdftotext` if it is
+   > installed and otherwise falls back to a built-in extractor (text PDFs only: a scanned PDF still needs
+   > OCR). Legacy `.doc` requires LibreOffice (`soffice`) in the PATH, or just save it as `.docx`.
    | **Azure DevOps** | work item URL + PAT → brings title + description + criteria |
    | **Jira** | issue URL + email + token |
    | **Google Drive / URL** | the URL (exported to text) |

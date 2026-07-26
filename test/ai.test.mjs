@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { configForTask, modelForTask, applyProfileModels, PROVIDERS } from '../lib/ai.mjs';
+import { configForTask, modelForTask, applyProfileModels, isStaleModel, pruneStaleModels, PROVIDERS } from '../lib/ai.mjs';
+import { roleConfig, roleModelLabel } from '../cli/session.mjs';
 import { makeAiTrace } from '../lib/aitrace.mjs';
 import { validateGeneratedSpec, summarizeValidation } from '../lib/specvalidate.mjs';
 import { runLocalAiEvals } from '../lib/aieval.mjs';
@@ -32,6 +33,57 @@ test('applyProfileModels never imposes a fixed model on local providers (Ollama)
   assert.equal(out.models?.spec, undefined);
   assert.equal(modelForTask(out, 'spec'), 'qwen2.5-coder:7b');
   assert.equal(modelForTask(out, 'qa'), 'qwen2.5-coder:7b');
+});
+
+// Cambiar el proveedor base (ollama → openrouter) dejaba los modelos por tarea del anterior:
+// se enviaban tal cual y la API respondía 400 "gpt-oss:20b is not a valid model ID".
+test('per-task models saved for another provider never reach the API', () => {
+  const cfg = { provider: 'openrouter', model: 'anthropic/claude-sonnet-4.6', models: { spec: 'gpt-oss:20b', qa: 'qwen3-coder:30b' } };
+  assert.equal(isStaleModel(cfg, 'gpt-oss:20b'), true);
+  assert.equal(modelForTask(cfg, 'spec'), 'anthropic/claude-sonnet-4.6');
+  assert.equal(configForTask(cfg, 'qa').model, 'anthropic/claude-sonnet-4.6');
+  assert.deepEqual(pruneStaleModels(cfg), {});
+});
+
+test('a per-task model stamped for the current provider is respected as-is', () => {
+  const cfg = { provider: 'openrouter', model: 'anthropic/claude-sonnet-4.6', modelsFor: 'openrouter', models: { spec: 'openai/gpt-5.5' } };
+  assert.equal(isStaleModel(cfg, 'openai/gpt-5.5', cfg.modelsFor), false);
+  assert.equal(modelForTask(cfg, 'spec'), 'openai/gpt-5.5');
+  // el sello manda sobre la heurística del nombre: si el usuario lo fijó aquí, se usa
+  assert.equal(isStaleModel({ ...cfg, models: { spec: 'raro:tag' } }, 'raro:tag', 'openrouter'), false);
+});
+
+test('the stamp catches stale models even when the name looks cloud-shaped', () => {
+  const cfg = { provider: 'openrouter', model: 'anthropic/claude-sonnet-4.6', modelsFor: 'openai', models: { spec: 'gpt-4o' } };
+  assert.equal(modelForTask(cfg, 'spec'), 'anthropic/claude-sonnet-4.6');
+});
+
+test('local providers keep their own model names (nothing is stale on Ollama)', () => {
+  const cfg = { provider: 'ollama', model: 'gpt-oss:20b', models: { spec: 'qwen3-coder:30b' } };
+  assert.equal(isStaleModel(cfg, 'qwen3-coder:30b'), false);
+  assert.equal(modelForTask(cfg, 'spec'), 'qwen3-coder:30b');
+});
+
+test('applyProfileModels drops the previous provider models and stamps the current one', () => {
+  const profile = { id: 'p', models: { spec: { openrouter: 'anthropic/claude-opus-4.8' } } };
+  const out = applyProfileModels({ provider: 'openrouter', model: 'anthropic/claude-sonnet-4.6', models: { spec: 'gpt-oss:20b', qa: 'qwen3-coder:30b' } }, profile);
+  assert.equal(out.models.spec, 'anthropic/claude-opus-4.8');
+  assert.equal(out.models.qa, undefined);
+  assert.equal(out.modelsFor, 'openrouter');
+  assert.equal(modelForTask(out, 'qa'), 'anthropic/claude-sonnet-4.6');
+});
+
+test('cli roles pinned as plain strings fall back to the base model after a provider switch', () => {
+  const cfg = {
+    provider: 'openrouter', model: 'anthropic/claude-sonnet-4.6',
+    cli: { roles: { coder: 'qwen3-coder:30b', planner: { provider: 'openrouter', model: 'anthropic/claude-opus-4.8', apiKey: 'k' } } }
+  };
+  assert.equal(roleConfig(cfg, 'coder'), null);              // null = usa el impl base
+  assert.equal(roleModelLabel(cfg, 'coder'), null);          // y la UI no miente sobre el modelo
+  assert.equal(roleConfig(cfg, 'planner').model, 'anthropic/claude-opus-4.8');   // rol con proveedor propio: intacto
+  // ya sellado para este proveedor: el string se respeta
+  const stamped = { ...cfg, cli: { ...cfg.cli, rolesFor: 'openrouter' } };
+  assert.equal(roleConfig(stamped, 'coder').model, 'qwen3-coder:30b');
 });
 
 test('AI traces hash prompt/output content without storing raw text', () => {

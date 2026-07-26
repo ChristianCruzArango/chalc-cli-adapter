@@ -624,6 +624,12 @@ gratuito. Al guardar se muestra la **tarjeta del equipo** (agente → modelo →
 Ojo: en OpenRouter los modelos llevan prefijo del fabricante (`anthropic/claude-sonnet-4.6`, no
 `claude-sonnet-4.6`).
 
+> **Si cambias de proveedor (p. ej. Ollama → OpenRouter):** los modelos por tarea y los roles del
+> equipo se guardan **contra el proveedor en el que los elegiste**. Al cambiar el proveedor base,
+> Chalc suelta los que ya no existen allí (`gpt-oss:20b` enviado a OpenRouter da `400 not a valid
+> model ID`), usa el nuevo modelo default y te lo avisa. Elige los nuevos con `config-ia
+> spec|qa|repair` y `config-ia cli`; `config-ia doctor` te lista lo que haya quedado colgado.
+
 El wizard base te pide elegir el proveedor de LLM y pegar tu API key:
 
 | Proveedor | Notas |
@@ -670,8 +676,10 @@ Flujo:
    |---|---|
    | Archivo local | ruta a `.md` / `.txt` (recomendado: se leen directo, sin herramientas extra) / Word / PDF / Excel→CSV |
 
-   > **Nota (Word/PDF):** leer `.docx` depende de `textutil` (solo macOS) y `.pdf` de `pdftotext`. En
-   > Windows (y en Linux sin esas herramientas) usa `.md`/`.txt` o pega el texto directamente.
+   > **Nota (Word/PDF):** `.docx`, `.odt`, `.rtf` y `.html` se leen con Node puro (zip + zlib), así que
+   > funcionan igual en Windows, macOS y Linux, sin herramientas extra. Para `.pdf` Chalc usa `pdftotext`
+   > si está instalado y, si no, un extractor propio (solo PDFs de texto: uno escaneado necesita OCR).
+   > El `.doc` legacy sí requiere LibreOffice (`soffice`) en el PATH, o guárdalo como `.docx`.
    | **Azure DevOps** | URL del work item + PAT → trae título + descripción + criterios |
    | **Jira** | URL del issue + email + token |
    | **Google Drive / URL** | la URL (export a texto) |

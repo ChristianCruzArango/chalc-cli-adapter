@@ -6,6 +6,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { createCcrStore } from '../lib/ccr.mjs';
+import { isStaleModel } from '../lib/ai.mjs';
 import { createAgentRegistry } from './agents/registry.mjs';
 import { inspectProject, readMcpServers, projectTree, mcpEnvironmentAllowlist } from './project.mjs';
 import { createTools } from './tools/registry.mjs';
@@ -139,7 +140,9 @@ function conversationSection(conversation, { max = 6, language } = {}) {
 export function roleConfig(cfg, role) {
   const m = cfg?.cli?.roles?.[role];
   if (!m) return null;
-  if (typeof m === 'string') return { ...cfg, model: m };
+  // string fijado cuando el proveedor base era OTRO (p. ej. `qwen3-coder:30b` de Ollama y ahora
+  // OpenRouter): ese nombre no existe en el proveedor actual → uso el modelo base en vez de un 400.
+  if (typeof m === 'string') return isStaleModel(cfg, m, cfg?.cli?.rolesFor) ? null : { ...cfg, model: m };
   if (!m.provider || !m.model) return null;
   const { baseURL: _b, apiKey: _k, apiVersion: _v, ...base } = cfg || {};
   return { ...base, ...m };
@@ -150,7 +153,7 @@ export function roleConfig(cfg, role) {
 export function roleModelLabel(cfg, role) {
   const m = cfg?.cli?.roles?.[role];
   if (!m) return null;
-  if (typeof m === 'string') return m;
+  if (typeof m === 'string') return isStaleModel(cfg, m, cfg?.cli?.rolesFor) ? null : m;   // null: se usa el base
   return m.provider && m.model ? `${m.model} (${m.provider})` : null;
 }
 

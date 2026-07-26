@@ -39,11 +39,17 @@ import { runTokens } from '../lib/commands/tokens.mjs';
 import { runUpdate } from '../lib/commands/update.mjs';
 import { runApply } from '../lib/commands/apply.mjs';
 
+// Salida con código SIN matar el proceso a mitad de camino: en Windows, un process.exit() justo
+// después de una llamada HTTP (fetch/undici con sockets aún cerrándose) revienta libuv con
+// "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), src\win\async.c". Fijando exitCode el
+// loop se vacía solo y el proceso termina limpio con el mismo código.
+const exitWith = (code) => { process.exitCode = code; };
+
 // Red de seguridad: nunca mostrar stack traces. Ctrl+C (AbortError) sale limpio.
 const onAbortOrError = (e) => {
-  if (e && (e.code === 'ABORT_ERR' || e.name === 'AbortError')) { process.stdout.write('\n'); process.exit(130); }
+  if (e && (e.code === 'ABORT_ERR' || e.name === 'AbortError')) { process.stdout.write('\n'); return exitWith(130); }
   console.error(c.red('✗ ' + (e && e.message ? e.message : e)));
-  process.exit(1);
+  exitWith(1);
 };
 process.on('uncaughtException', onAbortOrError);
 process.on('unhandledRejection', onAbortOrError);
@@ -91,5 +97,5 @@ setTokenLogCommand(verb);
     await flushTokenLog(projectPath);
     const message = err instanceof Error ? err.message : String(err?.message ?? err);
     console.error(c.red('✗ ' + message));
-    process.exit(1);
+    exitWith(1);
   });

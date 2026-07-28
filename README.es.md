@@ -4,7 +4,7 @@
 
 Chalc es una CLI local para **crear proyectos nuevos** (`chalc init`) y **equipar proyectos existentes** con la configuración de asistentes de desarrollo: skills, servidores MCP, reglas y métodos de trabajo.
 
-El flujo de equipado (`chalc`) no llama a modelos de IA: lee señales del proyecto (`package.json`, archivos raíz, globs), aplica reglas del catálogo y escribe los archivos que necesita el target elegido (Claude Code, GitHub Copilot, Cursor o Gemini CLI).
+El flujo de equipado (`chalc`) no llama a modelos de IA: lee señales del proyecto (`package.json`, archivos raíz, globs), aplica reglas del catálogo y escribe los archivos que necesita el target elegido (Claude Code, GitHub Copilot, Cursor, Gemini CLI o Codex CLI).
 
 La IA es **opt-in** y se usa solo en tres comandos, siempre con la API key configurada por el usuario:
 - **`chalc init`** — la IA *sugiere* una arquitectura calibrada a tu propuesta (aliada, no oráculo; tú decides).
@@ -167,7 +167,7 @@ Arquitecturas disponibles (la IA recomienda la más liviana que encaje; tú deci
 Al crear, Chalc genera el proyecto base del scaffolder oficial, las carpetas de la arquitectura con su
 `README.md`, `docs/architecture.md`, `specs/` (método SDD), las skills globales (`minimal-implementation`,
 `clean-code`, `solid-principles`, `modular-architecture`, `mutation-testing`), las skills del stack, los MCP y el target
-IA elegido (`CLAUDE.md`, Cursor, Copilot o Gemini).
+IA elegido (`CLAUDE.md`, Cursor, Copilot, Gemini o Codex).
 
 #### Extensible a cualquier framework
 
@@ -400,6 +400,7 @@ chalc/
 ├── rules/                   criterio: qué señal = qué stack = qué se instala (incl. global.json)
 ├── targets/
 │   ├── claude.mjs           traductor a Claude Code
+│   ├── codex.mjs            traductor a Codex CLI
 │   ├── copilot.mjs          traductor a GitHub Copilot
 │   ├── cursor.mjs           traductor a Cursor
 │   └── gemini.mjs           traductor a Gemini CLI
@@ -870,5 +871,6 @@ El mismo catálogo neutro se proyecta al formato nativo de cada herramienta. Eli
 | **GitHub Copilot** | `.github/copilot-instructions.md` | `.chalc/skills/<id>/` (referenciados) | `.vscode/mcp.json` (`servers`, type `stdio`) |
 | **Gemini CLI** | `GEMINI.md` | `.chalc/skills/<id>/` (referenciados) | `.gemini/settings.json` (`mcpServers`) |
 | **Cursor** | `.cursor/rules/chalc-*.mdc` | `.chalc/skills/<id>/` + un `.mdc` por skill | `.cursor/mcp.json` (`mcpServers`) |
+| **Codex CLI** | `AGENTS.md` | `.chalc/skills/<id>/` (referenciados) | `.codex/config.toml` (`[mcp_servers.<id>]`, bloque gestionado) |
 
 Todos escriben además `.chalc.json` (manifiesto). Agregar otro asistente = un `targets/<nombre>.mjs` con `apply()`, reusando catálogo y reglas.

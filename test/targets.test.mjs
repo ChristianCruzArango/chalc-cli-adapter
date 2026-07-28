@@ -6,13 +6,15 @@ import { tmpdir } from 'node:os';
 import * as claude from '../targets/claude.mjs';
 import * as gemini from '../targets/gemini.mjs';
 import * as copilot from '../targets/copilot.mjs';
+import * as codex from '../targets/codex.mjs';
 
-// El archivo de instrucciones del usuario (CLAUDE.md / GEMINI.md / copilot-instructions.md) es SAGRADO:
-// equipar debe FUSIONAR el bloque de chalc, nunca sobrescribir/borrar lo que el usuario ya tenía.
+// El archivo de instrucciones del usuario (CLAUDE.md / GEMINI.md / copilot-instructions.md / AGENTS.md)
+// es SAGRADO: equipar debe FUSIONAR el bloque de chalc, nunca sobrescribir/borrar lo que el usuario ya tenía.
 const CASES = [
   { name: 'Claude', mod: claude, rel: 'CLAUDE.md' },
   { name: 'Gemini', mod: gemini, rel: 'GEMINI.md' },
-  { name: 'Copilot', mod: copilot, rel: join('.github', 'copilot-instructions.md') }
+  { name: 'Copilot', mod: copilot, rel: join('.github', 'copilot-instructions.md') },
+  { name: 'Codex', mod: codex, rel: 'AGENTS.md' }
 ];
 
 for (const { name, mod, rel } of CASES) {

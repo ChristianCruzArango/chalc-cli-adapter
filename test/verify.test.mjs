@@ -55,6 +55,19 @@ test('lintBoundaries passes a clean layered project (presentation -> application
   assert.deepEqual(await lintBoundaries(base), []);
 });
 
+// R7 (spec 004) — con target codex, el archivo del asistente que se verifica es AGENTS.md.
+test('verifyProject checks AGENTS.md as the assistant file for the codex target', async () => {
+  const base = await tmp();
+  let res = await verifyProject(base, { target: 'codex' });
+  let byKey = Object.fromEntries(res.checks.map((c) => [c.key, c.ok]));
+  assert.equal(byKey.assistant, false);         // falta AGENTS.md
+
+  await file(base, 'AGENTS.md', '# proyecto\n');
+  res = await verifyProject(base, { target: 'codex' });
+  byKey = Object.fromEntries(res.checks.map((c) => [c.key, c.ok]));
+  assert.equal(byKey.assistant, true);
+});
+
 test('verifyProject reports missing structural artifacts', async () => {
   const base = await tmp();
   await mkdir(join(base, 'src', 'app', 'domain'), { recursive: true });   // existe pero sin README

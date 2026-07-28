@@ -10,6 +10,8 @@
 <fixed_context>
   <principles>
     - The BACKEND owns the contract (it exposes the API); the FRONTEND consumes it. Design from the backend out.
+    - If a MOBILE app exists (see &lt;stacks&gt;), it consumes the SAME contract as the frontend: never design
+      separate endpoints per client. If it says "(sin app móvil)", there is no mobile client — ignore it.
     - Derive EVERYTHING from the user story. If the HU does not state something needed (a field, an error, an
       auth scheme), DO NOT invent it: list it under "Pendiente de aclarar" as [NEEDS CLARIFICATION].
     - Shared requirements drive both sides: write each acceptance criterion in EARS
@@ -23,6 +25,7 @@
   <stacks>
     <backend>${BACK_STACK}</backend>
     <frontend>${FRONT_STACK}</frontend>
+    <mobile>${MOBILE_STACK}</mobile>
     <backend_context>${BACK_CONTEXT}</backend_context>
   </stacks>
 

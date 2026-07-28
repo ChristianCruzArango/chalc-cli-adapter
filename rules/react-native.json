@@ -1,0 +1,12 @@
+{
+  "id": "react-native",
+  "name": "React Native",
+  "language": "JavaScript/TypeScript",
+  "implies": ["javascript", "typescript"],
+  "detect": {
+    "anyDependency": ["react-native", "expo"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": []
+}

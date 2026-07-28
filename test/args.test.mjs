@@ -60,6 +60,16 @@ test('parseArgs accepts deliver rerun flag', () => {
   assert.equal(flags.rerun, true);
 });
 
+// R2 (spec 003) — el repo móvil llega por --movil (o --mobile) con su ruta como valor, no como booleano.
+test('parseArgs accepts --movil/--mobile as value flags (chalc feature)', () => {
+  const { flags, positional } = parseArgs(['feature', 'web', '--back', 'api', '--movil', 'app']);
+  assert.equal(flags.movil, 'app');
+  assert.deepEqual(positional, ['feature', 'web']);
+
+  const alias = parseArgs(['feature', 'web', '--back', 'api', '--mobile', 'app']);
+  assert.equal(alias.flags.mobile, 'app');
+});
+
 test('parseArgs accepts QA security opt-ins', () => {
   const { flags } = parseArgs(['qa', '--allow-login', '--allow-external-login', '--screenshots']);
   assert.equal(flags['allow-login'], true);

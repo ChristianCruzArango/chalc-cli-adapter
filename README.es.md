@@ -42,7 +42,7 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 | `chalc ai-doctor` | Muestra proveedor, perfil y modelos resueltos por tarea | no |
 | `chalc eval-ia` | Ejecuta evals locales de prompts/parsers sin llamar al proveedor | no |
 | `chalc spec-ia` | HU (Azure DevOps/Jira/Drive/Word/pegar) → spec/plan/tasks | sí |
-| `chalc feature` | Orquestador full-stack: UNA HU → contrato de API + spec del back + spec del front (mismo `NNN` en ambos repos) | sí |
+| `chalc feature` | Orquestador full-stack: UNA HU → contrato de API + spec del back + spec del front + spec del móvil opcional (mismo `NNN` en todos los repos) | sí |
 | `chalc-cli` | Shell interactiva del agente sobre tu proyecto equipado (tools con aprobación, skills y MCP) | sí |
 | `chalc qa <ruta>` | Lista specs y valida el preflight QA (Docker + documentación) | no |
 | `chalc qa <ruta> --spec 004-login --plan` | Genera el plan QA trazable a los requisitos de una spec | no |
@@ -690,28 +690,32 @@ Flujo:
 6. Guarda una traza reproducible en `specs/<feature>/.chalc/ai-trace.jsonl` con hashes de prompt/output, nunca el contenido crudo.
 7. Imprime un **comando hand-off** detallado para pegar en tu asistente y generar el código con TDD.
 
-### 3) `chalc feature` — orquestador full-stack (HU → contrato + spec back + spec front)
+### 3) `chalc feature` — orquestador full-stack (HU → contrato + spec back + spec front + spec móvil)
 
 ```bash
-chalc feature                                    # interactivo (pide rutas de front y back)
+chalc feature                                    # interactivo (pide rutas de front y back, y si hay app móvil)
 chalc feature /ruta/front --back /ruta/back --lang es --no-branch
+chalc feature /ruta/front --back /ruta/back --movil /ruta/app   # con repo móvil (alias: --mobile)
 ```
 
-Toma **una** historia de usuario y coordina **dos repos** (front y back) alrededor de un contrato de API:
+Toma **una** historia de usuario y coordina **dos repos** (front y back) — o **tres**, si la feature
+además tiene **app móvil** — alrededor de un contrato de API:
 
-1. Detecta el stack de cada repo, lo confirma contigo y equipa ambos si hace falta (SDD incluido).
+1. Detecta el stack de cada repo (framework y lenguaje: Angular, NestJS, Flutter, React Native, Kotlin,
+   Swift…), lo confirma contigo y los equipa si hace falta (SDD incluido).
 2. Adquiere la HU con las mismas fuentes que `spec-ia` (archivo, Azure DevOps, Jira, URL o pegar).
-3. La IA genera en orden: **contrato de API compartido** → **spec del back** → **spec del front**,
-   para que el front consuma exactamente lo que el back promete.
-4. Escribe `specs/NNN-<slug>/` en AMBOS repos con el **mismo número**, guarda el contrato en
+3. La IA genera en orden: **contrato de API compartido** → **spec del back** → **spec del front** →
+   **spec del móvil** (si hay), para que cada cliente consuma exactamente lo que el back promete. La
+   app móvil es otro consumidor del MISMO contrato: no hay endpoints separados por cliente.
+4. Escribe `specs/NNN-<slug>/` en TODOS los repos con el **mismo número**, guarda el contrato en
    `contracts/api.md` y estampa su huella en cada archivo (anti-drift: si regeneras la feature con un
    contrato distinto, te lo avisa). Re-ejecutar la misma HU es **idempotente**: reusa la carpeta del
    slug en vez de crear duplicados `NNN+1`.
-5. Opcional: crea la rama `feat/<slug>` en ambos repos — todo o nada, y solo si los dos árboles están
-   limpios. `--branch` / `--no-branch` deciden sin preguntar.
-6. Cierra con un **hand-off único** para tu asistente que coordina la implementación en los dos repos.
+5. Opcional: crea la rama `feat/<slug>` en todos los repos — todo o nada, y solo si todos los árboles
+   están limpios. `--branch` / `--no-branch` deciden sin preguntar.
+6. Cierra con un **hand-off único** para tu asistente que coordina la implementación en todos los repos.
 
-Flags: `--back <ruta>`, `--lang es|en`, `--full` o `--mode lite|full` (modo SDD), `--branch`/`--no-branch`.
+Flags: `--back <ruta>`, `--movil <ruta>` (alias `--mobile`), `--lang es|en`, `--full` o `--mode lite|full` (modo SDD), `--branch`/`--no-branch`.
 
 ### Harness de fidelidad (la IA NO inventa)
 

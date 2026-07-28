@@ -42,7 +42,7 @@ This way, an Angular project can receive its Angular skills, a NestJS one its ba
 | `chalc ai-doctor` | Shows provider, profile, and models resolved per task | no |
 | `chalc eval-ia` | Runs local evals of prompts/parsers without calling the provider | no |
 | `chalc spec-ia` | User story (Azure DevOps/Jira/Drive/Word/paste) → spec/plan/tasks | yes |
-| `chalc feature` | Full-stack orchestrator: ONE user story → API contract + back spec + front spec (same `NNN` in both repos) | yes |
+| `chalc feature` | Full-stack orchestrator: ONE user story → API contract + back spec + front spec + optional mobile spec (same `NNN` in every repo) | yes |
 | `chalc-cli` | Interactive agent shell over your equipped project (approval-gated tools, skills, and MCP) | yes |
 | `chalc qa <path>` | Lists specs and validates the QA preflight (Docker + documentation) | no |
 | `chalc qa <path> --spec 004-login --plan` | Generates the QA plan traceable to a spec's requirements | no |
@@ -688,28 +688,32 @@ Flow:
 6. It saves a reproducible trace in `specs/<feature>/.chalc/ai-trace.jsonl` with prompt/output hashes, never the raw content.
 7. It prints a detailed **hand-off command** to paste into your assistant and generate the code with TDD.
 
-### 3) `chalc feature` — full-stack orchestrator (user story → contract + back spec + front spec)
+### 3) `chalc feature` — full-stack orchestrator (user story → contract + back spec + front spec + mobile spec)
 
 ```bash
-chalc feature                                     # interactive (asks for front and back paths)
+chalc feature                                     # interactive (asks for front and back paths, and whether there's a mobile app)
 chalc feature /path/front --back /path/back --lang en --no-branch
+chalc feature /path/front --back /path/back --movil /path/app   # with a mobile repo (alias: --mobile)
 ```
 
-It takes **one** user story and coordinates **two repos** (front and back) around an API contract:
+It takes **one** user story and coordinates **two repos** (front and back) — or **three**, if the
+feature also has a **mobile app** — around an API contract:
 
-1. Detects each repo's stack, confirms it with you, and equips both if needed (SDD included).
+1. Detects each repo's stack (framework and language: Angular, NestJS, Flutter, React Native, Kotlin,
+   Swift…), confirms it with you, and equips them if needed (SDD included).
 2. Acquires the user story from the same sources as `spec-ia` (file, Azure DevOps, Jira, URL, or paste).
-3. The AI generates, in order: **shared API contract** → **back spec** → **front spec**,
-   so the front consumes exactly what the back promises.
-4. Writes `specs/NNN-<slug>/` in BOTH repos with the **same number**, stores the contract in
+3. The AI generates, in order: **shared API contract** → **back spec** → **front spec** → **mobile
+   spec** (if there is one), so every client consumes exactly what the back promises. The mobile app
+   is another consumer of the SAME contract: no separate endpoints per client.
+4. Writes `specs/NNN-<slug>/` in EVERY repo with the **same number**, stores the contract in
    `contracts/api.md`, and stamps its fingerprint into every file (anti-drift: if you regenerate the
    feature against a different contract, it warns you). Re-running the same story is **idempotent**:
    it reuses the slug's folder instead of creating `NNN+1` duplicates.
-5. Optional: creates the `feat/<slug>` branch in both repos — all or nothing, and only if both trees
+5. Optional: creates the `feat/<slug>` branch in every repo — all or nothing, and only if all trees
    are clean. `--branch` / `--no-branch` decide without asking.
-6. Ends with a **single hand-off** for your assistant that coordinates the implementation across both repos.
+6. Ends with a **single hand-off** for your assistant that coordinates the implementation across all repos.
 
-Flags: `--back <path>`, `--lang es|en`, `--full` or `--mode lite|full` (SDD mode), `--branch`/`--no-branch`.
+Flags: `--back <path>`, `--movil <path>` (alias `--mobile`), `--lang es|en`, `--full` or `--mode lite|full` (SDD mode), `--branch`/`--no-branch`.
 
 ### Fidelity harness (the AI does NOT make things up)
 

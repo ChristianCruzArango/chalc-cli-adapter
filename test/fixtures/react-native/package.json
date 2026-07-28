@@ -1,0 +1,8 @@
+{
+  "name": "chalc-react-native-fixture",
+  "version": "0.1.0",
+  "dependencies": {
+    "react": "latest",
+    "react-native": "latest"
+  }
+}

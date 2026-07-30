@@ -7,6 +7,7 @@
 //   chalc doctor                         valida reglas, catálogo, MCP, métodos y targets
 //   chalc configure                      configura rules, skills y MCP de forma interactiva
 //   chalc spec                           crea una carpeta/plantilla vacía specs/NNN-feature
+//   chalc dashboard [carpeta]            monitoreo solo-lectura de los workspaces (modo worktree)
 //   chalc install <fuente> [--stack id]  instala un skill al catálogo y lo cablea a una regla
 //   chalc [ruta] --yes                   sin preguntas: equipa el stack detectado
 //   chalc [ruta] --method sdd[:full]     activa un método sin preguntar
@@ -37,6 +38,7 @@ import { runQa } from '../lib/commands/qa.mjs';
 import { runDeliver } from '../lib/commands/deliver.mjs';
 import { runTokens } from '../lib/commands/tokens.mjs';
 import { runUpdate } from '../lib/commands/update.mjs';
+import { runDashboard } from '../lib/commands/dashboard.mjs';
 import { runApply } from '../lib/commands/apply.mjs';
 
 // Salida con código SIN matar el proceso a mitad de camino: en Windows, un process.exit() justo
@@ -79,6 +81,7 @@ const COMMANDS = {
   deliver: runDeliver,
   tokens: runTokens,
   update: runUpdate,
+  dashboard: runDashboard,
   apply: runApply
 };
 

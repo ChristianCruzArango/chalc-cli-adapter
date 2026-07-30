@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseArgs } from '../lib/args.mjs';
+import { npmConfigFlag, parseArgs } from '../lib/args.mjs';
 
 test('parseArgs keeps positional values after boolean flags', () => {
   const { flags, positional } = parseArgs(['inspect', '--yes', 'test/fixtures/angular']);
@@ -19,6 +19,15 @@ test('parseArgs supports repeated value flags', () => {
 test('parseArgs rejects unknown flags and missing values', () => {
   assert.throws(() => parseArgs(['--wat']), /Flag desconocida/);
   assert.throws(() => parseArgs(['--target']), /necesita un valor/);
+});
+
+// spec 006 R11 — `npm run dashboard --console` sin `--`: npm se traga el flag y lo deja como
+// npm_config_console en el entorno; chalc debe reconocerlo igual que --console.
+test('npmConfigFlag reads flags swallowed by npm run from the environment', () => {
+  assert.equal(npmConfigFlag('console', { npm_config_console: 'true' }), true);
+  assert.equal(npmConfigFlag('console', { npm_config_console: 'false' }), false);
+  assert.equal(npmConfigFlag('console', {}), false);
+  assert.equal(npmConfigFlag('watch', { npm_config_console: 'true' }), false);
 });
 
 test('parseArgs maps --no-ccr to the ccr capability flag', () => {
@@ -75,4 +84,25 @@ test('parseArgs accepts QA security opt-ins', () => {
   assert.equal(flags['allow-login'], true);
   assert.equal(flags['allow-external-login'], true);
   assert.equal(flags.screenshots, true);
+});
+
+// spec 005 (R1, R12) — flags del modo worktree: booleanas --worktree/--terminals y --workspace-dir con valor.
+test('parseArgs accepts the worktree-mode flags (spec 005)', () => {
+  const { flags } = parseArgs(['feature', '--worktree', '--terminals', '--workspace-dir', 'D:/features']);
+  assert.equal(flags.worktree, true);
+  assert.equal(flags.terminals, true);
+  assert.equal(flags['workspace-dir'], 'D:/features');
+});
+
+// spec 005 (R12) — --no-terminals apaga el lanzador en modo no interactivo.
+test('parseArgs maps --no-terminals to terminals: false', () => {
+  const { flags } = parseArgs(['feature', '--worktree', '--no-terminals']);
+  assert.equal(flags.terminals, false);
+});
+
+// spec 006 (R10, R11) — flags del dashboard: --console (puesto de mando) y --no-watch (solo página).
+test('parseArgs accepts the dashboard console/watch flags (spec 006)', () => {
+  const { flags } = parseArgs(['dashboard', '--console', '--no-watch']);
+  assert.equal(flags.console, true);
+  assert.equal(flags.watch, false);
 });

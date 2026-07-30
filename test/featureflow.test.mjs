@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { featureHandoff } from '../lib/commands/feature.mjs';
+import { featureHandoff, featureWorkspaceHandoff } from '../lib/commands/feature.mjs';
 import { DICT } from '../lib/i18n.mjs';
 
 const base = {
@@ -55,6 +55,54 @@ test('mobile flow i18n keys exist in es and en', () => {
     assert.equal(typeof DICT.es[key], typeof DICT.en[key], `tipo distinto para ${key}`);
   }
   assert.equal(typeof DICT.es.featDetectMobile, 'function');   // recibe la etiqueta del stack
+});
+
+// ---------- spec 005: hand-off del workspace ----------
+
+// R11 — el hand-off del workspace refiere los lados por rutas RELATIVAS (la sesión se abre en la raíz).
+test('featureWorkspaceHandoff uses relative side paths and the shared contract', () => {
+  const msg = featureWorkspaceHandoff({ id: '005-login', branch: 'feat/login', specLang: 'español' });
+  assert.match(msg, /`back`[\s\S]*`back\/specs\/005-login\/`/);
+  assert.match(msg, /`front`[\s\S]*`front\/specs\/005-login\/`/);
+  assert.doesNotMatch(msg, /C:\\|D:\\|C:\//);   // nada de rutas absolutas
+  assert.match(msg, /contracts\/api\.md/);
+  assert.match(msg, /feat\/login/);
+});
+
+// R11 — incluye la instrucción de limpieza: no mover la carpeta y quitar el worktree al mergear.
+test('featureWorkspaceHandoff includes the cleanup instructions in both languages', () => {
+  const es = featureWorkspaceHandoff({ id: '005-login', branch: 'feat/login', specLang: 'español' });
+  assert.match(es, /[Nn]o muevas/);
+  assert.match(es, /git worktree remove/);
+  const en = featureWorkspaceHandoff({ id: '005-login', branch: 'feat/login', specLang: 'English' });
+  assert.match(en, /[Dd]o not move/);
+  assert.match(en, /git worktree remove/);
+});
+
+// R11 — con móvil el workspace coordina TRES lados, también relativos.
+test('featureWorkspaceHandoff with mobile lists the three relative sides', () => {
+  const msg = featureWorkspaceHandoff({ id: '005-login', branch: 'feat/login', specLang: 'español', hasMobile: true });
+  assert.match(msg, /TRES repos/);
+  assert.match(msg, /`movil\/specs\/005-login\/`/);
+});
+
+// spec 005 (R14) — claves nuevas del modo worktree existen en ambos idiomas con el mismo tipo.
+test('worktree mode i18n keys exist in es and en', () => {
+  const keys = [
+    'featModeQ', 'featModeRepo', 'featModeBranch', 'featModeWorktree',
+    'featGateHdr', 'featGateRetryQ', 'featGateAbort',
+    'featAnotherHuQ', 'featHuLabel', 'featWorkspaceDirQ',
+    'featWorkspaceCreated', 'featWorkspaceFailed', 'featDupRoute',
+    'featTerminalsQ', 'featOpenAllHint', 'featWsTableHead', 'featHandoffAt',
+    'termOpenAllPs1', 'termOpenAllSh'
+  ];
+  for (const key of keys) {
+    assert.ok(key in DICT.es, `falta ${key} en es`);
+    assert.ok(key in DICT.en, `falta ${key} en en`);
+    assert.equal(typeof DICT.es[key], typeof DICT.en[key], `tipo distinto para ${key}`);
+  }
+  assert.equal(typeof DICT.es.featWorkspaceCreated, 'function');   // (id, dir)
+  assert.equal(typeof DICT.es.featDupRoute, 'function');           // (method, path, ids)
 });
 
 // R9 — los textos de progreso/cierre reflejan si hay móvil (no mienten con 3 repos).

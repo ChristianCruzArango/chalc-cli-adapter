@@ -42,7 +42,8 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 | `chalc ai-doctor` | Muestra proveedor, perfil y modelos resueltos por tarea | no |
 | `chalc eval-ia` | Ejecuta evals locales de prompts/parsers sin llamar al proveedor | no |
 | `chalc spec-ia` | HU (Azure DevOps/Jira/Drive/Word/pegar) → spec/plan/tasks | sí |
-| `chalc feature` | Orquestador full-stack: UNA HU → contrato de API + spec del back + spec del front + spec del móvil opcional (mismo `NNN` en todos los repos) | sí |
+| `chalc feature` | Orquestador full-stack: UNA HU → contrato de API + spec del back + spec del front + spec del móvil opcional (mismo `NNN` en todos los repos). Con `--worktree`: varias HUs en paralelo, un workspace aislado por HU | sí |
+| `chalc dashboard [carpeta]` | Dashboard local solo-lectura de los workspaces del modo worktree: progreso de tareas + estado git por lado, auto-refresco | no |
 | `chalc-cli` | Shell interactiva del agente sobre tu proyecto equipado (tools con aprobación, skills y MCP) | sí |
 | `chalc qa <ruta>` | Lista specs y valida el preflight QA (Docker + documentación) | no |
 | `chalc qa <ruta> --spec 004-login --plan` | Genera el plan QA trazable a los requisitos de una spec | no |
@@ -717,6 +718,68 @@ además tiene **app móvil** — alrededor de un contrato de API:
 6. Cierra con un **hand-off único** para tu asistente que coordina la implementación en todos los repos.
 
 Flags: `--back <ruta>`, `--movil <ruta>` (alias `--mobile`), `--lang es|en`, `--full` o `--mode lite|full` (modo SDD), `--branch`/`--no-branch`.
+
+#### Modo worktree — varias HUs en paralelo
+
+```bash
+chalc feature /ruta/front --back /ruta/back --worktree             # workspaces aislados, uno por HU
+chalc feature /ruta/front --back /ruta/back --worktree --workspace-dir D:/features --no-terminals
+```
+
+En interactivo, `chalc feature` pregunta **dónde trabajar**: en el repo sin rama (default, el
+flujo de arriba), en el repo creando la rama, o en **worktrees aislados**. En modo worktree el
+modelo es "N desarrolladores, una HU cada uno" — chalc prepara todo, tú ejecutas los agentes:
+
+1. **Puerta bloqueante**: verifica cada repo (árbol limpio + al día, pull seguro fast-forward)
+   ANTES de pedir las HUs y antes de gastar un solo token; en interactivo re-verifica hasta que
+   los resuelvas, en no interactivo aborta.
+2. Captura **una o más HUs** y reserva números `NNN` consecutivos por adelantado (sin
+   colisiones entre HUs paralelas).
+3. Genera los contratos **en secuencia**: el contrato de la HU N ve los anteriores para no
+   redefinir sus rutas, y un chequeo de rutas duplicadas entre contratos te avisa (regex, sin IA).
+4. Crea un **workspace por HU**: `<base>/NNN-slug/` con un worktree git por repo (`back/`,
+   `front/` y `movil/` si hay) sobre la rama `feat/<slug>`, y todo DENTRO del worktree: skills
+   equipadas, `specs/NNN-slug/`, el contrato con su lock y el hand-off del orquestador en
+   `handoff.md`. El árbol principal de cada repo queda intacto. Todo-o-nada por HU; chalc nunca
+   ejecuta `worktree remove`, `prune`, `--force`, commit ni push.
+5. Ofrece abrir **Windows Terminal con un panel por HU — todos a la vista en una sola
+   ventana** — cada panel ya ubicado en su workspace; el comando del agente (`claude`,
+   `codex`…) lo escribes tú. Siempre escribe `open-all.ps1` (u `open-all.sh`) en la carpeta
+   base para reabrirlas después.
+
+Cada workspace es un "desarrollador" independiente: mismo contrato compartido, su propia rama, su
+propio PR. Dos reglas: no muevas la carpeta de un workspace (los worktrees guardan rutas absolutas
+hacia su repo), y al mergear el PR de un lado quita su worktree desde el repo original
+(`git worktree remove <ruta>`).
+
+Flags extra: `--worktree`, `--workspace-dir <carpeta>` (se recuerda para corridas futuras y para
+el dashboard), `--terminals`/`--no-terminals`. Sea cual sea la ruta que indiques, chalc trabaja
+siempre dentro de su subcarpeta `chalc-workspaces/` (la crea si falta, nunca la duplica) — no
+riega workspaces en tu carpeta.
+
+### 4) `chalc dashboard` — monitoreo solo-lectura de los workspaces (sin IA, sin tokens)
+
+```bash
+chalc dashboard                       # usa la carpeta recordada por chalc feature --worktree
+chalc dashboard D:/features --port 4321
+```
+
+Con varias HUs corriendo en paralelo necesitas la vista de pájaro sin recorrer cada terminal.
+`chalc dashboard` sirve una página local (solo localhost, solo GET, cero dependencias) con una
+tarjeta por workspace: estado agregado (`sin arrancar / en curso / completa / rota`) y, por lado
+(`back/`, `front/`, `movil/`), la rama, el progreso de tareas leído del `tasks.md` de esa spec,
+si el árbol está limpio o con cambios, los commits sobre la rama base (`develop`/`main`/`master`)
+y el asunto del último commit — más la **tarea en curso** (la primera pendiente del `tasks.md`),
+para ver en qué va cada agente. Se refresca sola cada 5 segundos. Nunca escribe, nunca lanza
+agentes — te dice **a qué terminal ir**. Ctrl+C lo apaga.
+
+En una terminal interactiva la misma vista se pinta también **en vivo en la consola** (mismo
+refresco, mismos datos) — navegador y terminal en tiempo real; `--no-watch` sirve solo la página.
+Y en Windows, `chalc dashboard --console` (o `npm run dashboard --console`) abre el **puesto
+de mando**: una ventana de Windows Terminal con layout fijo — el panel `dashboard` corriendo la
+vista viva en un lado (la mitad de la ventana, siempre legible) y los workspaces apilados a
+partes iguales en el otro, cada panel listo para que escribas el comando del agente. Si la página
+ya está servida por otro proceso, la vista de consola sigue funcionando sola.
 
 ### Harness de fidelidad (la IA NO inventa)
 

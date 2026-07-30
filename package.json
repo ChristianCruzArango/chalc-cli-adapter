@@ -48,6 +48,7 @@
     "ai-doctor": "node bin/chalc.mjs ai-doctor",
     "eval-ia": "node bin/chalc.mjs eval-ia",
     "spec-ia": "node bin/chalc.mjs spec-ia",
+    "dashboard": "node bin/chalc.mjs dashboard",
     "cli": "node cli/index.mjs",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm test && npm run doctor -- --yes && npm run eval-ia && npm run pack:check",

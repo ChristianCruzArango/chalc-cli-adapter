@@ -42,7 +42,8 @@ This way, an Angular project can receive its Angular skills, a NestJS one its ba
 | `chalc ai-doctor` | Shows provider, profile, and models resolved per task | no |
 | `chalc eval-ia` | Runs local evals of prompts/parsers without calling the provider | no |
 | `chalc spec-ia` | User story (Azure DevOps/Jira/Drive/Word/paste) → spec/plan/tasks | yes |
-| `chalc feature` | Full-stack orchestrator: ONE user story → API contract + back spec + front spec + optional mobile spec (same `NNN` in every repo) | yes |
+| `chalc feature` | Full-stack orchestrator: ONE user story → API contract + back spec + front spec + optional mobile spec (same `NNN` in every repo). With `--worktree`: several stories in parallel, one isolated workspace per story | yes |
+| `chalc dashboard [folder]` | Read-only local dashboard of the worktree workspaces: task progress + git state per side, auto-refresh | no |
 | `chalc-cli` | Interactive agent shell over your equipped project (approval-gated tools, skills, and MCP) | yes |
 | `chalc qa <path>` | Lists specs and validates the QA preflight (Docker + documentation) | no |
 | `chalc qa <path> --spec 004-login --plan` | Generates the QA plan traceable to a spec's requirements | no |
@@ -715,6 +716,68 @@ feature also has a **mobile app** — around an API contract:
 6. Ends with a **single hand-off** for your assistant that coordinates the implementation across all repos.
 
 Flags: `--back <path>`, `--movil <path>` (alias `--mobile`), `--lang es|en`, `--full` or `--mode lite|full` (SDD mode), `--branch`/`--no-branch`.
+
+#### Worktree mode — several stories in parallel
+
+```bash
+chalc feature /path/front --back /path/back --worktree             # isolated workspaces, one per story
+chalc feature /path/front --back /path/back --worktree --workspace-dir D:/features --no-terminals
+```
+
+Interactively, `chalc feature` asks **where to work**: in the repo without a branch (default, the
+flow above), in the repo creating the branch, or in **isolated worktrees**. In worktree mode the
+model is "N developers, one story each" — chalc prepares everything, you run the agents:
+
+1. **Blocking gate**: it checks every repo (clean tree + up to date, safe fast-forward pull)
+   BEFORE asking for stories and before spending a single token; interactively it re-checks
+   until you fix them, non-interactively it aborts.
+2. Captures **one or more user stories** and reserves consecutive `NNN` numbers up front (no
+   collisions between parallel stories).
+3. Generates the contracts **in sequence**: story N's contract sees the previous ones so it does
+   not redefine their routes, and a duplicate-route check across contracts warns you (regex, no AI).
+4. Creates one **workspace per story**: `<base>/NNN-slug/` with a git worktree per repo
+   (`back/`, `front/`, and `movil/` if there is one) on branch `feat/<slug>`, and everything
+   INSIDE the worktree: equipped skills, `specs/NNN-slug/`, the contract with its lock, and the
+   orchestrator hand-off at `handoff.md`. The main tree of every repo stays untouched.
+   All-or-nothing per story; chalc never runs `worktree remove`, `prune`, `--force`, commit, or push.
+5. Offers to open **Windows Terminal with one pane per story — all visible at once in a single
+   window** — each pane already sitting at its workspace; you type the agent command (`claude`,
+   `codex`…) yourself. It always writes `open-all.ps1` (or `open-all.sh`) in the base folder to
+   reopen them later.
+
+Each workspace is an independent "developer": same shared contract, its own branch, its own PR.
+Two rules: do not move a workspace folder (worktrees store absolute paths to their repo), and
+after merging a side's PR remove its worktree from the original repo (`git worktree remove <path>`).
+
+Extra flags: `--worktree`, `--workspace-dir <folder>` (remembered for future runs and for the
+dashboard), `--terminals`/`--no-terminals`. Whatever path you give, chalc always works inside its
+`chalc-workspaces/` subfolder (created if missing, never doubled) — it does not scatter
+workspaces in your folder.
+
+### 4) `chalc dashboard` — read-only monitoring of the workspaces (no AI, no tokens)
+
+```bash
+chalc dashboard                       # uses the folder remembered by chalc feature --worktree
+chalc dashboard D:/features --port 4321
+```
+
+With several stories running in parallel you need the bird's-eye view without walking every
+terminal. `chalc dashboard` serves a local page (localhost only, GET only, zero dependencies)
+with one card per workspace: aggregate status (`not started / in progress / complete / broken`)
+and, per side (`back/`, `front/`, `movil/`), the branch, task progress read from that spec's
+`tasks.md`, whether the tree is clean or has changes, commits over the base branch
+(`develop`/`main`/`master`), and the last commit subject — plus the **current task** (the first
+unchecked one in `tasks.md`), so you can see what every agent is working on. It refreshes itself
+every 5 seconds. It never writes, never launches agents — it tells you **which terminal needs
+you**. Ctrl+C stops it.
+
+In an interactive terminal the same view is also painted **live in the console** (same refresh,
+same data) — browser and terminal in real time; `--no-watch` serves the page only. And on Windows,
+`chalc dashboard --console` (or `npm run dashboard --console`) opens the **command center**:
+one Windows Terminal window with a fixed layout — the `dashboard` pane running the live view on
+one side (half the window, always readable) and the workspaces stacked evenly on the other side,
+each pane ready for you to type the agent command. If the page is already served by another
+process, the console view keeps working on its own.
 
 ### Fidelity harness (the AI does NOT make things up)
 

@@ -13,9 +13,14 @@ changes (mutants) into the code and checks whether your tests fail (kill the mut
 mutants = weak or missing tests. This is the **final gate of the SDD Implement phase** (after
 Red → Green → Refactor) and is mandated by the project constitution (test quality).
 
-> This skill is **guidance**, not an executor. Chalc does not run mutation testing — YOU (the assistant)
-> install and run the tool **in the project**. Install it **PROJECT-LOCAL** (dev-dependency / tool
-> manifest), **never `-g` global**, so the version is pinned and reproducible in CI. Commit the config.
+> **The gate runs this and checks it.** An equipped repo carries `.chalc/gate.mjs`: it executes the
+> command in `.chalc/gate.json` and reads the **native report file** the tool writes. The score comes
+> from that file — never from a summary you type. A missing tool, a missing report, or a report older
+> than the code you changed is a **BLOCKER**, not a pass.
+>
+> Your job is to install and configure the tool **PROJECT-LOCAL** (dev-dependency / tool manifest),
+> **never `-g` global**, so the version is pinned and reproducible in CI — and to make it write its
+> report **where the gate reads it** (table below). Commit the config.
 
 ## Core principle: detect, reuse, configure, report — never assume
 
@@ -40,15 +45,56 @@ Two Angular apps can use Karma, Jest or Vitest; do not guess. Always, in this or
 
 ## Pick the tool by language; pick the JS/TS runner by detected framework
 
-| Language | Install once, project-local (if missing) | Run |
-|---|---|---|
-| JS / TS | `npm i -D @stryker-mutator/core` **+ the runner that matches the detected framework** (see mapping below). Then `npx stryker init` (reuses your existing test config). | `npx stryker run` |
-| .NET / C# | `dotnet new tool-manifest` (once) → `dotnet tool install dotnet-stryker` (**local**, writes `.config/dotnet-tools.json`, commit it) | `dotnet stryker` |
-| Python | `uv add --dev mutmut` (or, inside a venv, `pip install mutmut`) | `uv run mutmut run` → `mutmut results` |
-| Java / Kotlin | PIT plugin in `pom.xml` (project build) | `mvn org.pitest:pitest-maven:mutationCoverage` |
-| Go | no install: `go run github.com/go-gremlins/gremlins/cmd/gremlins@latest unleash` | (same command) |
-| Rust | `cargo install --locked cargo-mutants` (cargo subcommand, user-level) | `cargo mutants` |
-| PHP | `composer require --dev infection/infection` | `vendor/bin/infection` |
+| Language | Install once, project-local (if missing) | Run | Native report the gate parses |
+|---|---|---|---|
+| JS / TS | `npm i -D @stryker-mutator/core` **+ the runner that matches the detected framework** (see mapping below). Then `npx stryker init` (reuses your existing test config). | `npx --no-install stryker run` | `reports/mutation/mutation.json` — **you must enable the `json` reporter**, see below |
+| .NET / C# | `dotnet new tool-manifest` (once) → `dotnet tool install dotnet-stryker` (**local**, writes `.config/dotnet-tools.json`, commit it) | `dotnet stryker` | `StrykerOutput/**/reports/mutation-report.json` (written by default) |
+| Python | `uv add --dev mutmut` (or, inside a venv, `pip install mutmut`) | `mutmut run && mutmut junitxml > reports/mutation/mutmut.xml` | `reports/mutation/mutmut.xml` |
+| Java / Kotlin | PIT plugin in `pom.xml` (project build) | `mvn org.pitest:pitest-maven:mutationCoverage` | `target/pit-reports/**/mutations.xml` (written by default) |
+| Go | no install: `go run github.com/go-gremlins/gremlins/cmd/gremlins@latest unleash` | (same command) | **no parser yet** — see below |
+| Rust | `cargo install --locked cargo-mutants` (cargo subcommand, user-level) | `cargo mutants` | **no parser yet** — see below |
+| PHP | `composer require --dev infection/infection` | `vendor/bin/infection` | **no parser yet** — see below |
+| Dart / Flutter | no standard tool exists | — | **none** — see below |
+
+### The report is the evidence — make the tool write it
+The gate never reads the tool's stdout, because stdout is exactly what a summary can fake. It parses
+the report file. Two tools need you to ask for it explicitly:
+
+- **StrykerJS does not write the JSON report by default.** Its default reporters are HTML and progress.
+  Add the `json` reporter to `stryker.conf.json` (and commit it):
+  ```json
+  {
+    "reporters": ["html", "json", "progress"],
+    "jsonReporter": { "fileName": "reports/mutation/mutation.json" }
+  }
+  ```
+- **mutmut prints results to the screen.** `mutmut results` is for humans; the gate needs the file, so
+  the run always ends with `mutmut junitxml > reports/mutation/mutmut.xml`.
+
+Note the `--no-install` in the JS command: plain `npx stryker run` **downloads** whatever it cannot
+find — and the bare `stryker` package on npm is an abandoned 2019 release, not `@stryker-mutator/core`.
+The gate never installs anything, so neither does the command it launches. If the tool is missing, the
+stage blocks and prints the exact install command instead of pulling a random package from the network.
+
+If you change where the report lands, change `mutation.report` in `.chalc/gate.json` to match. That
+file is the single place the gate reads its configuration from.
+
+### Stacks the gate cannot verify yet
+Go, Rust, PHP and **Dart / Flutter** have no report parser in the gate (Dart has no standard mutation
+tool at all). There the mutation stage ends as a **BLOCKER** by default, and that is deliberate: the
+gate says "I could not verify this", never "this passed".
+
+Two honest ways out — pick one **with the user**, never on your own:
+
+1. **Configure a tool the gate can read.** Point `mutation.command`, `mutation.report` and
+   `mutation.format` in `.chalc/gate.json` at a tool that writes one of the supported report formats
+   (`elements`, `junit`, `pit`).
+2. **Declare the stage not applicable**: set `"required": false` inside `mutation` in
+   `.chalc/gate.json`. The stage is then reported as *not applicable* instead of blocking, and the
+   reason is recorded in `.chalc/gate.md` on every run. This only works where the gate has **no parser
+   for the stack** — on a repo it can measure, the flag is ignored and the stage runs anyway.
+
+Do not work around a blocker by editing the gate code: it is regenerated on every equip.
 
 ### JS/TS — framework → Stryker runner (lookup, not a stack rule)
 | Detected unit-test framework | Runner plugin |
@@ -72,21 +118,25 @@ Notes:
 1. Run the mutation tool on the code you changed (scope `mutate` to the feature's files — fast and focused).
 2. Read the **surviving mutants** — each one is a bug your tests do NOT catch.
 3. Add or strengthen tests until those mutants are killed.
-4. Reach **≥ 80% mutation score** on critical logic (set the threshold in the tool config).
+4. Reach **≥ 80% mutation score** on critical logic (`mutation.threshold` in `.chalc/gate.json`).
+5. Close the task by running the gate: `node .chalc/gate.mjs`. It reruns the tool, parses the report
+   and writes the evidence to `.chalc/gate.md`. Your word is not the evidence; that file is.
 
 ## Cleanup (don't leave or commit artifacts)
-Mutation tools create temp sandboxes and reports. When the run finishes:
+Mutation tools create temp sandboxes and reports.
 - **Remove the temp sandbox.** Stryker deletes `.stryker-tmp/` on its own when `cleanTempDir` is on
-  (default); if a crash leaves it behind, delete it. Same idea for other tools (e.g. `.mutmut-cache/`,
-  PIT's `target/pit-reports/`).
-- **Never commit it.** Add the temp/report paths to the project's `.gitignore`, e.g.
-  `.stryker-tmp/` and the mutation report dir (`reports/mutation/`). Commit only the **config**
-  (`stryker.conf.json` / equivalent), not the run output.
+  (default); if a crash leaves it behind, delete it. Same idea for `.mutmut-cache/`.
+- **Never delete the report before the gate reads it.** `reports/mutation/`, `StrykerOutput/` and
+  `target/pit-reports/` are the evidence, not sandbox litter. Deleting them makes the gate block with
+  "the tool left no report".
+- **Never commit run output.** Add the temp and report paths to `.gitignore` (`.stryker-tmp/`,
+  `reports/mutation/`, `StrykerOutput/`). Commit only the **config** (`stryker.conf.json` / equivalent).
 
 ## Where it fits in SDD
-`Red (failing test) → Green (code) → Refactor → MUTATION TESTING (kill mutants)`.
-No feature closes with surviving mutants in critical logic. If it's blocked by environment/tooling,
-keep the task open (traceability) and move the run to CI — don't drop it.
+`Red (failing test) → Green (code) → Refactor → MUTATION TESTING (kill mutants) → GATE (verifies it)`.
+No feature closes with surviving mutants in critical logic. If it's blocked by environment or tooling,
+say so as a blocker and keep the task open — the gate will not let it pass either, and that is the
+point: an unverified run is never a green run.
 
 ## Don'ts
 - **Don't pick a runner by language/stack** — pick it from the project's detected test framework.
@@ -95,3 +145,7 @@ keep the task open (traceability) and move the run to CI — don't drop it.
 - Don't chase 100% blindly — focus mutation effort on business/critical logic.
 - Don't run full mutation on every commit if it's slow: changed files in PRs, full run in nightly CI.
 - Don't "kill" a mutant by deleting code — kill it by improving the test.
+- **Don't report a score you did not read from the report file** — the gate parses that same file and
+  will contradict you.
+- **Don't edit `.chalc/gate.mjs` or the modules under `.chalc/gate/`** to get past a blocker: they are
+  regenerated on every equip. Configuration goes in `.chalc/gate.json`.

@@ -25,6 +25,12 @@ for (const { name, mod, rel } of CASES) {
     const userText = '# Instrucciones del usuario\n\nEsto NO se debe borrar. Var $HOME y ejemplo $& en un comando.\n';
     await writeFile(file, userText, 'utf8');
 
+    // Catálogo mínimo: el agente revisor, que todos los targets proyectan (spec 007, R12).
+    await mkdir(join(base, 'agents'), { recursive: true });
+    for (const agent of ['revisor.md', 'revisor.en.md']) {
+      await writeFile(join(base, 'agents', agent), 'Revisor. Skills:\n\n{{SKILLS}}\n', 'utf8');
+    }
+
     // apply() mínimo: sin skills/mcp/métodos → solo escribe el bloque gestionado + manifiesto.
     await mod.apply({
       projectPath: base, CATALOG: base, skills: [], mcps: [], methods: [], stacks: [], dryRun: false

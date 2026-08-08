@@ -34,6 +34,7 @@ This way, an Angular project can receive its Angular skills, a NestJS one its ba
 | `chalc` | Detects the stack and equips skills/MCP/method (interactive) | no |
 | `chalc inspect` | Explains what it detects and why, without writing | no |
 | `chalc verify [path]` | Verifies a project: completeness (folders/README, architecture.md, specs/) + **architecture boundaries** (layers) | no |
+| `node .chalc/gate.mjs` | **Quality gate** of an equipped repo: tests + mutation + static checks; evidence in `.chalc/gate.md`. Not a chalc command — it runs in the repo, with or without chalc | no |
 | `chalc doctor` | Validates the catalog (rules, skills, MCP, methods, targets) | no |
 | `chalc configure` | Manages the catalog (rules/skills/MCP) via menu | no |
 | `chalc install <source>` | Installs a skill into the catalog and wires it to a rule | no |
@@ -362,7 +363,10 @@ chalc/
 │   ├── init-folders.mjs     per-folder guides (README.md) + folder map for architecture.md
 │   ├── init-scaffold.mjs    reshapes the project to the architecture + writes docs/architecture.md
 │   ├── verify.mjs           project completeness verification (folders, docs, specs, manifest)
-│   ├── verify-boundaries.mjs architecture boundary linter (layers, no AI) — `chalc verify`
+│   ├── verify-boundaries.mjs re-export of the gate's boundary linter — `chalc verify`
+│   ├── gatedetect.mjs      detects the gate config from the repo's real signals
+│   ├── gateemit.mjs        emits the gate into `.chalc/` when equipping
+│   ├── gatehandoff.mjs     the task-closing cycle printed in every hand-off
 │   ├── initai.mjs           optional AI layer that suggests architecture (CCR + recall, clarifications)
 │   ├── ── spec generation (`chalc spec-ia`) ──
 │   ├── ai.mjs               multi-provider AI client (fetch) + ~/.chalc config (per-task profiles)
@@ -396,7 +400,10 @@ chalc/
 │   ├── skills/              the real skills (self-contained, portable)
 │   ├── mcp/                 MCP server definitions
 │   ├── profiles/            per-task model profiles (chalc-default.json: spec/qa/repair)
-│   └── methods/sdd/         the SDD method (constitution, es/en templates, rules, graphic)
+│   ├── methods/sdd/         the SDD method (constitution, es/en templates, rules, graphic)
+│   ├── agents/              the reviewer agent (es/en), projected in each target's format
+│   ├── hooks/               the opt-in turn-end hook, documented — never installed
+│   └── gate/                the quality gate: real code copied into `.chalc/` when equipping
 ├── rules/                   criteria: which signal = which stack = what gets installed (incl. global.json)
 ├── targets/
 │   ├── claude.mjs           translator to Claude Code
@@ -583,7 +590,7 @@ Five phases in order: **Constitution → Specify → Plan → Tasks → Implemen
 
 - **EARS**: requirements are written to be testable — `WHEN <evento> THE SYSTEM SHALL <comportamiento>` — with an id (`R1`, `R2`…).
 - **Test-First (non-negotiable)**: no code before a test that **fails** (Red), approved. Then the minimal code (Green), refactor.
-- **Mutation testing**: after Green/refactor, the tests must **kill mutants** (score ≥ 80%). See the *Test-First + Mutation testing* section.
+- **Mutation testing**: after Green/refactor, the tests must **kill mutants** (score ≥ 80%). The **quality gate** below is what checks it.
 - **Traceability**: each task and each test points to a requirement (`R#`).
 
 When you choose it in interactive mode, Chalc **shows a brief diagram** explaining SDD before integrating it, and asks the **project size**:
@@ -596,6 +603,57 @@ When you choose it in interactive mode, Chalc **shows a brief diagram** explaini
 The method is injected into the assistant's file (`CLAUDE.md`, etc.) as rules, and leaves `specs/` in the project.
 Without interactive: `chalc --method sdd:lite` or `chalc --method sdd:full` (or `--mode lite|full`).
 The constitution, templates, and rules are in **es and en** (they follow the system language).
+
+### Quality gate: closing a task is verified, not promised
+
+Equipping a repo also drops a **quality gate** in it: `.chalc/gate.mjs`, real code with zero
+dependencies that runs with plain Node, whether or not chalc is installed there.
+
+The reason it exists: "run mutation testing and reach 80%" used to be a sentence in the rules that
+nobody checked. An assistant could report a score without running anything. Now the score comes from
+**parsing the tool's own report file** — never from its stdout, never from a summary someone typed.
+
+```
+node .chalc/gate.mjs           # closes a task: tests + mutation + static checks
+node .chalc/gate.mjs --fast    # skips mutation (minutes) — does NOT close a task
+```
+
+| Stage | What it checks | Where it comes from |
+|---|---|---|
+| tests | the repo's own suite | `test.command` |
+| mutation | score ≥ threshold and surviving mutants | the native report (Stryker, Stryker.NET, mutmut, PIT) |
+| code | one thing per file, file/function length, parameters, nesting, empty `catch`, debug output, `any` | changed files |
+| boundaries | imports crossing layers or features | same linter as `chalc verify` |
+| traceability | every changed test cites a real `R#` | `specs/NNN-*/spec.md` |
+| contract | every route of the contract exists in the code | `contracts/api.md` |
+
+**What cannot be verified is blocked, never approved.** A missing tool, a missing report, or a report
+older than the code you changed exits non-zero and prints the exact install command. Every run writes
+`.chalc/gate.md` with the date, branch, each command with its real exit code and duration, the score,
+the survivors and the findings — evidence you can read yourself.
+
+Configuration lives in **`.chalc/gate.json`** (thresholds, commands, report paths). Re-equipping
+regenerates the gate code and **keeps what you edited there**.
+
+### Reviewer agent: what the gate cannot measure
+
+The gate measures and does not opine. Next to it, each repo gets a **reviewer agent** in its target's
+format (a real subagent in `.claude/agents/` for Claude Code, a rule in `.cursor/rules/`, a section of
+the managed block for Codex, Copilot and Gemini). It reads `.chalc/gate.md`, the task's diff, the
+constitution and **that repo's active skills**, and judges what only reading can tell: whether the
+test verifies the requirement or merely accompanies it, whether the abstraction is right, whether the
+name says what it does.
+
+It answers `OK` or a numbered list with `file:line`. **It does not modify files** — in Claude Code
+that is not asked for, it is granted: its tool list has no write tool.
+
+The hand-off printed by `spec-ia` and `feature` carries the closing cycle: run the gate → paste its
+output verbatim → fix → reviewer → tick the task. In a full-stack feature the cycle is **per repo**,
+naming each side's gate, and switching repos before closing the current one is forbidden.
+
+> Chalc **never installs the hook** that would run this automatically: hooks execute on their own and
+> `.claude/settings.json` is committed, so enabling it would impose a command on everyone who clones
+> the repo. The ready-to-paste block and the reasoning are left in `.chalc/gate-hook.md`.
 
 ## Optional AI layer — generating specs from a user story
 
@@ -878,6 +936,12 @@ right tool per stack (**project-local** install, never global):
 
 Goal: **mutation score ≥ 80%** on critical logic. These are **dev-only** tools (they don't go to
 production); audit them with `npm audit` / `dotnet list package --vulnerable` / `pip-audit` / `composer audit`.
+
+**The skill installs and configures; the gate verifies.** The 80% is not taken on trust: the quality
+gate runs the tool and reads the score from the report file it writes. That is why the skill also tells
+you to enable Stryker's `json` reporter and to end a mutmut run with `mutmut junitxml` — without a
+report file there is nothing to verify, and the stage blocks. Chalc **never installs anything**: when a
+tool is missing the gate prints the exact command and stops.
 
 ## Internationalization
 

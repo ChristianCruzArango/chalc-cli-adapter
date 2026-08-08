@@ -8,7 +8,16 @@ import * as codex from '../targets/codex.mjs';
 import { tomlMcpServers } from '../lib/targetkit.mjs';
 import { loadTargets } from '../lib/commands/catalogstore.mjs';
 
-async function tmp() { return mkdtemp(join(tmpdir(), 'chalc-codex-')); }
+// El directorio hace de proyecto y de catálogo mínimo a la vez. Incluye el agente revisor, que
+// todos los targets proyectan desde el catálogo (spec 007, R12).
+async function tmp() {
+  const base = await mkdtemp(join(tmpdir(), 'chalc-codex-'));
+  await mkdir(join(base, 'agents'), { recursive: true });
+  for (const agent of ['revisor.md', 'revisor.en.md']) {
+    await writeFile(join(base, 'agents', agent), 'Revisor. Skills:\n\n{{SKILLS}}\n', 'utf8');
+  }
+  return base;
+}
 
 const MCPS = [
   { id: 'dart', description: 'Dart MCP', server: { command: 'dart', args: ['mcp-server'] } },

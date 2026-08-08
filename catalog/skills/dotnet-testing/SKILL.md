@@ -60,15 +60,19 @@ repo.GetAsync(1).Returns(new User(1, "Ana"));
 3. Run mutation testing and strengthen tests until the mutants are killed.
 
 ## Mutation testing (test quality)
-A green test isn't enough — it must catch bugs. Run **Stryker.NET**:
+A green test isn't enough — it must catch bugs. Run **Stryker.NET**, installed **project-local** so the
+version is pinned and reproducible in CI:
 ```bash
-dotnet tool install -g dotnet-stryker
-dotnet stryker            # mutates the code; surviving mutants = weak tests → strengthen them
+dotnet new tool-manifest                  # once per repo; commit .config/dotnet-tools.json
+dotnet tool install dotnet-stryker        # project-local, never global
+dotnet stryker                            # surviving mutants = weak tests → strengthen them
 ```
-Target ≥ 80% mutation score on critical logic; add it to CI.
+Stryker.NET writes its report to `StrykerOutput/<timestamp>/reports/mutation-report.json`; that file is
+what the quality gate (`.chalc/gate.mjs`) parses, so don't delete it before closing the task. Target
+≥ 80% mutation score on critical logic (`mutation.threshold` in `.chalc/gate.json`); add it to CI.
 
 ## Checklist
-- [ ] Mutation score ≥ 80% (Stryker.NET) on critical logic.
+- [ ] Mutation score ≥ 80% (Stryker.NET) on critical logic, verified by `node .chalc/gate.mjs`.
 - [ ] Test project per prod project; `dotnet test` green.
 - [ ] AAA, `Method_State_Expected` names.
 - [ ] `[Theory]` for edge cases.

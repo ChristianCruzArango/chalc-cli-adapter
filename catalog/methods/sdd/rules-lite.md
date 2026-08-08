@@ -14,7 +14,9 @@ de tener tests que **fallen** (Red).
    2. Confírmalos en **FALLO** (Red).
    3. Escribe el **mínimo código** para pasarlos (Green).
    4. Refactoriza sin romper tests.
-   5. Corre **mutation testing** apoyándote en la skill `mutation-testing` del proyecto; si sobreviven mutantes, refuerza los tests hasta matarlos (score ≥ 80%).
+   5. **Cierra la tarea con el portón:** `node .chalc/gate.mjs`. Corre los tests, la herramienta de mutación y los linters, y escribe la evidencia en `.chalc/gate.md`. Pega su salida tal cual: el score sale de ahí, no de ti. Si sobreviven mutantes, refuerza los tests hasta matarlos (el portón exige ≥ 80%).
+   6. **Llama al agente revisor** (`revisor`). Si devuelve hallazgos, arréglalos y vuelve al paso 5.
+   7. No avances a la siguiente tarea con el portón en rojo o con hallazgos del revisor. Una corrida con `--fast` no cierra tarea: omite la mutación.
 
 ### Reglas duras
 - **Test-First:** ningún código de implementación antes de un test que falla y esté aprobado.

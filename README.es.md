@@ -34,6 +34,7 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 | `chalc` | Detecta el stack y equipa skills/MCP/método (interactivo) | no |
 | `chalc inspect` | Explica qué detecta y por qué, sin escribir | no |
 | `chalc verify [ruta]` | Verifica un proyecto: completitud (carpetas/README, architecture.md, specs/) + **fronteras de arquitectura** (capas) | no |
+| `node .chalc/gate.mjs` | **Portón de calidad** de un repo equipado: tests + mutación + comprobaciones estáticas; evidencia en `.chalc/gate.md`. No es un comando de chalc — corre en el repo, con o sin chalc | no |
 | `chalc doctor` | Valida el catálogo (rules, skills, MCP, métodos, targets) | no |
 | `chalc configure` | Administra el catálogo (rules/skills/MCP) por menú | no |
 | `chalc install <fuente>` | Instala un skill al catálogo y lo cablea a una regla | no |
@@ -363,7 +364,10 @@ chalc/
 │   ├── init-folders.mjs     guías por carpeta (README.md) + mapa de carpetas para architecture.md
 │   ├── init-scaffold.mjs    re-moldea el proyecto a la arquitectura + escribe docs/architecture.md
 │   ├── verify.mjs           verificación de completitud del proyecto (carpetas, docs, specs, manifiesto)
-│   ├── verify-boundaries.mjs linter de fronteras de arquitectura (capas, sin IA) — `chalc verify`
+│   ├── verify-boundaries.mjs re-export del linter de fronteras del portón — `chalc verify`
+│   ├── gatedetect.mjs      detecta la config del portón desde las señales reales del repo
+│   ├── gateemit.mjs        emite el portón en `.chalc/` al equipar
+│   ├── gatehandoff.mjs     el ciclo de cierre de tarea que va en cada hand-off
 │   ├── initai.mjs           capa IA opcional que sugiere arquitectura (CCR + recall, clarifications)
 │   ├── ── generación de specs (`chalc spec-ia`) ──
 │   ├── ai.mjs               cliente multi-proveedor de IA (fetch) + config ~/.chalc (perfiles por tarea)
@@ -397,7 +401,10 @@ chalc/
 │   ├── skills/              las skills reales (autocontenidas, portátiles)
 │   ├── mcp/                 definiciones de servidores MCP
 │   ├── profiles/            perfiles de modelos por tarea (chalc-default.json: spec/qa/repair)
-│   └── methods/sdd/         el método SDD (constitución, plantillas es/en, reglas, gráfico)
+│   ├── methods/sdd/         el método SDD (constitución, plantillas es/en, reglas, gráfico)
+│   ├── agents/              el agente revisor (es/en), proyectado en el formato de cada target
+│   ├── hooks/               el hook opcional de fin de turno, documentado — nunca instalado
+│   └── gate/                el portón de calidad: código real que se copia a `.chalc/` al equipar
 ├── rules/                   criterio: qué señal = qué stack = qué se instala (incl. global.json)
 ├── targets/
 │   ├── claude.mjs           traductor a Claude Code
@@ -584,7 +591,7 @@ Cinco fases en orden: **Constitución → Specify → Plan → Tasks → Impleme
 
 - **EARS**: los requisitos se escriben testeables — `WHEN <evento> THE SYSTEM SHALL <comportamiento>` — con id (`R1`, `R2`…).
 - **Test-First (innegociable)**: ningún código antes de un test que **falle** (Red), aprobado. Luego el mínimo código (Green), refactor.
-- **Mutation testing**: tras Green/refactor, los tests deben **matar mutantes** (score ≥ 80%). Ver sección *Test-First + Mutation testing*.
+- **Mutation testing**: tras Green/refactor, los tests deben **matar mutantes** (score ≥ 80%). El **portón de calidad** de abajo es quien lo comprueba.
 - **Trazabilidad**: cada tarea y cada test apunta a un requisito (`R#`).
 
 Al elegirlo en el modo interactivo, Chalc **muestra un gráfico breve** explicando SDD antes de integrarlo, y pregunta el **tamaño del proyecto**:
@@ -597,6 +604,58 @@ Al elegirlo en el modo interactivo, Chalc **muestra un gráfico breve** explican
 El método se inyecta en el archivo del asistente (`CLAUDE.md`, etc.) como reglas, y deja `specs/` en el proyecto.
 Sin interactivo: `chalc --method sdd:lite` o `chalc --method sdd:full` (o `--mode lite|full`).
 La constitución, plantillas y reglas están en **es y en** (siguen el idioma del sistema).
+
+### Portón de calidad: cerrar una tarea se verifica, no se promete
+
+Equipar un repo también le deja un **portón de calidad**: `.chalc/gate.mjs`, código real sin
+dependencias que corre con Node a secas, esté o no chalc instalado ahí.
+
+Por qué existe: "corre mutation testing y llega a 80%" era una frase de las reglas que nadie
+comprobaba. Un asistente podía reportar un score sin ejecutar nada. Ahora el score sale de **parsear
+el archivo de reporte de la propia herramienta** — nunca de su stdout, nunca de un resumen escrito.
+
+```
+node .chalc/gate.mjs           # cierra una tarea: tests + mutación + comprobaciones estáticas
+node .chalc/gate.mjs --fast    # omite la mutación (minutos) — NO cierra tarea
+```
+
+| Etapa | Qué comprueba | De dónde sale |
+|---|---|---|
+| tests | la suite del propio repo | `test.command` |
+| mutación | score ≥ umbral y mutantes supervivientes | el reporte nativo (Stryker, Stryker.NET, mutmut, PIT) |
+| código | una cosa por archivo, largo de archivo/función, parámetros, anidamiento, `catch` vacío, salida de depuración, `any` | archivos cambiados |
+| fronteras | imports que cruzan capas o features | el mismo linter de `chalc verify` |
+| trazabilidad | cada test cambiado cita un `R#` real | `specs/NNN-*/spec.md` |
+| contrato | cada ruta del contrato existe en el código | `contracts/api.md` |
+
+**Lo que no se puede comprobar se bloquea, nunca se aprueba.** Herramienta ausente, reporte que no
+está o reporte más viejo que el código que cambiaste salen con código distinto de cero e imprimen el
+comando de instalación exacto. Cada corrida escribe `.chalc/gate.md` con la fecha, la rama, cada
+comando con su código de salida y su duración reales, el score, los supervivientes y los hallazgos —
+evidencia que puedes leer tú mismo.
+
+La configuración vive en **`.chalc/gate.json`** (umbrales, comandos, rutas de reporte). Re-equipar
+regenera el código del portón y **conserva lo que hayas editado ahí**.
+
+### Agente revisor: lo que el portón no puede medir
+
+El portón mide y no opina. A su lado, cada repo recibe un **agente revisor** en el formato de su
+target (subagente real en `.claude/agents/` para Claude Code, regla en `.cursor/rules/`, sección del
+bloque gestionado para Codex, Copilot y Gemini). Lee `.chalc/gate.md`, el diff de la tarea, la
+constitución y **las skills activas de ESE repo**, y juzga lo que solo se ve leyendo: si el test
+comprueba el requisito o solo lo acompaña, si la abstracción es la correcta, si el nombre dice lo que
+hace.
+
+Responde `OK` o una lista numerada con `archivo:línea`. **No modifica archivos** — en Claude Code eso
+no se pide, se concede: su lista de herramientas no incluye ninguna de escritura.
+
+El hand-off que imprimen `spec-ia` y `feature` lleva el ciclo de cierre: corre el portón → pega su
+salida tal cual → arregla → revisor → marca la tarea. En una feature full-stack el ciclo es **por
+repo**, nombrando el portón de cada lado, y está prohibido cambiar de repo sin cerrar el actual.
+
+> Chalc **nunca instala el hook** que haría esto automático: los hooks se ejecutan solos y
+> `.claude/settings.json` va commiteado, así que activarlo le impondría un comando a todo el que
+> clone el repo. El bloque listo para pegar y el porqué quedan en `.chalc/gate-hook.md`.
 
 ## Capa de IA opcional — generar specs desde una HU
 
@@ -881,6 +940,12 @@ herramienta correcta por stack (instalación **project-local**, nunca global):
 
 Objetivo: **mutation score ≥ 80%** en la lógica crítica. Son herramientas **dev-only** (no van a
 producción); audítalas con `npm audit` / `dotnet list package --vulnerable` / `pip-audit` / `composer audit`.
+
+**La skill instala y configura; el portón verifica.** El 80% no se da por bueno: el portón de calidad
+corre la herramienta y lee el score del archivo de reporte que escribe. Por eso la skill también te
+manda habilitar el reporter `json` de Stryker y terminar la corrida de mutmut con `mutmut junitxml` —
+sin archivo de reporte no hay nada que verificar, y la etapa bloquea. Chalc **no instala nada**: si
+falta la herramienta, el portón imprime el comando exacto y se detiene.
 
 ## Internacionalización
 

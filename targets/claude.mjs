@@ -13,9 +13,11 @@ import * as kit from '../lib/targetkit.mjs';
 
 export const label = 'Claude Code';
 
-export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, dryRun }) {
+export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun }) {
   const plan = [];
   for (const s of skills) plan.push(`skill     .claude/skills/${s}`);
+  plan.push('agent     .claude/agents/revisor.md');
+  plan.push('doc       .chalc/gate-hook.md  (hook opcional, para pegar a mano)');
   for (const m of mcps) plan.push(`mcp       .mcp.json  ::  ${m.id}`);
   for (const me of methods) plan.push(`método    ${me.id}${me.mode && me.mode !== 'default' ? ` (${me.mode})` : ''}  (scaffold + reglas)`);
   plan.push('rules     CLAUDE.md  (bloque chalc)');
@@ -35,6 +37,14 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
 
   // 3) Métodos -> copiar scaffold (specs/ del SDD, sin sobrescribir archivos del usuario)
   await kit.copyMethodScaffolds(methods, projectPath);
+
+  // 3b) Revisor: en Claude Code va como SUBAGENTE propio, no como un párrafo más de CLAUDE.md.
+  // Así se invoca a voluntad al cerrar cada tarea, y sus herramientas son de solo lectura (R12).
+  await kit.writeReviewer(projectPath, CATALOG, { skills, specLang, kind: 'agent' });
+
+  // 3c) Hook de cierre de turno: se DOCUMENTA, no se instala. `.claude/settings.json` va commiteado,
+  // así que activarlo aquí le ejecutaría un comando a todo el que clone el repo (R19).
+  await kit.writeGateHookDoc(projectPath, CATALOG, { specLang });
 
   // 4) CLAUDE.md (bloque gestionado)
   const lines = [kit.START, '## ⚙️ Chalc'];

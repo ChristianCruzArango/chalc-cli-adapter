@@ -113,3 +113,13 @@ void main() {
 - [ ] Dependencies mocked with `mocktail`; interactions `verify`-ied.
 - [ ] Golden tests for critical visuals; integration tests for key flows.
 - [ ] Test strength validated via the mutation-testing skill.
+
+## A note on mutation testing in Dart
+Dart has no standard mutation-testing tool, so by default the quality gate's mutation stage ends as a
+**BLOCKER** in a Flutter repo — it reports "I could not verify this", never "this passed".
+
+Agree the way out with the user, once per repo: setting `"required": false` inside `mutation` in
+`.chalc/gate.json` marks the stage as *not applicable* instead of blocking, and every run records that
+reason in `.chalc/gate.md`. Don't decide it yourself and don't edit the gate code (it is regenerated on
+every equip). Everything else the gate checks — tests, one-thing-per-file, architecture boundaries,
+traceability, contract routes — runs normally, so the bar for a Flutter task stays high.

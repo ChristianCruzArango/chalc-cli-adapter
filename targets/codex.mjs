@@ -9,7 +9,7 @@ import * as kit from '../lib/targetkit.mjs';
 
 export const label = 'Codex CLI';
 
-export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, dryRun }) {
+export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun }) {
   const plan = [];
   for (const s of skills) plan.push(`skill     .chalc/skills/${s}`);
   for (const m of mcps) plan.push(`mcp       .codex/config.toml  ::  ${m.id}`);
@@ -35,6 +35,8 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   }
   if (mcps.length) lines.push('', '### Servidores MCP', ...mcps.map((m) => `- \`${m.id}\` — ${m.description || ''}`));
   for (const me of methods) lines.push('', me.rulesText.trim());
+  // Revisor: aquí no hay subagentes, así que va como sección del mismo bloque gestionado (R12).
+  lines.push(...await kit.reviewerLines(CATALOG, { skills, specLang }));
   lines.push(kit.END);
   await kit.writeManagedBlock(join(projectPath, 'AGENTS.md'), lines.join('\n'));
 

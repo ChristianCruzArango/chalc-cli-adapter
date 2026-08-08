@@ -13,7 +13,8 @@ de tener tests que **fallen** (Red).
    - **Contratos** → `contracts/<recurso>.<acción>.contract.md` (uno por archivo).
    - **Validación** → `quickstart.md` (escenarios end-to-end).
 5. **Tasks** → `tasks.md` — tareas atómicas ordenadas, trazadas a requisitos (`R1`…), `[P]` = paralelas.
-6. **Implement (TDD estricto)** — por tarea: test desde el contrato/criterio → confírmalo en **FALLO** (Red) → mínimo código (Green) → refactor → **mutation testing** con la skill `mutation-testing` (mata los mutantes, score ≥ 80%).
+6. **Implement (TDD estricto)** — por tarea: test desde el contrato/criterio → confírmalo en **FALLO** (Red) → mínimo código (Green) → refactor.
+7. **Cierre de tarea** — `node .chalc/gate.mjs` (tests + mutación + linters; evidencia en `.chalc/gate.md`). Pega su salida tal cual: el score sale de la corrida, no de ti; el portón exige ≥ 80% y mata mutantes supervivientes. Luego el agente **`revisor`**: si devuelve hallazgos, arréglalos y vuelve a correr el portón. No avances con el portón en rojo o con hallazgos. Una corrida con `--fast` no cierra tarea: omite la mutación.
 
 ### Reglas duras
 - **Test-First:** ningún código antes de un test que falla y esté aprobado.

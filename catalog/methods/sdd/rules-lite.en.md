@@ -14,7 +14,9 @@ you have tests that **fail** (Red).
    2. Confirm they **FAIL** (Red).
    3. Write the **minimum code** to pass them (Green).
    4. Refactor without breaking tests.
-   5. Run **mutation testing** using the project's `mutation-testing` skill; if mutants survive, strengthen the tests until they are killed (score ≥ 80%).
+   5. **Close the task with the gate:** `node .chalc/gate.mjs`. It runs the tests, the mutation tool and the linters, and writes the evidence to `.chalc/gate.md`. Paste its output verbatim: the score comes from there, not from you. If mutants survive, strengthen the tests until they are killed (the gate requires ≥ 80%).
+   6. **Call the `revisor` reviewer agent.** If it returns findings, fix them and go back to step 5.
+   7. Do not move on to the next task while the gate is red or the reviewer has findings. A `--fast` run does not close a task: it skips mutation.
 
 ### Hard rules
 - **Test-First:** no implementation code before a failing, approved test.

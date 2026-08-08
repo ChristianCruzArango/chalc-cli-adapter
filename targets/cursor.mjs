@@ -12,11 +12,12 @@ import * as kit from '../lib/targetkit.mjs';
 
 export const label = 'Cursor';
 
-export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, dryRun }) {
+export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun }) {
   const plan = [];
   for (const s of skills) plan.push(`skill     .cursor/rules/chalc-skill-${s}.mdc  (+ .chalc/skills/${s})`);
   for (const me of methods) plan.push(`método    .cursor/rules/chalc-method-${me.id}.mdc`);
   for (const m of mcps) plan.push(`mcp       .cursor/mcp.json  ::  ${m.id}`);
+  plan.push('agent     .cursor/rules/chalc-reviewer.mdc');
   plan.push('manifest  .chalc.json');
   if (dryRun) return { plan, written: false };
 
@@ -27,6 +28,9 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
 
   // Scaffold de los métodos (specs/ del SDD): contenido del proyecto, va con cualquier asistente.
   await kit.copyMethodScaffolds(methods, projectPath);
+
+  // Revisor: en Cursor va como regla propia, para invocarlo al cerrar cada tarea (R12).
+  await kit.writeReviewer(projectPath, CATALOG, { skills, specLang, kind: 'rule' });
 
   // principios obligatorios (siempre activos): implementación mínima + Clean Code + SOLID + arquitectura modular, prominentes
   const principles = kit.mandatoryPrinciplesBlock(skills);

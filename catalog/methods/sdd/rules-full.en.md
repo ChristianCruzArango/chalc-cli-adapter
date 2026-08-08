@@ -13,7 +13,8 @@ you have tests that **fail** (Red).
    - **Contracts** → `contracts/<resource>.<action>.contract.md` (one per file).
    - **Validation** → `quickstart.md` (end-to-end scenarios).
 5. **Tasks** → `tasks.md` — atomic, ordered tasks, traced to requirements (`R1`…), `[P]` = parallel.
-6. **Implement (strict TDD)** — per task: test from the contract/criterion → confirm it **FAILS** (Red) → minimum code (Green) → refactor → **mutation testing** using the `mutation-testing` skill (kill the mutants, score ≥ 80%).
+6. **Implement (strict TDD)** — per task: test from the contract/criterion → confirm it **FAILS** (Red) → minimum code (Green) → refactor.
+7. **Task closing** — `node .chalc/gate.mjs` (tests + mutation + linters; evidence in `.chalc/gate.md`). Paste its output verbatim: the score comes from the run, not from you; the gate requires ≥ 80% and kills surviving mutants. Then the **`revisor`** reviewer agent: if it returns findings, fix them and run the gate again. Do not move on with a red gate or open findings. A `--fast` run does not close a task: it skips mutation.
 
 ### Hard rules
 - **Test-First:** no code before a failing, approved test.

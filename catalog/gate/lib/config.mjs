@@ -13,9 +13,26 @@ export const CONFIG_REL = '.chalc/gate.json';
 
 const DEFAULTS = {
   test: { command: '' },
-  mutation: { tool: '', command: '', report: '', format: '', install: '', probe: '', scopeFlag: '', threshold: 80, required: true },
-  lint: { maxFileLines: 300, maxFunctionLines: 40, maxParams: 4, maxDepth: 3 },
+  mutation: { tool: '', command: '', report: '', format: '', install: '', probe: '', scopeFlag: '', scopeJoin: '', threshold: 80, required: true },
+  lint: {
+    maxFileLines: 300, maxFunctionLines: 40, maxParams: 4, maxDepth: 3,
+    // Duplicación (spec 012). Mínimo conservador a propósito: esta etapa vive o muere por los falsos
+    // positivos, y un linter que se equivoca se acaba apagando entero.
+    duplication: { enabled: true, minLines: 6, maxFiles: 4000 }
+  },
   spec: { dir: 'specs' },
+  // Cómo se TRABAJA, frente al resto de la config, que dice cómo se MIDE (spec 008, R17). Comparte
+  // archivo porque es el mismo ciclo y porque la fusión de R16 ya está resuelta aquí. Los defaults
+  // son el comportamiento de siempre: sin ellos, actualizar chalc encadenaría tareas sin que nadie
+  // las apruebe.
+  flow: {
+    approvals: { task: true, feature: true },
+    review: { required: true },
+    // Coordinación entre lados (spec 010). Apagada por defecto: el caso común es el mono-repo, que no
+    // tiene con quién coordinarse. La rellena `chalc feature` en modo worktree, que es el único que
+    // sabe qué lados existen.
+    sides: { me: '', owner: '', peers: [], mail: '', enabled: false }
+  },
   role: '',
   language: 'en'
 };

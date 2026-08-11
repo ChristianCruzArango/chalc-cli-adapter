@@ -12,6 +12,7 @@ import { existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { loadRoles } from '../lib/roles.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CATALOG = join(ROOT, 'catalog');
@@ -31,7 +32,10 @@ async function project() {
 async function equipWith(name, specLang = 'español') {
   const dir = await project();
   const target = await import(`../targets/${name}.mjs`);
-  await target.apply({ projectPath: dir, CATALOG, skills: SKILLS, mcps: [], methods: [], stacks: [], specLang, dryRun: false });
+  // Desde la spec 009 los roles salen de sus contratos y el target los recibe; este test invoca al
+  // target directamente, así que se los pasa igual que hace `equipForSpec`.
+  const roles = await loadRoles();
+  await target.apply({ projectPath: dir, CATALOG, skills: SKILLS, mcps: [], methods: [], stacks: [], specLang, roles, dryRun: false });
   return dir;
 }
 
@@ -71,23 +75,32 @@ test('the claude target writes the reviewer as a real subagent', async () => {
   assert.match(agent, /^description:\s*\S/m);
 });
 
-// R12: el revisor NO modifica archivos. En Claude Code eso no se pide, se concede: la lista de
-// herramientas del subagente no incluye ninguna de escritura.
-test('the claude reviewer is given no tool that can write', async () => {
+// R12 decía que el revisor NO modifica archivos, y en Claude Code eso no se pedía: se concedía o no
+// se concedía. La spec 008 (R15) lo ENMIENDA para un único archivo, `.chalc/review.md`: sin bitácora
+// el advisor no puede comprobar que el revisor pasó, y el olvido volvería a depender de la buena fe
+// del mismo agente que se beneficia de olvidar.
+//
+// Lo que este test protege ahora es que la excepción siga siendo excepción: se concede `Write` y
+// nada más. `Edit` y `NotebookEdit` modifican archivos que ya existen, que es lo que R12 prohíbe.
+test('the claude reviewer can only write its own logbook, nothing else', async () => {
   const dir = await equipWith('claude');
 
   const agent = await readFile(join(dir, '.claude', 'agents', 'revisor.md'), 'utf8');
   const tools = /^tools:\s*([^\r\n]+)/m.exec(agent);
   assert.ok(tools, 'el subagente debe declarar sus herramientas');
-  for (const forbidden of ['Write', 'Edit', 'NotebookEdit']) {
-    assert.ok(!tools[1].includes(forbidden), `el revisor no puede tener ${forbidden}`);
+
+  assert.match(tools[1], /\bWrite\b/, 'sin Write no puede dejar la bitácora que el advisor exige');
+  for (const forbidden of ['Edit', 'NotebookEdit']) {
+    assert.ok(!tools[1].includes(forbidden), `el revisor no puede tener ${forbidden}: edita código existente`);
   }
+  assert.match(agent, /\.chalc\/review\.md/, 'la plantilla acota por escrito a qué archivo');
 });
 
 test('the cursor target writes the reviewer as one of its rules', async () => {
   const dir = await equipWith('cursor');
 
-  assert.ok(existsSync(join(dir, '.cursor', 'rules', 'chalc-reviewer.mdc')));
+  // El nombre deriva del contrato desde la spec 009: `chalc-<id>.mdc`.
+  assert.ok(existsSync(join(dir, '.cursor', 'rules', 'chalc-revisor.mdc')));
 });
 
 // ── qué dice el revisor ───────────────────────────────────────────────────────────────────────

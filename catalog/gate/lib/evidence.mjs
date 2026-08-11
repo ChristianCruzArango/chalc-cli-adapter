@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { frameOf, messageOf } from './i18n.mjs';
 
 export const EVIDENCE_REL = '.chalc/gate.md';
+export const STATE_REL = '.chalc/gate.state.json';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -130,4 +131,40 @@ export async function writeEvidence(root, markdown) {
   await mkdir(join(root, '.chalc'), { recursive: true });
   await writeFile(join(root, EVIDENCE_REL), markdown, 'utf8');
   return EVIDENCE_REL;
+}
+
+// El MISMO resultado que el informe, para una máquina (spec 008, R13). El informe está escrito para
+// un humano y en el idioma del spec: su veredicto es un encabezado traducido y el aviso de `--fast`
+// una frase. Un lector automático que dependiera de esa redacción se rompería con cada retoque de
+// estilo, y habría que congelar el informe para siempre.
+//
+// Sale del mismo `verdictOf` que titula el informe, por la misma razón por la que el código de
+// salida del portón también sale de ahí: dos cálculos podrían contradecirse.
+export function renderState({ stages, meta, fast }) {
+  const verdict = verdictOf(stages);
+  return {
+    date: meta.date.toISOString(),
+    verdict,
+    fast: !!fast,
+    // Una corrida rápida no cierra tarea aunque salga verde: no se midió la calidad de las pruebas.
+    closesTask: verdict === 'pass' && !fast,
+    branch: meta.branch || '',
+    spec: meta.spec || '',
+    role: meta.role || '',
+    stages: stages.map((s) => ({
+      stage: s.stage,
+      ok: !!s.ok,
+      blocked: !!s.blocked,
+      skipped: !!s.skipped,
+      reason: s.reason || '',
+      findings: (s.findings || []).length
+    }))
+  };
+}
+
+// Deja el estado en `.chalc/gate.state.json` y devuelve su ruta relativa.
+export async function writeState(root, state) {
+  await mkdir(join(root, '.chalc'), { recursive: true });
+  await writeFile(join(root, STATE_REL), JSON.stringify(state, null, 2) + '\n', 'utf8');
+  return STATE_REL;
 }

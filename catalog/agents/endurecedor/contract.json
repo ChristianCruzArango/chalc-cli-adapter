@@ -1,0 +1,12 @@
+{
+  "id": "endurecedor",
+  "order": 20,
+  "cadence": "feature",
+  "summary": {
+    "es": "Endurecedor de cierre de feature: audita rutas de error, entradas inválidas, casos borde y fallos de dependencias externas. Devuelve OK o una lista numerada y lo anota en .chalc/review.md. No modifica ningún otro archivo.",
+    "en": "Feature-closing hardener: audits error paths, invalid input, edge cases and external dependency failures. Returns OK or a numbered list and logs it to .chalc/review.md. Modifies no other file."
+  },
+  "writes": [".chalc/review.md"],
+  "forbiddenWrites": ["**"],
+  "tools": ["Read", "Grep", "Glob", "Bash", "Write"]
+}

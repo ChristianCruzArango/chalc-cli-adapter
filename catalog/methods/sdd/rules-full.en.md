@@ -14,7 +14,7 @@ you have tests that **fail** (Red).
    - **Validation** → `quickstart.md` (end-to-end scenarios).
 5. **Tasks** → `tasks.md` — atomic, ordered tasks, traced to requirements (`R1`…), `[P]` = parallel.
 6. **Implement (strict TDD)** — per task: test from the contract/criterion → confirm it **FAILS** (Red) → minimum code (Green) → refactor.
-7. **Task closing** — `node .chalc/gate.mjs` (tests + mutation + linters; evidence in `.chalc/gate.md`). Paste its output verbatim: the score comes from the run, not from you; the gate requires ≥ 80% and kills surviving mutants. Then the **`revisor`** reviewer agent: if it returns findings, fix them and run the gate again. Do not move on with a red gate or open findings. A `--fast` run does not close a task: it skips mutation.
+7. **Task closing — the advisor decides, not your memory:** run `node .chalc/next.mjs`, do what `NEXT_ACTION` says and run its `COMMAND` if it is not empty; ask again and repeat until it answers `done`. It reads the real state of the repo (evidence date, gate verdict, reviewer log, `tasks.md`), so do not skip an action and do not decide the order yourself. `ask_human` is the only answer that stops the loop: stop and report it. What measures is the gate (`node .chalc/gate.mjs`): it requires a mutation score of ≥ 80% and lists the survivors, so when the advisor says `fix_gate`, what is missing are tests that kill mutants — not retries.
 
 ### Hard rules
 - **Test-First:** no code before a failing, approved test.

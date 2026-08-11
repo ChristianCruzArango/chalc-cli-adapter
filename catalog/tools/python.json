@@ -1,0 +1,48 @@
+{
+  "id": "python",
+  "label": "Python",
+  "priority": 40,
+  "detect": {
+    "files": [
+      "pyproject.toml",
+      "setup.cfg",
+      "requirements.txt"
+    ]
+  },
+  "signals": {
+    "python": [
+      "pyproject.toml",
+      "setup.cfg",
+      "requirements.txt"
+    ]
+  },
+  "test": {
+    "rule": "bySignal",
+    "signal": "python",
+    "cases": [
+      {
+        "match": "pytest",
+        "value": "pytest"
+      }
+    ],
+    "default": ""
+  },
+  "mutation": {
+    "rule": "bySignal",
+    "signal": "python",
+    "cases": [
+      {
+        "match": "pytest",
+        "value": {
+          "tool": "mutmut",
+          "command": "mutmut run && mutmut junitxml > reports/mutation/mutmut.xml",
+          "report": "reports/mutation/mutmut.xml",
+          "format": "junit",
+          "install": "uv add --dev mutmut",
+          "scopeFlag": "",
+          "setup": "**mutmut prints results to the screen.** `mutmut results` is for humans; the gate needs the file,\nso the run always ends with the `junitxml` redirect into `{report}`."
+        }
+      }
+    ]
+  }
+}

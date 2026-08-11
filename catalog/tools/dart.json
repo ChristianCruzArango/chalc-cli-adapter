@@ -1,0 +1,14 @@
+{
+  "id": "dart",
+  "label": "Dart / Flutter",
+  "priority": 30,
+  "detect": { "files": ["pubspec.yaml"] },
+  "signals": { "pubspec": ["pubspec.yaml"] },
+  "test": {
+    "rule": "bySignal",
+    "signal": "pubspec",
+    "cases": [{ "match": "\\bflutter\\b", "value": "flutter test" }],
+    "default": "dart test"
+  },
+  "mutation": null
+}

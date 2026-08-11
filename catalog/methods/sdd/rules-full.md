@@ -14,7 +14,7 @@ de tener tests que **fallen** (Red).
    - **Validación** → `quickstart.md` (escenarios end-to-end).
 5. **Tasks** → `tasks.md` — tareas atómicas ordenadas, trazadas a requisitos (`R1`…), `[P]` = paralelas.
 6. **Implement (TDD estricto)** — por tarea: test desde el contrato/criterio → confírmalo en **FALLO** (Red) → mínimo código (Green) → refactor.
-7. **Cierre de tarea** — `node .chalc/gate.mjs` (tests + mutación + linters; evidencia en `.chalc/gate.md`). Pega su salida tal cual: el score sale de la corrida, no de ti; el portón exige ≥ 80% y mata mutantes supervivientes. Luego el agente **`revisor`**: si devuelve hallazgos, arréglalos y vuelve a correr el portón. No avances con el portón en rojo o con hallazgos. Una corrida con `--fast` no cierra tarea: omite la mutación.
+7. **Cierre de tarea — lo decide el advisor, no tu memoria:** corre `node .chalc/next.mjs`, haz lo que diga `NEXT_ACTION` y ejecuta su `COMMAND` si no está vacío; vuelve a preguntarle y repite hasta que responda `done`. Lee el estado real del repo (fecha de la evidencia, veredicto del portón, bitácora del revisor, `tasks.md`), así que no te saltes una acción ni decidas tú el orden. `ask_human` es lo único que corta el bucle: para y repórtalo. Quien mide es el portón (`node .chalc/gate.mjs`): exige un score de mutación ≥ 80% y lista los supervivientes, así que cuando el advisor mande `fix_gate`, lo que falta son tests que maten mutantes — no reintentos.
 
 ### Reglas duras
 - **Test-First:** ningún código antes de un test que falla y esté aprobado.

@@ -1,0 +1,8 @@
+{
+  "id": "rust",
+  "label": "Rust",
+  "priority": 60,
+  "detect": { "files": ["Cargo.toml"] },
+  "test": { "rule": "fixed", "value": "cargo test" },
+  "mutation": null
+}

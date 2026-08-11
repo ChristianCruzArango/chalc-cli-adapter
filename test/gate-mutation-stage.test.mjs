@@ -312,6 +312,53 @@ test('runMutation scopes the run to the changed files when the tool supports it'
   assert.equal(run.calls[0].cwd, dir);
 });
 
+test('runMutation leaves out of the scope what no mutation tool can mutate', async () => {
+  const dir = await project();
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate' }),
+    {
+      root: dir,
+      // Lo que el portón trae de git: carpetas, specs y colecciones de API junto al código.
+      changed: ['.chalc/', 'specs/008-alta/', 'api/POST-crear.bru', 'docs/plan.md', 'src/precio.ts'],
+      run
+    }
+  );
+
+  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/precio.ts');
+});
+
+test('runMutation scopes each file to its own project when the repo has several', async () => {
+  const dir = await project();
+  // Solución multiproyecto: la herramienta resuelve los globos contra CADA proyecto, no contra la
+  // raíz, así que la ruta del repo no casa con ningún archivo y la corrida se queda sin mutantes.
+  await file(dir, 'src/Tienda.Dominio/Tienda.Dominio.csproj', '<Project />');
+  await file(dir, 'src/Tienda.Dominio/Precios/Total.cs', 'class Total {}');
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate' }),
+    { root: dir, changed: ['src/Tienda.Dominio/Precios/Total.cs'], run }
+  );
+
+  assert.equal(run.calls[0].command, 'npx stryker run --mutate **/Precios/Total.cs');
+});
+
+test('runMutation repeats the scope flag for tools that do not take a comma-separated list', async () => {
+  const dir = await project();
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate', scopeJoin: 'repeat' }),
+    { root: dir, changed: ['src/precio.ts', 'src/total.ts'], run }
+  );
+
+  // Unidos por coma, Stryker.NET los lee como UN globo con comas dentro: no casa con ningún archivo
+  // y la corrida se queda sin mutantes.
+  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/precio.ts --mutate src/total.ts');
+});
+
 test('runMutation runs the full command when the tool has no scope flag', async () => {
   const dir = await project();
   const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });

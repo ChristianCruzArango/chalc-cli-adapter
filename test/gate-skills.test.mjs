@@ -13,10 +13,21 @@ import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { detectGateConfig } from '../lib/gatedetect.mjs';
+import { loadToolTable } from '../lib/tooltable.mjs';
+import { renderMutationSkill } from '../lib/toolskill.mjs';
 
 const SKILLS = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'catalog', 'skills');
 
-const skill = (id) => readFile(join(SKILLS, id, 'SKILL.md'), 'utf8');
+// Desde la spec 011, `mutation-testing` es una PLANTILLA: sus tablas se derivan de `catalog/tools/`
+// al copiarla al repo. El invariante de R20 no cambia —lo que el asistente lee tiene que coincidir
+// con lo que el portón espera— pero ahora se comprueba sobre el texto RENDERIZADO, que es el que de
+// verdad llega al repo. Leer la plantilla cruda solo encontraría marcadores.
+const stacks = await loadToolTable();
+
+async function skill(id) {
+  const text = await readFile(join(SKILLS, id, 'SKILL.md'), 'utf8');
+  return /\{\{\w+\}\}/.test(text) ? renderMutationSkill(text, { stacks, stack: null, tools: null }) : text;
+}
 
 async function project(files) {
   const dir = await mkdtemp(join(tmpdir(), 'chalc-gate-skills-'));

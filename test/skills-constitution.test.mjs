@@ -67,11 +67,38 @@ test('ninguna skill prohíbe crear tipos sin dar la salida del Artículo 4', asy
   }
 });
 
-test('la constitución sigue exigiendo el Artículo 4: el test no puede quedar desfasado', async () => {
-  const constitution = await readFile(join(ROOT, 'specs', 'constitution.md'), 'utf8');
+// La constitución que importa es la que chalc REPARTE, no la copia local de este repo — que además
+// está en `.gitignore` y no existe en CI: leerla de ahí hacía que el test pasara en la máquina de
+// quien lo escribió y fallara en cualquier otra. Las cuatro que se emiten (lite/full × es/en) tienen
+// que exigir lo mismo, o las skills corregidas apuntarían a una regla que en algún modo no está.
+test('las CUATRO constituciones que chalc emite exigen el Artículo 4', async () => {
+  const scaffolds = {
+    'scaffold-lite': [/Una cosa por archivo/i, /Nunca declarados dentro de servicios/i],
+    'scaffold-full': [/Una cosa por archivo/i, /Nunca declarados dentro de servicios/i],
+    'scaffold-lite-en': [/One thing per file/i, /Never declared inside services/i],
+    'scaffold-full-en': [/One thing per file/i, /Never declared inside services/i]
+  };
 
-  assert.match(constitution, /Una cosa por archivo/i);
-  assert.match(constitution, /Nunca declarados dentro de servicios/i);
+  for (const [scaffold, patterns] of Object.entries(scaffolds)) {
+    const file = join(ROOT, 'catalog', 'methods', 'sdd', scaffold, 'specs', 'constitution.md');
+    const text = await readFile(file, 'utf8');
+    for (const pattern of patterns) assert.match(text, pattern, `${scaffold}: falta ${pattern}`);
+  }
+});
+
+// Y ninguna otra parte de la suite puede depender de archivos que el repo no versiona: pasaría en
+// local y fallaría en CI, que es la forma más cara de descubrir un test mal escrito.
+test('ningún test lee la carpeta specs/ de ESTE repo, que está en .gitignore', async () => {
+  const { readdir } = await import('node:fs/promises');
+  const dir = join(ROOT, 'test');
+
+  for (const name of (await readdir(dir)).filter((f) => f.endsWith('.test.mjs'))) {
+    const text = await readFile(join(dir, name), 'utf8');
+    assert.ok(
+      !/join\(\s*ROOT\s*,\s*'specs'/.test(text),
+      `${name} lee specs/ del repo: está en .gitignore y no existe en CI`
+    );
+  }
 });
 
 // ── La duplicación es un hallazgo, no una opción ──────────────────────────────────────────────

@@ -8,7 +8,10 @@
 // entre deuda de hace tres años.
 
 import { spawn } from 'node:child_process';
-import { sourceFiles, SOURCE_FILE } from './sources.mjs';
+import { isUserSource } from './sources.mjs';
+import { readBaseline } from './baseline.mjs';
+import { readTouched } from './touched.mjs';
+import { resolveScope } from './scope.mjs';
 
 // Salida de un comando de git, o null si git no está o el repo no existe.
 function git(args, cwd) {
@@ -35,15 +38,60 @@ export async function currentBranch(root) {
 // SIN GIT se revisa el árbol de fuentes entero. Devolver [] sería decir "no hay nada que revisar", y
 // el portón aprobaría en silencio un repo que nunca miró — que es justo lo que esta spec quita. Con
 // git y sin cambios, [] sí es la respuesta correcta: no se tocó nada.
-export async function changedFiles(root, { base = '' } = {}) {
-  if (!await git(['rev-parse', '--is-inside-work-tree'], root)) return (await sourceFiles(root)).files;
+export async function changedFiles(root) {
+  return (await taskScope(root)).files;
+}
+
+// El alcance de la tarea, con su procedencia. Es el único punto con efectos: aquí se leen las tres
+// fuentes —línea base, registro de rutas escritas y git— y se le pasan a la política.
+//
+// El orden de preferencia no es arbitrario. El registro sabe qué escribió ESTA tarea; el diff desde
+// la línea base sabe qué cambió desde que empezó; el diff contra la rama solo sabe qué cambió desde
+// que la rama nació, que son todas las tareas juntas. De más específico a más grueso, y el que
+// mande queda dicho en `source` para que la evidencia pueda declararlo (R7).
+//
+// `from` es la referencia contra la que se midió y `staleRegistry` avisa de que había un registro
+// pero era de la tarea anterior. Los dos existen por lo mismo: nada se descarta en silencio.
+export async function taskScope(root) {
+  const baseline = await readBaseline(root);
+  const registry = await readTouched(root, { since: baseline.date });
+
+  const ref = baseline.commit || await mergeBase(root);
+  const diff = await changedSince(root, ref);
+
+  return {
+    ...resolveScope({ registry: registry.files, diff, diffSource: baseline.exists ? 'baseline' : 'branch' }),
+    from: ref,
+    staleRegistry: registry.stale
+  };
+}
+
+// El commit actual, o '' si no se puede saber. Es lo que el portón sella como línea base de la
+// tarea siguiente (spec 013, R1).
+export async function headCommit(root) {
+  const out = await git(['rev-parse', 'HEAD'], root);
+  return out ? out.trim() : '';
+}
+
+// ¿Hay un repo de git en `root`? Lo necesita quien tiene que distinguir «no cambió nada» de «no
+// puedo saberlo» (spec 013, R4b), que son dos respuestas con consecuencias opuestas.
+export const isRepo = async (root) => !!await git(['rev-parse', '--is-inside-work-tree'], root);
+
+// Los archivos cambiados DESDE `ref`, más lo que aún no está commiteado. Rutas relativas con '/'.
+//
+// Devuelve `null` cuando no se puede responder: no hay repo, o la referencia no resuelve —un commit
+// que un rebase se llevó por delante—. `null` no es `[]`: uno significa «no sé» y el otro «no
+// cambió nada». Confundirlos es exactamente lo que la spec 013 vino a quitar, porque el segundo
+// pasa por aprobado y el primero tiene que bloquear (R4b, R13).
+export async function changedSince(root, ref) {
+  if (!await isRepo(root)) return null;
 
   const found = new Set();
 
-  const against = base || await mergeBase(root);
-  if (against) {
-    const diff = await git(['diff', '--name-only', '--diff-filter=d', against], root);
-    if (diff) lines(diff).forEach((f) => found.add(f));
+  if (ref) {
+    const diff = await git(['diff', '--name-only', '--diff-filter=d', ref], root);
+    if (diff === null) return null;
+    lines(diff).forEach((f) => found.add(f));
   }
 
   // Lo que está en el árbol de trabajo y todavía no se commiteó: es justo lo que se acaba de hacer.
@@ -63,20 +111,10 @@ export async function changedFiles(root, { base = '' } = {}) {
   return [...found].map((f) => f.replace(/\\/g, '/')).filter(isUserSource).sort();
 }
 
-// Un archivo que alguna etapa sabe revisar y que es del usuario. El recorrido de respaldo ya
-// aplicaba estas dos reglas; la ruta de git devolvía todo lo que git nombrara, y esa asimetría se
-// notaba en dos sitios:
-//
-//   - `.chalc/` no está trackeado, así que `git status` lo listaba: la evidencia que el portón
-//     acababa de escribir contaba como archivo cambiado, siempre con fecha posterior a sí misma.
-//   - `tasks.md` sí está trackeado: marcar un checkbox invalidaba la medida que acababa de
-//     autorizar ese marcado.
-//
-// Los dos los destapó el advisor de la spec 008 al recorrer el ciclo en un repo real.
-const isUserSource = (file) => !file.startsWith('.chalc/') && SOURCE_FILE.test(file);
-
 // El punto del que salió la rama. Se prueban las bases habituales; la primera que exista manda.
-async function mergeBase(root) {
+// '' si no se puede saber. Es el respaldo de R4: sin línea base de tarea se mide contra esto, que
+// sigue siendo «archivos modificados» aunque sea de más — nunca el proyecto entero.
+export async function mergeBase(root) {
   for (const candidate of ['develop', 'main', 'master']) {
     const base = await git(['merge-base', 'HEAD', candidate], root);
     if (base && base.trim()) return base.trim();

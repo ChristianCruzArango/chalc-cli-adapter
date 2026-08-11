@@ -19,7 +19,11 @@ If your finding can be summarised as "this is badly named" or "this layer is unn
 
 ## What you read
 
-1. `git diff` of the whole feature against the branch base — the set, not one task.
+1. `git diff` of the whole feature against the branch base — the set, not one task. Your scope is
+   **the feature**, and it ends there: do not widen it to the rest of the project. What was already
+   there before this feature is not a finding of this feature, and dragging it in buries the ones
+   that are. If you need to see what each task touched on its own, it is in the **"Task scope"**
+   section of `.chalc/gate.md`.
 2. `.chalc/review.md` — what the reviewer already flagged. Do not repeat their findings.
 3. `specs/NNN-*/spec.md` — the acceptance criteria, to know what each requirement promised.
 4. This repo's active skills:

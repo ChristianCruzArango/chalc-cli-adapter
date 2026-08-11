@@ -9,7 +9,9 @@
 // código: corre, mide, y escribe en `.chalc/gate.md` la evidencia con la que cualquiera puede
 // comprobarlo. Lo que no se puede comprobar, se bloquea; nunca se aprueba por defecto.
 
-import { changedFiles, currentBranch } from './lib/changed.mjs';
+import { currentBranch, headCommit, taskScope } from './lib/changed.mjs';
+import { sealBaseline } from './lib/baseline.mjs';
+import { clearTouched } from './lib/touched.mjs';
 import { checkContract } from './lib/contractcheck.mjs';
 import { checkTraceability } from './lib/traceability.mjs';
 import { contractRoutesWithLines } from './lib/contract-routes.mjs';
@@ -56,8 +58,28 @@ export async function runGate({ root = process.cwd(), fast = false, run = runCom
     }], { branch: await currentBranch(root), role: '', spec: '' }, fast);
   }
 
-  const files = changed || await changedFiles(root);
+  // El alcance: qué archivos revisa esta corrida (spec 013). Una lista inyectada ES un alcance
+  // determinado —los tests del portón la usan para no depender de git— y se respeta tal cual.
+  const scope = changed ? { files: changed, source: 'given', undetermined: false, from: '' } : await taskScope(root);
   const spec = await newestSpec(root, config.spec.dir, 'spec.md');
+  // El alcance viaja en la meta hasta la evidencia y el estado (R7): sin dejar escrito sobre qué se
+  // miró, un informe sin hallazgos no se distingue de un informe que no miró nada.
+  const meta = { branch: await currentBranch(root), role: config.role, spec: spec ? spec.dir : '', scope };
+
+  // Sin saber QUÉ revisar no se revisa (R4b). La salida histórica era el árbol de fuentes entero, y
+  // eso no es revisar de más: es cambiar de pregunta sin avisar, y enterrar la tarea de hoy bajo la
+  // deuda de tres años. Es un bloqueo —"no pude comprobarlo"—, no un fallo.
+  if (scope.undetermined) return finish(root, lang, [scopeStage(RULES.scopeUndetermined, {}, true)], meta, fast);
+
+  // Sabiendo que no cambió nada, se dice y no se aprueba (R13). "No hay nada que revisar" y "está
+  // todo bien" no son lo mismo: confundirlos cierra tareas sin una línea de código medida.
+  //
+  // Aquí caen también las tareas cuyo único cambio no es fuente —solo documentación, solo config— y
+  // las que solo borran archivos. No es un descuido: el portón mide código, y de esas no tiene nada
+  // que medir. El informe dice exactamente eso, que es lo que permite decidir a quien lo lea.
+  if (!scope.files.length) return finish(root, lang, [scopeStage(RULES.scopeEmpty, { from: scope.from }, false)], meta, fast);
+
+  const files = scope.files;
   const stages = [];
 
   // 1. Tests. Todo lo demás depende de esto: mutar o revisar estilo sobre una suite en rojo es
@@ -93,8 +115,16 @@ export async function runGate({ root = process.cwd(), fast = false, run = runCom
   }));
   stages.push(staticStage('contract', contract.value, contract.ms));
 
-  return finish(root, lang, stages, { branch: await currentBranch(root), role: config.role, spec: spec ? spec.dir : '' }, fast);
+  return finish(root, lang, stages, meta, fast);
 }
+
+// La etapa que reporta un alcance con el que no se puede trabajar. No cuelga de ningún archivo —el
+// problema no está EN un archivo, está en no saber cuáles son—, así que el informe la muestra por el
+// nombre de su etapa.
+const scopeStage = (rule, data, blocked) => ({
+  stage: 'scope', ok: false, blocked, reason: rule, command: '', code: null, ms: 0,
+  findings: [{ file: '', line: 0, rule, data }]
+});
 
 // Una violación de frontera, en el formato común de hallazgo.
 const asFinding = (v) => ({
@@ -109,6 +139,10 @@ const asFinding = (v) => ({
 // evidencia dejaría de serlo.
 async function finish(root, lang, stages, meta, fast) {
   const verdict = verdictOf(stages);
+  // Una corrida rápida no cierra una tarea aunque salga verde: no se midió la calidad de las
+  // pruebas, que es justo lo que más cuesta y lo que más se omite.
+  const closesTask = verdict === 'pass' && !fast;
+
   const stamped = { ...meta, date: new Date() };
   const evidence = await writeEvidence(root, renderEvidence({ stages, meta: stamped, lang }));
 
@@ -116,15 +150,24 @@ async function finish(root, lang, stages, meta, fast) {
   // que informe y estado no puedan discrepar: misma corrida, misma fecha, mismo `verdictOf`.
   await writeState(root, renderState({ stages, meta: stamped, fast }));
 
-  return {
-    code: verdict === 'pass' ? 0 : 1,
-    verdict,
-    // Una corrida rápida no cierra una tarea aunque salga verde: no se midió la calidad de las
-    // pruebas, que es justo lo que más cuesta y lo que más se omite.
-    closesTask: verdict === 'pass' && !fast,
-    stages,
-    evidence
-  };
+  if (closesTask) await sealTask(root);
+
+  return { code: verdict === 'pass' ? 0 : 1, verdict, closesTask, stages, evidence };
+}
+
+// Cierra la tarea de cara al alcance (spec 013, R1): sella dónde termina, y vacía el registro para
+// que la siguiente no herede sus archivos.
+//
+// Solo se llama cuando la corrida CIERRA tarea. Sellar en una corrida que falló movería la
+// referencia al medio de la tarea en curso, y a partir de ahí el portón revisaría solo lo escrito
+// después de ese punto. Un alcance de menos es el error peligroso: no se nota, porque aprueba.
+//
+// Sin git no hay commit que sellar y `sealBaseline` se niega —una referencia inservible es peor que
+// ninguna, que al menos tiene respaldo declarado (R4)—. El registro se vacía igual: es de la tarea
+// que acaba de cerrarse, venga de donde venga.
+async function sealTask(root) {
+  await sealBaseline(root, { commit: await headCommit(root) });
+  await clearTouched(root);
 }
 
 // Resumen por consola. La evidencia completa está en el archivo; esto es para no tener que abrirlo.

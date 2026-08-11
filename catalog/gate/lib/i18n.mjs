@@ -21,6 +21,7 @@ export const FRAME = {
     stages: {
       title: 'Etapas',
       name: 'Etapa', result: 'Resultado', command: 'Comando', code: 'Salida', duration: 'Duración',
+      scope: 'alcance',
       tests: 'tests', mutation: 'mutación', smells: 'código', duplication: 'duplicación', boundaries: 'fronteras',
       traceability: 'trazabilidad', contract: 'contrato'
     },
@@ -35,6 +36,23 @@ export const FRAME = {
       file: 'Archivo', line: 'Línea', mutator: 'Mutador', state: 'Estado'
     },
     findings: { title: 'Hallazgos', file: 'Archivo', line: 'Línea', rule: 'Regla', detail: 'Detalle', none: 'Sin hallazgos.' },
+    // El alcance (spec 013, R7). `source` se traduce porque el informe lo lee una persona: "registro"
+    // y "base de la rama" son dos revisiones muy distintas con el mismo aspecto.
+    scopeBlock: {
+      title: 'Alcance de la tarea',
+      source: 'Fuente', from: 'Desde', files: 'Archivos revisados',
+      excluded: 'Fuera del alcance (del árbol, pero no de esta tarea)',
+      reverted: 'Escrito y deshecho durante la tarea',
+      stale: 'El registro de rutas escritas era de la tarea anterior: se descartó.',
+      none: 'No se pudo determinar qué archivos cambió esta tarea.',
+      origin: {
+        registry: 'registro de rutas escritas (.chalc/task.files)',
+        baseline: 'cambios desde la línea base de la tarea',
+        branch: 'cambios desde la base de la rama (sin línea base sellada)',
+        none: 'ninguna',
+        given: 'lista de archivos indicada al portón'
+      }
+    },
     fast: 'Corrida rápida (`--fast`): la mutación no se ejecutó, así que **no cierra la tarea**.'
   },
   en: {
@@ -46,6 +64,7 @@ export const FRAME = {
     stages: {
       title: 'Stages',
       name: 'Stage', result: 'Result', command: 'Command', code: 'Exit', duration: 'Duration',
+      scope: 'scope',
       tests: 'tests', mutation: 'mutation', smells: 'code', duplication: 'duplication', boundaries: 'boundaries',
       traceability: 'traceability', contract: 'contract'
     },
@@ -60,6 +79,21 @@ export const FRAME = {
       file: 'File', line: 'Line', mutator: 'Mutator', state: 'State'
     },
     findings: { title: 'Findings', file: 'File', line: 'Line', rule: 'Rule', detail: 'Detail', none: 'No findings.' },
+    scopeBlock: {
+      title: 'Task scope',
+      source: 'Source', from: 'Since', files: 'Files reviewed',
+      excluded: 'Out of scope (in the tree, but not from this task)',
+      reverted: 'Written and undone during the task',
+      stale: 'The record of written paths belonged to the previous task: it was discarded.',
+      none: 'There was no way to tell which files this task changed.',
+      origin: {
+        registry: 'record of written paths (.chalc/task.files)',
+        baseline: 'changes since the task baseline',
+        branch: 'changes since the branch base (no baseline sealed)',
+        none: 'none',
+        given: 'file list given to the gate'
+      }
+    },
     fast: 'Fast run (`--fast`): mutation did not run, so this **does not close the task**.'
   }
 };
@@ -101,6 +135,9 @@ export const MESSAGES = {
     [RULES.layerBoundary]: (d) => `"${d.from}" importa "${d.to}" (${d.import}): rompe la dirección de las capas`,
     [RULES.featureBoundary]: (d) => `"${d.from}" importa "${d.to}" (${d.import}): los features no se importan entre sí`,
 
+    [RULES.scopeUndetermined]: () => 'no se puede saber qué archivos cambió esta tarea: no hay repo de git ni registro de rutas escritas en .chalc/task.files — el portón revisa una tarea, no el proyecto entero, así que no revisa nada hasta poder acotarlo',
+    [RULES.scopeEmpty]: (d) => `no hay nada que revisar: ningún fuente cambió desde ${d.from ? `"${d.from}"` : 'la última tarea cerrada'} — sin código medido no hay tarea que cerrar`,
+
     [RULES.noRequirement]: (d) => `el test no cita ningún requisito de ${d.spec}: sin cita nadie puede saber qué cubre`,
     [RULES.unknownRequirement]: (d) => `"${d.id}" no existe en ${d.spec}: cita un requisito real o actualiza la spec primero`,
     [RULES.contractRouteMissing]: (d, lang) =>
@@ -130,6 +167,9 @@ export const MESSAGES = {
       + `${d.capped ? ' (the scan was capped: there may be more)' : ''}`,
     [RULES.layerBoundary]: (d) => `"${d.from}" imports "${d.to}" (${d.import}): it breaks the direction of the layers`,
     [RULES.featureBoundary]: (d) => `"${d.from}" imports "${d.to}" (${d.import}): features do not import each other`,
+
+    [RULES.scopeUndetermined]: () => 'there is no way to tell which files this task changed: no git repo and no record of written paths in .chalc/task.files — the gate reviews a task, not the whole project, so it reviews nothing until the scope can be narrowed down',
+    [RULES.scopeEmpty]: (d) => `there is nothing to review: no source changed since ${d.from ? `"${d.from}"` : 'the last closed task'} — with no measured code there is no task to close`,
 
     [RULES.noRequirement]: (d) => `the test cites no requirement from ${d.spec}: without a citation nobody can tell what it covers`,
     [RULES.unknownRequirement]: (d) => `"${d.id}" does not exist in ${d.spec}: cite a real requirement or update the spec first`,

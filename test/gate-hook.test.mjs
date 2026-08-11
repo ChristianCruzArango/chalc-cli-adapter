@@ -72,8 +72,10 @@ test('the document is written in the language of the spec', async () => {
   await equip(es, 'español');
   await equip(en, 'english');
 
-  assert.match(await readFile(join(es, HOOK_DOC), 'utf8'), /no lo instala/i);
-  assert.match(await readFile(join(en, HOOK_DOC), 'utf8'), /does not install it/i);
+  // Sin atarse al número: la spec 013 añadió un segundo hook —el anotador de rutas escritas— y la
+  // frase pasó a plural. Lo que el test fija es el IDIOMA, no cuántos hooks haya hoy.
+  assert.match(await readFile(join(es, HOOK_DOC), 'utf8'), /chalc no l[oa]s? instala/i);
+  assert.match(await readFile(join(en, HOOK_DOC), 'utf8'), /chalc does not install (?:it|them)/i);
 });
 
 // ── lo que NO hace ────────────────────────────────────────────────────────────────────────────

@@ -641,6 +641,50 @@ evidencia que puedes leer tú mismo.
 La configuración vive en **`.chalc/gate.json`** (umbrales, comandos, rutas de reporte). Re-equipar
 regenera el código del portón y **conserva lo que hayas editado ahí**.
 
+### Alcance por tarea: lo que cambiaste, nunca el proyecto entero
+
+Cada etapa acotada de arriba mide **los archivos que esta tarea cambió**. Suena obvio y no estaba
+pasando: el portón medía contra la base de la *rama* —con todas las tareas anteriores de la feature
+dentro— y el prompt del revisor pedía "el diff de la tarea" que nadie podía darle, porque nada
+marcaba dónde empezaba una tarea. El hueco lo rellenaba el modelo, y lo rellenaba de las dos maneras
+malas: reportando deuda de hace años, o saltándose la revisión porque "el diff es casi todo trabajo
+ajeno en curso".
+
+El alcance tiene ahora tres fuentes, de más específica a menos:
+
+| Fuente | Qué es | Cuándo se usa |
+|---|---|---|
+| `registry` | `.chalc/task.files`, las rutas escritas durante esta tarea | siempre que exista |
+| `baseline` | cambios desde el commit sellado al cerrar la última tarea (`.chalc/task.json`) | sin registro |
+| `branch` | cambios desde la base de la rama | sin línea base tampoco |
+
+**Y nunca el proyecto entero.** Sin git y sin registro el alcance no se puede determinar, y la
+corrida queda **bloqueada** — no cae al árbol de fuentes. Revisarlo todo no es revisar de más, es
+cambiar de pregunta: un informe con tres años de deuda dentro entierra la tarea de hoy y se lee en
+diagonal, así que el resultado práctico de revisarlo todo es no revisar nada.
+
+Cada informe dice qué archivos revisó, de dónde salió esa lista, contra qué referencia midió y **qué
+dejó fuera**:
+
+```
+## Alcance de la tarea
+
+- Fuente: registro de rutas escritas (.chalc/task.files)
+- Desde: `a1b2c3d4e5`
+- Archivos revisados: `src/pago.service.ts`, `src/pago.model.ts`
+- Fuera del alcance (del árbol, pero no de esta tarea): `src/otra-tarea-a-medias.ts`
+```
+
+Esa última línea es la mitad que faltaba: un alcance de un archivo en un árbol con veinte cambios se
+lee como "solo cambió uno" si nadie dice que los otros diecinueve no eran tuyos.
+
+El portón sella la línea base y vacía el registro **cuando una corrida cierra tarea** — nunca en una
+que falló o fue `--fast`, que movería la referencia al medio de la tarea en curso. Y `chalc` llena el
+registro solo mientras usas su shell; para Claude Code o Codex, pega el hook de anotación
+documentado en `.chalc/gate-hook.md`. Sin él no se rompe nada, pero el alcance cae al diff, y eso
+pesa si commiteas al final de la feature en vez de tarea a tarea: la línea base es un commit, así que
+sin commits en medio el diff no distingue una tarea de la anterior.
+
 ### La duplicación deja de ser opinión
 
 El portón gana una séptima etapa. Compara los archivos que la tarea tocó contra **todo el árbol de

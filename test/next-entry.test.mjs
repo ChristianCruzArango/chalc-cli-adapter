@@ -14,6 +14,7 @@ import { mkdtemp, mkdir, writeFile, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { advise, render } from '../catalog/next/next.mjs';
+import { recordTouched } from '../catalog/gate/lib/touched.mjs';
 
 const SPEC = 'specs/008-advisor';
 
@@ -36,6 +37,9 @@ async function repo({ tasks = '- [x] T1\n- [ ] T2 — en esto voy\n', config, st
   // depender de cuándo corra el test. Sin esto, cualquier repo "terminado" tendría trabajo sin medir.
   await writeFile(join(root, 'src', 'pago.ts'), 'export const x = 1;\n');
   await utimes(join(root, 'src', 'pago.ts'), TOUCHED / 1000, TOUCHED / 1000);
+  // Qué escribió esta tarea (spec 013, R10). Antes salía del árbol de fuentes entero, porque el
+  // temporal no es un repo de git; R4b quitó ese respaldo y el fixture lo dice explícitamente.
+  await recordTouched(root, ['src/pago.ts']);
   return root;
 }
 

@@ -639,6 +639,51 @@ the survivors and the findings — evidence you can read yourself.
 Configuration lives in **`.chalc/gate.json`** (thresholds, commands, report paths). Re-equipping
 regenerates the gate code and **keeps what you edited there**.
 
+### Task scope: what you changed, never the whole project
+
+Every scoped stage above measures **the files this task changed**. That sounds obvious and it was not
+happening: the gate used to diff against the base of the *branch* — every earlier task of the feature
+included — and the reviewer's prompt asked for "the diff of the task" that nobody could give it,
+because nothing marked where a task began. The hole was filled by the model, and it filled it the two
+bad ways: reporting years-old debt, or skipping the review because "the diff is mostly somebody
+else's work in progress".
+
+The scope now has three sources, most specific first:
+
+| Source | What it is | When it is used |
+|---|---|---|
+| `registry` | `.chalc/task.files`, the paths written during this task | whenever it exists |
+| `baseline` | changes since the commit sealed when the last task closed (`.chalc/task.json`) | no registry |
+| `branch` | changes since the branch base | no baseline either |
+
+**And never the whole project.** With no git and no registry the scope cannot be determined, and the
+run is **blocked** — it does not fall back to the source tree. Reviewing everything is not reviewing
+more, it is changing the question: a report carrying three years of debt buries today's task and gets
+read diagonally, so the practical result of reviewing everything is reviewing nothing.
+
+Every report says which files it reviewed, where that list came from, the reference it measured
+against, and **what it left out**:
+
+```
+## Task scope
+
+- Source: record of written paths (.chalc/task.files)
+- Since: `a1b2c3d4e5`
+- Files reviewed: `src/payment.service.ts`, `src/payment.model.ts`
+- Out of scope (in the tree, but not from this task): `src/other-task-wip.ts`
+```
+
+That last line is the half that used to be missing: a one-file scope in a tree with twenty changes
+reads as "only one changed" unless somebody says the other nineteen were not yours.
+
+The gate seals the baseline and clears the registry **when a run closes a task** — never on a run that
+failed or used `--fast`, which would move the reference into the middle of the task in progress. And
+`chalc` fills the registry on its own while you use its shell; for Claude Code or Codex, paste the
+recording hook documented in `.chalc/gate-hook.md`. Without it nothing breaks, but the scope falls
+back to the diff, which matters if you commit at the end of the feature rather than task by task: the
+baseline is a commit, so with no commits in between the diff cannot tell one task from the previous
+one.
+
 ### Duplication stops being an opinion
 
 The gate gains a seventh stage. It compares the files the task touched against the **whole source

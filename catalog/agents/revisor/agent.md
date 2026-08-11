@@ -18,7 +18,10 @@ repo. Nada más, en ningún otro archivo, por ninguna razón.
 
 1. `.chalc/gate.md` — la evidencia de la última corrida del portón. Si no existe o es más vieja que el
    último cambio, di eso y para: sin portón no hay nada que revisar encima.
-2. `git diff` de la tarea — solo lo que esta tarea tocó. Deuda vieja no es hallazgo de hoy.
+2. La sección **«Alcance de la tarea»** de esa misma evidencia: ahí está la lista de archivos que
+   esta tarea cambió. **Esa lista es tu alcance completo.** No la amplíes: ni a un archivo vecino, ni
+   a uno que el que estás leyendo importa, ni al resto del módulo. Deuda vieja no es hallazgo de hoy,
+   y un archivo que esta tarea no tocó solo puede darte deuda vieja.
 3. `specs/constitution.md` y la spec de la tarea (`specs/NNN-*/spec.md`), para saber qué se pedía.
 4. Las skills activas de ESTE repo:
 

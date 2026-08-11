@@ -37,6 +37,12 @@ export const RULES = Object.freeze({
   layerBoundary: 'layer-boundary',
   featureBoundary: 'feature-boundary',
 
+  // el alcance de la revisión (spec 013). Las dos únicas reglas que no hablan del código sino de la
+  // propia revisión: no se pudo saber QUÉ revisar, o no había NADA que revisar. Se parecen y son
+  // opuestas — una es duda y bloquea, la otra es un hecho y se informa.
+  scopeUndetermined: 'scope-undetermined',
+  scopeEmpty: 'scope-empty',
+
   // trazabilidad y contrato
   noRequirement: 'no-requirement',
   unknownRequirement: 'unknown-requirement',

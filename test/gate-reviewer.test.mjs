@@ -105,12 +105,16 @@ test('the cursor target writes the reviewer as one of its rules', async () => {
 
 // ── qué dice el revisor ───────────────────────────────────────────────────────────────────────
 
-test('the reviewer is told what to read: the evidence, the diff and the constitution', async () => {
+// El diff dejó de ser lo que el revisor lee (spec 013, R9). Pedirle "el `git diff` de la tarea" era
+// pedirle un cálculo que el sistema no sabía hacer: no había marca de dónde empezaba la tarea, así
+// que el límite lo ponía el modelo. Ahora la lista de archivos está escrita en la evidencia y el
+// revisor la toma de ahí — un dato, no una deducción.
+test('the reviewer is told what to read: the evidence, its scope and the constitution', async () => {
   for (const name of TARGETS) {
     const text = await assistantText(await equipWith(name));
 
     assert.match(text, /\.chalc\/gate\.md/, `${name}: el revisor debe leer la evidencia`);
-    assert.match(text, /git diff/, `${name}: el revisor debe leer el diff de la tarea`);
+    assert.match(text, /Alcance de la tarea|Task scope/, `${name}: el revisor debe tomar de ahí su alcance`);
     assert.match(text, /specs\/constitution\.md/, `${name}: el revisor debe auditar contra la constitución`);
   }
 });

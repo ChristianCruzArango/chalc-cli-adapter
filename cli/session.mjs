@@ -17,7 +17,11 @@ import { runAgent } from './engine/loop.mjs';
 import { loadSkillMetas, buildSkillSections, relevantBlocks } from './skills/loader.mjs';
 import { connectMcpServers, mcpToolsForAgent, stopMcpConnections } from './mcp/astools.mjs';
 import { runPlanner, planSection } from './engine/plan.mjs';
-import { runReviewer, collectChanges } from './engine/review.mjs';
+import { runReviewer, collectChanges, touchedPaths } from './engine/review.mjs';
+// El MISMO módulo que lee el portón. Escribir el registro con una segunda implementación del formato
+// sería garantizar que las dos se desincronizan — es el criterio que ya aplica `lib/verify-boundaries`
+// al re-exportar el linter del portón en vez de copiarlo.
+import { recordTouched } from '../catalog/gate/lib/touched.mjs';
 import { specInfo, loadPlan } from './engine/planfile.mjs';
 
 // Cómo se GENERA código en cada stack: la instrucción concreta que evita que el modelo invente
@@ -330,6 +334,14 @@ export async function createSession({
       });
       conversation.push({ role: 'user', content: String(task).trim() });
       conversation.push({ role: 'assistant', content: result.done ? (result.summary || '(sin resumen)') : (result.error || 'sin resultado') });
+      // Lo que este turno escribió queda anotado para la tarea (spec 013, R10). Se anota AQUÍ y no
+      // en cada sitio que llama a `ask` porque los cuatro caminos —turno suelto, paso de plan,
+      // reintento, modo pantalla— pasan por esta función: una omisión en cualquiera de ellos dejaría
+      // el registro incompleto, y un registro incompleto es peor que ninguno (acota de menos, y
+      // acotar de menos aprueba).
+      //
+      // El turno no se interrumpe si falla: sin registro el alcance cae al diff, que revisa de más.
+      if (projectPath) await recordTouched(projectPath, touchedPaths(result));
       agents.finish(id, result);
       return result;
     } catch (error) { agents.fail(id, error); throw error; }

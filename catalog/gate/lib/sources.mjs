@@ -19,6 +19,20 @@ export const SKIP_DIRS = new Set([
   '.next', '.nuxt', '.angular', '.dart_tool', '.gradle', '.venv', 'venv', 'coverage'
 ]);
 
+// ¿Es esta ruta código del usuario? Es la MISMA pregunta que responde el recorrido de arriba, pero
+// para una ruta que ya viene de fuera —de git, o del registro de rutas escritas de la spec 013—, y
+// por eso vive aquí y no en quien la consulta: dos versiones de «qué es fuente del usuario» se
+// desincronizarían, y `.chalc/` es prueba de ello (se excluye a base de un bug real: la evidencia
+// que el portón acababa de escribir contaba como archivo cambiado).
+// No reutiliza SKIP_DIRS a propósito. Ese conjunto sirve para no ENTRAR en carpetas al recorrer el
+// árbol; aplicarlo aquí a cada segmento de ruta excluiría fuentes legítimas —`bin/` y `obj/` están
+// dentro, y este mismo repo tiene `bin/chalc.mjs`—. Lo que llega por git ya viene filtrado por el
+// .gitignore del proyecto, así que la única exclusión que hace falta es la que git no puede saber.
+export const isUserSource = (file) => {
+  const path = String(file ?? '').replace(/\\/g, '/');
+  return !path.startsWith('.chalc/') && SOURCE_FILE.test(path);
+};
+
 // Todos los fuentes del proyecto, en rutas relativas con '/'.
 //
 // `max` acota el recorrido en repos enormes, y cuando se alcanza se DECLARA (R8): un recorte

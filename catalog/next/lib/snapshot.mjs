@@ -14,7 +14,7 @@
 
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { changedFiles, currentBranch } from '../../gate/lib/changed.mjs';
+import { currentBranch, taskScope } from '../../gate/lib/changed.mjs';
 import { loadConfig } from '../../gate/lib/config.mjs';
 import { newestSpec } from '../../gate/lib/spec.mjs';
 import { allReviews, lastReview } from './review.mjs';
@@ -57,6 +57,33 @@ async function readTasks(root, specDir, findSpec) {
   return { hasTasksFile: true, done, total, current: currentTask(found.text), mtime: await mtimeOf(join(root, found.path)) };
 }
 
+// El alcance de la tarea (spec 013, R8), tolerante a todo.
+//
+// El advisor mide la frescura sobre esta lista, así que quién esté en ella decide si manda a correr
+// el portón. Medirla sobre archivos que no son de esta tarea invalidaría la evidencia buena de hoy
+// por algo que nadie tocó, una y otra vez — ese archivo ajeno no se va a arreglar solo.
+//
+// Y "no sé qué cambió" entra como PROBLEMA, no como lista vacía. Son dos conclusiones opuestas: la
+// lista vacía dice que no hay trabajo pendiente y puede acabar cerrando la feature; el "no sé" es
+// justo el caso en el que hay que parar y preguntar (spec 008, R11).
+async function readScope(problems, read) {
+  let scope;
+  try {
+    scope = await read();
+  } catch (err) {
+    problems.push(`.chalc/gate/lib/changed.mjs: ${err.message}`);
+    return { files: [], source: 'none', undetermined: false };
+  }
+
+  // Un lector inyectado puede devolver solo la lista: el alcance de siempre, ya determinado.
+  const resolved = Array.isArray(scope)
+    ? { files: scope, source: 'given', undetermined: false }
+    : { files: [], source: 'none', undetermined: false, ...(scope || {}) };
+
+  if (resolved.undetermined) problems.push('scope-undetermined');
+  return resolved;
+}
+
 // La fecha del fuente cambiado más reciente. Sin cambios es 0, no "ahora": inventar un instante
 // invalidaría cualquier evidencia y mandaría a correr el portón para siempre.
 async function newestOf(root, files) {
@@ -94,14 +121,15 @@ async function readContract(root, sides, specDir, findSpec) {
 // Los hechos del repo en `root`. Las lecturas del portón se inyectan para poder probar el manejo de
 // fallos sin romper la instalación. Devuelve el snapshot que consume `decide`.
 export async function snapshot(root, {
-  changed = changedFiles, branch = currentBranch, config = loadConfig, findSpec = newestSpec
+  changed = taskScope, branch = currentBranch, config = loadConfig, findSpec = newestSpec
 } = {}) {
   const problems = [];
 
   const loaded = await attempt(problems, '.chalc/gate.json', () => config(root), null);
   const gateConfig = loaded?.config || {};
 
-  const files = await attempt(problems, '.chalc/gate/lib/changed.mjs', () => changed(root), []);
+  const scope = await readScope(problems, () => changed(root));
+  const files = scope.files;
   const currentRef = await attempt(problems, 'git', () => branch(root), '');
 
   const tasks = await attempt(
@@ -119,7 +147,7 @@ export async function snapshot(root, {
     tasks,
     gate: { ...gate, pending: Array.isArray(gateConfig.pending) ? gateConfig.pending : [] },
     review: { ...lastReview(reviewText), entries: allReviews(reviewText) },
-    changed: { files, newestMtime: await newestOf(root, files) },
+    changed: { files, newestMtime: await newestOf(root, files), source: scope.source, undetermined: scope.undetermined },
     flow: {
       approvals: { ...FLOW_DEFAULT.approvals, ...(gateConfig.flow?.approvals || {}) },
       review,

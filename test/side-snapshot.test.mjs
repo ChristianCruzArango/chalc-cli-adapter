@@ -31,6 +31,10 @@ async function workspace({ ownerContract = CONTRATO, mineContract = CONTRATO, si
     await writeFile(join(dir, SPEC, 'tasks.md'), '- [x] T1\n- [ ] T2\n', 'utf8');
     if (contract !== null) await writeFile(join(dir, SPEC, 'contracts', 'api.md'), contract, 'utf8');
     await writeFile(join(dir, 'src', 'a.ts'), 'export const x = 1;\n', 'utf8');
+    // Qué escribió la tarea de este lado (spec 013, R10). Cada lado lleva su `.chalc/`, así que su
+    // alcance es suyo (R5). Sin esto el temporal no tiene ni git ni registro, y el alcance saldría
+    // "no sé" — que es un problema legítimo del advisor, pero no el que estos tests miden.
+    await writeFile(join(dir, '.chalc', 'task.files'), 'src/a.ts\n', 'utf8');
   }
 
   await writeFile(join(front, '.chalc', 'gate.json'), JSON.stringify({

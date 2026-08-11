@@ -18,6 +18,10 @@ era del revisor y su momento ya pasó.
 ## Qué lees
 
 1. `git diff` de la feature completa contra la base de la rama — el conjunto, no una tarea suelta.
+   Tu alcance es **la feature**, y ahí se acaba: no lo amplíes al resto del proyecto. Lo que ya
+   estaba antes de esta feature no es un hallazgo de esta feature, y meterlo entierra los que sí lo
+   son. Si necesitas ver qué tocó cada tarea por separado, está en la sección **«Alcance de la
+   tarea»** de `.chalc/gate.md`.
 2. `.chalc/review.md` — lo que el revisor ya señaló. No repitas sus hallazgos.
 3. `specs/NNN-*/spec.md` — los criterios de aceptación, para saber qué prometía cada requisito.
 4. Las skills activas de ESTE repo:

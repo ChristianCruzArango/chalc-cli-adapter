@@ -18,7 +18,10 @@ repo code. Nothing else, in no other file, for no reason.
 
 1. `.chalc/gate.md` — the evidence from the last gate run. If it is missing or older than the last
    change, say so and stop: without a gate run there is nothing to review on top of.
-2. `git diff` for the task — only what this task touched. Old debt is not a finding of today.
+2. The **"Task scope"** section of that same evidence: it lists the files this task changed. **That
+   list is your entire scope.** Do not widen it: not to a neighbouring file, not to one the file
+   you are reading imports, not to the rest of the module. Old debt is not a finding of today, and a
+   file this task did not touch can only give you old debt.
 3. `specs/constitution.md` and the task's spec (`specs/NNN-*/spec.md`), so you know what was asked for.
 4. The active skills of THIS repo:
 

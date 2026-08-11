@@ -10,7 +10,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { sideAdvice } from '../lib/dashboard.mjs';
@@ -18,6 +18,9 @@ import { emitGate } from '../lib/gateemit.mjs';
 import { emitNext } from '../lib/nextemit.mjs';
 
 const SPEC = '008-advisor';
+
+// Instante fijo del fuente: la evidencia de los tests con estado tiene que poder ser posterior.
+const TOUCHED = Date.parse('2026-08-09T12:00:00Z');
 
 // Un lado de workspace es un repo EQUIPADO: lleva su portón y su advisor dentro. Sin emitirlos, el
 // dashboard no tendría a quién preguntar — que es justamente el caso `ask_human` de más abajo.
@@ -28,6 +31,14 @@ async function side({ tasks = '- [x] T1\n- [ ] T2 — en esto voy\n', state, rev
   await emitNext(dest);
   await writeFile(join(dest, '.chalc', 'gate.json'), JSON.stringify(config ?? { spec: { dir: 'specs' }, pending: [], language: 'es' }));
   await writeFile(join(dest, 'specs', SPEC, 'tasks.md'), tasks);
+  // El fuente de la tarea y el registro de que fue esta tarea quien lo escribió (spec 013, R10).
+  // Antes el lado no tenía ni fuentes ni registro: el alcance salía "no sé" y el advisor —con razón—
+  // paraba a preguntar, que no es lo que estos tests miden. Se envejece a un instante fijo para que
+  // la evidencia de los casos con `state` pueda ser posterior a él.
+  await mkdir(join(dest, 'src'), { recursive: true });
+  await writeFile(join(dest, 'src', 'a.ts'), 'export const x = 1;\n');
+  await utimes(join(dest, 'src', 'a.ts'), TOUCHED / 1000, TOUCHED / 1000);
+  await writeFile(join(dest, '.chalc', 'task.files'), 'src/a.ts\n');
   if (state) await writeFile(join(dest, '.chalc', 'gate.state.json'), JSON.stringify(state));
   if (review) await writeFile(join(dest, '.chalc', 'review.md'), review);
   return dest;

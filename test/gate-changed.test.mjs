@@ -71,38 +71,22 @@ test('changedFiles only reports source files, in git repos too', async () => {
   assert.ok(!files.includes('README.md'), 'la documentación tampoco');
 });
 
-test('changedFiles falls back to the source tree when the folder is not a git repo', async () => {
+// La spec 013 (R4b) cambió este comportamiento, y el test que había decía lo contrario: sin git,
+// `changedFiles` devolvía el árbol de fuentes ENTERO. La intención era buena —devolver [] habría
+// sido un aprobado silencioso—, pero el efecto era peor que el problema: el portón dejaba de medir
+// una tarea y pasaba a medir el proyecto, con la deuda de años dentro, y el informe se volvía
+// inservible. Revisar de más no es un grado de revisar: es otra cosa.
+//
+// Ahora la respuesta es "no sé". Quien decide qué hacer con ella es el portón, que bloquea la
+// corrida y lo dice — ni aprueba, ni inventa un alcance.
+//
+// El recorrido del árbol no desaparece: lo sigue usando la etapa de duplicación para responder "esto
+// ya existía", y sus reglas de exclusión se prueban ahora sobre `sourceFiles`, que es de quien son.
+test('changedFiles reports nothing to review when it cannot tell what the task changed', async () => {
   const dir = await project({
     'src/precio.ts': 'export const p = 1;\n',
     'lib/pagina.dart': 'class X {}\n'
   });
 
-  const files = await changedFiles(dir);
-
-  assert.deepEqual(files, ['lib/pagina.dart', 'src/precio.ts']);
-});
-
-test('the fallback skips dependencies and build output', async () => {
-  const dir = await project({
-    'src/precio.ts': 'export const p = 1;\n',
-    'node_modules/x/index.js': 'module.exports = 1;\n',
-    'dist/bundle.js': 'var a = 1;\n',
-    '.chalc/gate/lib/smells.mjs': 'export const x = 1;\n'
-  });
-
-  const files = await changedFiles(dir);
-
-  assert.deepEqual(files, ['src/precio.ts']);
-});
-
-test('the fallback skips what the gate cannot lint anyway', async () => {
-  const dir = await project({
-    'src/precio.ts': 'export const p = 1;\n',
-    'README.md': '# hola\n',
-    'assets/logo.png': 'binario\n'
-  });
-
-  const files = await changedFiles(dir);
-
-  assert.deepEqual(files, ['src/precio.ts']);
+  assert.deepEqual(await changedFiles(dir), []);
 });

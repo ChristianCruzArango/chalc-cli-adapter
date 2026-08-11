@@ -77,6 +77,35 @@ function mutationSection(stages, frame) {
   return [...section, ''];
 }
 
+// El alcance normalizado. Un repo equipado con una versión anterior de chalc puede llegar sin él, y
+// perder el informe entero por una sección nueva sería peor que no tener la sección.
+const scopeOf = (meta) => ({
+  files: [], source: 'none', from: '', excluded: [], reverted: [], staleRegistry: false, ...(meta.scope || {})
+});
+
+// Sección de alcance (spec 013, R7): qué se revisó, de dónde salió esa lista, desde qué referencia y
+// —sobre todo— qué quedó fuera.
+//
+// Lo que se dejó fuera importa igual que lo que entró. Un alcance de un archivo, en un árbol con
+// veinte cambios, se lee como "solo cambió uno" si nadie dice que los otros diecinueve no eran de
+// esta tarea. Sin esa línea el informe deja de ser evidencia y pasa a ser una afirmación.
+function scopeSection(meta, frame) {
+  const scope = scopeOf(meta);
+  const block = frame.scopeBlock;
+  const list = (paths) => paths.map((p) => `\`${p}\``).join(', ');
+
+  const lines = [`## ${block.title}`, ''];
+
+  lines.push(`- ${block.source}: ${block.origin[scope.source] || scope.source}`);
+  if (scope.from) lines.push(`- ${block.from}: \`${scope.from}\``);
+  lines.push(scope.files.length ? `- ${block.files}: ${list(scope.files)}` : `- ${block.none}`);
+  if (scope.excluded.length) lines.push(`- ${block.excluded}: ${list(scope.excluded)}`);
+  if (scope.reverted.length) lines.push(`- ${block.reverted}: ${list(scope.reverted)}`);
+  if (scope.staleRegistry) lines.push(`- ${block.stale}`);
+
+  return [...lines, ''];
+}
+
 // Todos los hallazgos de la corrida, ya redactados en el idioma del spec.
 function findingsSection(stages, frame, lang) {
   const findings = stages.flatMap((s) => s.findings || []);
@@ -110,6 +139,10 @@ export function renderEvidence({ stages, meta, lang = 'en' }) {
   // El aviso de `--fast` va arriba: quien lea el informe tiene que saber ANTES que el verde de esta
   // corrida no cierra la tarea (R11).
   if (stages.some((s) => s.skipped && s.reason === 'fast')) lines.push(frame.fast, '');
+
+  // El alcance va justo detrás del veredicto, antes que las etapas: "APROBADO" no significa nada
+  // hasta saber sobre qué. Es la primera pregunta que hay que poder responder al abrir el informe.
+  lines.push(...scopeSection(meta, frame));
 
   lines.push(`## ${frame.stages.title}`, '', table(
     [frame.stages.name, frame.stages.result, frame.stages.command, frame.stages.code, frame.stages.duration],
@@ -151,6 +184,10 @@ export function renderState({ stages, meta, fast }) {
     branch: meta.branch || '',
     spec: meta.spec || '',
     role: meta.role || '',
+    // El mismo alcance que muestra el informe (spec 013, R7). Va aquí porque el advisor lo necesita
+    // para medir la frescura contra los archivos de la tarea (R8), y porque una evidencia y un
+    // estado que discreparan sobre qué se revisó no servirían ni el uno ni el otro.
+    scope: scopeOf(meta),
     stages: stages.map((s) => ({
       stage: s.stage,
       ok: !!s.ok,

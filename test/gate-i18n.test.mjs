@@ -73,6 +73,58 @@ test('messageOf writes both languages differently for the same finding', async (
   }
 });
 
+// ── T7 (spec 013, R14): las dos reglas del alcance ────────────────────────────────────────────
+//
+// Son las únicas dos reglas del portón que no hablan del código, sino de la propia revisión: una
+// dice que no se pudo saber QUÉ revisar, y la otra que no había NADA que revisar. Se parecen en
+// pantalla y son opuestas — la primera es una duda que bloquea, la segunda un hecho que se informa—,
+// así que la redacción tiene que separarlas sin que haga falta leer la spec.
+
+test('the gate knows how to name a scope it could not determine, and an empty one', async () => {
+  assert.equal(typeof RULES.scopeUndetermined, 'string');
+  assert.equal(typeof RULES.scopeEmpty, 'string');
+  assert.notEqual(RULES.scopeUndetermined, RULES.scopeEmpty);
+});
+
+// Los dos hallazgos no cuelgan de ningún archivo, así que en el informe se muestran bajo el nombre
+// de su etapa. Sin ese nombre traducido, la línea saldría con el identificador interno en crudo.
+test('the report can name the scope stage in both languages', async () => {
+  assert.equal(typeof FRAME.es.stages.scope, 'string');
+  assert.equal(typeof FRAME.en.stages.scope, 'string');
+  assert.notEqual(FRAME.es.stages.scope, FRAME.en.stages.scope);
+});
+
+// El hallazgo tiene que decir QUÉ HACER. Un "no se pudo determinar el alcance" a secas invita a la
+// salida de siempre —revisarlo todo—, que es justo lo que R4b prohíbe.
+test('the undetermined scope finding says how to fix it, in both languages', async () => {
+  const es = messageOf(RULES.scopeUndetermined, {}, 'es');
+  const en = messageOf(RULES.scopeUndetermined, {}, 'en');
+
+  for (const text of [es, en]) assert.match(text, /git/, 'nombra la fuente que falta');
+  assert.notEqual(es, en);
+});
+
+// El alcance vacío lleva la referencia contra la que se midió: sin ella, "no cambió nada" es
+// incomprobable — nadie puede saber desde cuándo.
+test('the empty scope finding carries the reference it measured against', async () => {
+  const data = { from: 'a1b2c3d4e5' };
+  const es = messageOf(RULES.scopeEmpty, data, 'es');
+  const en = messageOf(RULES.scopeEmpty, data, 'en');
+
+  for (const text of [es, en]) assert.match(text, /a1b2c3d4e5/);
+  assert.notEqual(es, en);
+});
+
+// Sin línea base sellada no hay referencia que citar, y la frase no puede quedarse coja ni mentir
+// con un hueco vacío entre comillas.
+test('the empty scope finding still reads well with no reference', async () => {
+  for (const lang of ['es', 'en']) {
+    const text = messageOf(RULES.scopeEmpty, {}, lang);
+    assert.ok(text.length > 20, `la frase ${lang} se queda coja sin referencia`);
+    assert.doesNotMatch(text, /""|undefined/, 'ni comillas vacías ni undefined');
+  }
+});
+
 // ── bordes ────────────────────────────────────────────────────────────────────────────────────
 
 test('frameOf falls back to english for a language it does not have', async () => {

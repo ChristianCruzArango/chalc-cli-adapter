@@ -10,10 +10,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readdir, utimes } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, readdir, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { snapshot } from '../catalog/next/lib/snapshot.mjs';
+import { recordTouched } from '../catalog/gate/lib/touched.mjs';
 
 const SPEC = 'specs/008-advisor';
 
@@ -32,11 +33,57 @@ async function repo({ tasks, state, review, config, sourceAt } = {}) {
   await writeFile(join(root, 'src', 'pago.ts'), 'export const x = 1;\n');
   if (sourceAt) await utimes(join(root, 'src', 'pago.ts'), sourceAt / 1000, sourceAt / 1000);
 
+  // El registro de lo que la tarea escribió (spec 013, R10). Antes el fixture no lo tenía: el
+  // temporal no es un repo de git y `changedFiles` caía al árbol de fuentes entero, así que
+  // src/pago.ts entraba "gratis". Ese respaldo lo quitó R4b —sin forma de saber qué tocó la tarea,
+  // la respuesta es "no sé", nunca el proyecto— y el fixture pasa a decir explícitamente lo que un
+  // repo equipado sí sabe: qué archivo escribió esta tarea.
+  await recordTouched(root, ['src/pago.ts']);
+
   return root;
 }
 
-// Sin git en el temporal, `changedFiles` cae al recorrido del árbol de fuentes: devuelve src/pago.ts.
 const take = (root, over = {}) => snapshot(root, over);
+
+// ── T12 (spec 013, R8): la frescura se mide contra el alcance de la tarea ─────────────────────
+//
+// El advisor decide "hay trabajo sin medir" comparando la fecha del fuente más reciente con la de la
+// evidencia. Si esa comparación mira archivos que no son de esta tarea, el advisor manda a correr el
+// portón por trabajo ajeno —una y otra vez, porque ese archivo no se va a arreglar solo— y la
+// evidencia buena de hoy queda invalidada por algo que nadie tocó en esta tarea.
+
+test('R8 — a file outside the task scope does not invalidate the evidence', async () => {
+  const root = await repo();
+  // Ajeno: más reciente que todo, pero no está en el registro de lo que esta tarea escribió.
+  await writeFile(join(root, 'src', 'ajeno.ts'), 'export const a = 1;\n');
+
+  const s = await take(root);
+
+  assert.deepEqual(s.changed.files, ['src/pago.ts']);
+  assert.ok(s.changed.newestMtime > 0, 'la frescura sale del archivo de la tarea');
+});
+
+// De dónde salió el alcance viaja también al advisor: es lo que le permite explicar por qué manda a
+// medir, y lo que hace comprobable su decisión.
+test('R8 — the snapshot carries where the scope came from', async () => {
+  const s = await take(await repo());
+
+  assert.equal(s.changed.source, 'registry');
+  assert.equal(s.changed.undetermined, false);
+});
+
+// Sin poder saber qué cambió la tarea, el advisor NO puede concluir. "Cero archivos" y "no sé qué
+// archivos" llevan a acciones opuestas: la primera dice que no hay trabajo pendiente y podría cerrar
+// la feature; la segunda es justo el caso en el que hay que parar y preguntar (R11 de la spec 008).
+test('R8 — an undetermined scope is a problem, not an empty list', async () => {
+  const root = await repo();
+  await rm(join(root, '.chalc', 'task.files'), { force: true });
+
+  const s = await take(root);
+
+  assert.equal(s.changed.undetermined, true);
+  assert.ok(s.problems.length > 0, 'el advisor tiene que poder parar y preguntar');
+});
 
 // ── arma los hechos que decide necesita ───────────────────────────────────────────────────────
 
@@ -103,7 +150,19 @@ test('R13 — los cambiados traen la fecha del fuente MÁS reciente', async () =
 
 test('R13 — sin archivos cambiados, la fecha más reciente es 0 y no un instante inventado', async () => {
   const s = await take(await repo(), { changed: async () => [] });
-  assert.deepEqual(s.changed, { files: [], newestMtime: 0 });
+  assert.deepEqual({ files: s.changed.files, newestMtime: s.changed.newestMtime }, { files: [], newestMtime: 0 });
+  assert.equal(s.changed.undetermined, false, 'cero archivos es una respuesta, no una duda');
+});
+
+// Un lector inyectado que devuelve la lista pelada —sin la forma de alcance— sigue valiendo: es una
+// respuesta determinada, y sus archivos son los que se miden. Los tests del advisor lo usan para no
+// depender de git, y romper esa puerta los volvería frágiles sin ganar nada.
+test('R13 — a plain list of files from an injected reader is a determined scope', async () => {
+  const s = await take(await repo(), { changed: async () => ['src/pago.ts'] });
+
+  assert.deepEqual(s.changed.files, ['src/pago.ts']);
+  assert.ok(s.changed.newestMtime > 0);
+  assert.equal(s.changed.undetermined, false);
 });
 
 test('R17 — las puertas salen de gate.json, con los defaults del portón si no están', async () => {

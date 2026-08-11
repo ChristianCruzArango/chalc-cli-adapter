@@ -1,0 +1,80 @@
+{
+  "id": "js",
+  "label": "JS / TS",
+  "priority": 10,
+  "detect": {
+    "files": [
+      "package.json"
+    ]
+  },
+  "test": {
+    "rule": "jsonField",
+    "file": "package.json",
+    "path": "scripts.test",
+    "reject": "no test specified",
+    "value": "npm test"
+  },
+  "mutation": {
+    "rule": "byLookup",
+    "base": {
+      "tool": "stryker",
+      "command": "npx --no-install stryker run",
+      "report": "reports/mutation/mutation.json",
+      "format": "elements",
+      "probe": "node_modules/.bin/stryker",
+      "scopeFlag": "--mutate",
+      "setup": "**StrykerJS does not write the JSON report by default.** Its default reporters are HTML and\nprogress. Add the `json` reporter to `stryker.conf.json` (and commit it):\n\n```json\n{\n  \"reporters\": [\"html\", \"json\", \"progress\"],\n  \"jsonReporter\": { \"fileName\": \"{report}\" }\n}\n```"
+    },
+    "variants": [
+      {
+        "id": "jest",
+        "label": "Jest (incl. NestJS, jest-preset-angular)",
+        "runner": "jest-runner",
+        "deps": [
+          "jest",
+          "jest-preset-angular"
+        ],
+        "files": "^jest\\.config\\.(js|cjs|mjs|ts|json)$"
+      },
+      {
+        "id": "karma",
+        "label": "Karma / Jasmine (Angular clásico)",
+        "runner": "karma-runner",
+        "deps": [
+          "karma"
+        ],
+        "files": "^karma\\.conf\\.(js|ts)$"
+      },
+      {
+        "id": "vitest",
+        "label": "Vitest (incl. Angular vía su plugin de Vite)",
+        "runner": "vitest-runner",
+        "deps": [
+          "vitest"
+        ],
+        "files": "^vitest\\.config\\.(js|ts|mjs)$"
+      },
+      {
+        "id": "mocha",
+        "label": "Mocha",
+        "runner": "mocha-runner",
+        "deps": [
+          "mocha"
+        ],
+        "files": "^\\.mocharc\\.(js|cjs|json|yml|yaml)$"
+      },
+      {
+        "id": "jasmine",
+        "label": "Jasmine (suelto)",
+        "runner": "jasmine-runner",
+        "deps": [
+          "jasmine"
+        ],
+        "files": "^jasmine\\.json$"
+      }
+    ],
+    "template": {
+      "install": "npm i -D @stryker-mutator/core @stryker-mutator/{runner}"
+    }
+  }
+}

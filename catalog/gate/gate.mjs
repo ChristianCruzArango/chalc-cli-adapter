@@ -16,9 +16,10 @@ import { contractRoutesWithLines } from './lib/contract-routes.mjs';
 import { frameOf, messageOf } from './lib/i18n.mjs';
 import { lintBoundariesIn } from './lib/boundaries.mjs';
 import { lintChanged } from './lib/smells.mjs';
+import { lintDuplication } from './lib/duplication.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { newestSpec } from './lib/spec.mjs';
-import { renderEvidence, verdictOf, writeEvidence } from './lib/evidence.mjs';
+import { renderEvidence, renderState, verdictOf, writeEvidence, writeState } from './lib/evidence.mjs';
 import { RULES } from './lib/rules.mjs';
 import { runCommand } from './lib/run.mjs';
 import { runMutation } from './lib/mutation.mjs';
@@ -75,6 +76,12 @@ export async function runGate({ root = process.cwd(), fast = false, run = runCom
   const smells = await timed(() => lintChanged(files, { root, limits: config.lint }));
   stages.push(staticStage('smells', smells.value, smells.ms));
 
+  // Duplicación (spec 012): mira el árbol entero, pero solo reporta lo que tiene una punta en algo
+  // que la tarea tocó. Va junto a `smells` porque las dos leen el mismo texto; el informe queda de
+  // más local a más global — primero el archivo, luego el repo, luego las fronteras.
+  const duplication = await timed(() => lintDuplication(root, files, config.lint?.duplication));
+  stages.push(staticStage('duplication', duplication.value, duplication.ms));
+
   const boundaries = await timed(() => lintBoundariesIn(root, files));
   stages.push(staticStage('boundaries', boundaries.value.map(asFinding), boundaries.ms));
 
@@ -102,8 +109,12 @@ const asFinding = (v) => ({
 // evidencia dejaría de serlo.
 async function finish(root, lang, stages, meta, fast) {
   const verdict = verdictOf(stages);
-  const markdown = renderEvidence({ stages, meta: { ...meta, date: new Date() }, lang });
-  const evidence = await writeEvidence(root, markdown);
+  const stamped = { ...meta, date: new Date() };
+  const evidence = await writeEvidence(root, renderEvidence({ stages, meta: stamped, lang }));
+
+  // El mismo resultado, para el advisor (spec 008, R13). Se escribe aquí y no en otro sitio para
+  // que informe y estado no puedan discrepar: misma corrida, misma fecha, mismo `verdictOf`.
+  await writeState(root, renderState({ stages, meta: stamped, fast }));
 
   return {
     code: verdict === 'pass' ? 0 : 1,

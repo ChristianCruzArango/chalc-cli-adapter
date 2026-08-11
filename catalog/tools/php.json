@@ -1,0 +1,8 @@
+{
+  "id": "php",
+  "label": "PHP",
+  "priority": 70,
+  "detect": { "files": ["composer.json"] },
+  "test": { "rule": "fixed", "value": "vendor/bin/phpunit" },
+  "mutation": null
+}

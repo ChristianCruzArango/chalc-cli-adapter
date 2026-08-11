@@ -8,6 +8,10 @@ metadata:
 
 # Mutation Testing (any language, any test framework)
 
+> **This repo's stack could not be detected.** chalc did not resolve it from the root signals,
+> so no per-stack guidance is given here — use the full table below, and fill
+> `test.command` and `mutation.*` in `.chalc/gate.json` yourself.
+
 A passing test isn't proof of quality — it must **catch bugs**. Mutation testing introduces small
 changes (mutants) into the code and checks whether your tests fail (kill the mutant). Surviving
 mutants = weak or missing tests. This is the **final gate of the SDD Implement phase** (after
@@ -47,29 +51,30 @@ Two Angular apps can use Karma, Jest or Vitest; do not guess. Always, in this or
 
 | Language | Install once, project-local (if missing) | Run | Native report the gate parses |
 |---|---|---|---|
-| JS / TS | `npm i -D @stryker-mutator/core` **+ the runner that matches the detected framework** (see mapping below). Then `npx stryker init` (reuses your existing test config). | `npx --no-install stryker run` | `reports/mutation/mutation.json` — **you must enable the `json` reporter**, see below |
-| .NET / C# | `dotnet new tool-manifest` (once) → `dotnet tool install dotnet-stryker` (**local**, writes `.config/dotnet-tools.json`, commit it) | `dotnet stryker` | `StrykerOutput/**/reports/mutation-report.json` (written by default) |
-| Python | `uv add --dev mutmut` (or, inside a venv, `pip install mutmut`) | `mutmut run && mutmut junitxml > reports/mutation/mutmut.xml` | `reports/mutation/mutmut.xml` |
-| Java / Kotlin | PIT plugin in `pom.xml` (project build) | `mvn org.pitest:pitest-maven:mutationCoverage` | `target/pit-reports/**/mutations.xml` (written by default) |
-| Go | no install: `go run github.com/go-gremlins/gremlins/cmd/gremlins@latest unleash` | (same command) | **no parser yet** — see below |
-| Rust | `cargo install --locked cargo-mutants` (cargo subcommand, user-level) | `cargo mutants` | **no parser yet** — see below |
-| PHP | `composer require --dev infection/infection` | `vendor/bin/infection` | **no parser yet** — see below |
-| Dart / Flutter | no standard tool exists | — | **none** — see below |
+| JS / TS | `npm i -D @stryker-mutator/core @stryker-mutator/{runner}` | `npx --no-install stryker run` | `reports/mutation/mutation.json` |
+| .NET / C# | `dotnet new tool-manifest && dotnet tool install dotnet-stryker` | `dotnet stryker` | `StrykerOutput/**/reports/mutation-report.json` |
+| Dart / Flutter | — | — | **no parser yet** |
+| Python | `uv add --dev mutmut` | `mutmut run && mutmut junitxml > reports/mutation/mutmut.xml` | `reports/mutation/mutmut.xml` |
+| Java / Kotlin (Maven) | — | `mvn org.pitest:pitest-maven:mutationCoverage` | `target/pit-reports/**/mutations.xml` |
+| Rust | — | — | **no parser yet** |
+| PHP | — | — | **no parser yet** |
 
 ### The report is the evidence — make the tool write it
 The gate never reads the tool's stdout, because stdout is exactly what a summary can fake. It parses
 the report file. Two tools need you to ask for it explicitly:
 
-- **StrykerJS does not write the JSON report by default.** Its default reporters are HTML and progress.
-  Add the `json` reporter to `stryker.conf.json` (and commit it):
-  ```json
-  {
-    "reporters": ["html", "json", "progress"],
-    "jsonReporter": { "fileName": "reports/mutation/mutation.json" }
-  }
-  ```
-- **mutmut prints results to the screen.** `mutmut results` is for humans; the gate needs the file, so
-  the run always ends with `mutmut junitxml > reports/mutation/mutmut.xml`.
+- **StrykerJS does not write the JSON report by default.** Its default reporters are HTML and
+progress. Add the `json` reporter to `stryker.conf.json` (and commit it):
+
+```json
+{
+  "reporters": ["html", "json", "progress"],
+  "jsonReporter": { "fileName": "reports/mutation/mutation.json" }
+}
+```
+
+- **mutmut prints results to the screen.** `mutmut results` is for humans; the gate needs the file,
+so the run always ends with the `junitxml` redirect into `reports/mutation/mutmut.xml`.
 
 Note the `--no-install` in the JS command: plain `npx stryker run` **downloads** whatever it cannot
 find — and the bare `stryker` package on npm is an abandoned 2019 release, not `@stryker-mutator/core`.
@@ -80,19 +85,19 @@ If you change where the report lands, change `mutation.report` in `.chalc/gate.j
 file is the single place the gate reads its configuration from.
 
 ### Stacks the gate cannot verify yet
-Go, Rust, PHP and **Dart / Flutter** have no report parser in the gate (Dart has no standard mutation
-tool at all). There the mutation stage ends as a **BLOCKER** by default, and that is deliberate: the
-gate says "I could not verify this", never "this passed".
+Dart / Flutter, Rust, PHP have no report parser in the gate. There the mutation stage ends as a
+**BLOCKER** by default, and that is deliberate: the gate says "I could not verify this", never
+"this passed".
 
 Two honest ways out — pick one **with the user**, never on your own:
 
 1. **Configure a tool the gate can read.** Point `mutation.command`, `mutation.report` and
-   `mutation.format` in `.chalc/gate.json` at a tool that writes one of the supported report formats
+   `mutation.format` in `.chalc/gate.json` at a tool that writes one of the supported formats
    (`elements`, `junit`, `pit`).
 2. **Declare the stage not applicable**: set `"required": false` inside `mutation` in
    `.chalc/gate.json`. The stage is then reported as *not applicable* instead of blocking, and the
-   reason is recorded in `.chalc/gate.md` on every run. This only works where the gate has **no parser
-   for the stack** — on a repo it can measure, the flag is ignored and the stage runs anyway.
+   reason is recorded in `.chalc/gate.md` on every run. This only works where the gate has **no
+   parser for the stack** — on a repo it can measure, the flag is ignored and the stage runs anyway.
 
 Do not work around a blocker by editing the gate code: it is regenerated on every equip.
 
@@ -100,10 +105,10 @@ Do not work around a blocker by editing the gate code: it is regenerated on ever
 | Detected unit-test framework | Runner plugin |
 |---|---|
 | Jest (incl. NestJS, jest-preset-angular) | `@stryker-mutator/jest-runner` |
-| Karma / Jasmine (classic Angular) | `@stryker-mutator/karma-runner` |
-| Vitest (incl. Angular via its Vite plugin) | `@stryker-mutator/vitest-runner` (reuses the project's `vitest.config.*`, plugins included) |
+| Karma / Jasmine (Angular clásico) | `@stryker-mutator/karma-runner` |
+| Vitest (incl. Angular vía su plugin de Vite) | `@stryker-mutator/vitest-runner` |
 | Mocha | `@stryker-mutator/mocha-runner` |
-| Jasmine (standalone) | `@stryker-mutator/jasmine-runner` |
+| Jasmine (suelto) | `@stryker-mutator/jasmine-runner` |
 
 Notes:
 - **StrykerJS = `@stryker-mutator/core` + ONE runner plugin** (table above). `npx stryker init` reuses

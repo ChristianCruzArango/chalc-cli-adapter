@@ -27,7 +27,12 @@ const ASSIGNED = /^\s*(?:export\s+)?(?:const|let|var|final|val)\s+([A-Za-z_$][\w
 // Reemplaza por espacios el contenido de comentarios y literales, conservando saltos de línea y
 // posiciones. Sin esto el linter marcaría el `console.log` de un comentario o contaría las llaves
 // de un texto — y un linter con falsos positivos se desactiva a la semana.
-export function blankOut(text, { lineComment = '//', block = true, template = true } = {}) {
+// `strings: false` conserva el CONTENIDO de los literales y vacía solo los comentarios. Lo pide la
+// etapa de duplicación (spec 012, R2): vaciar las cadenas volvía idénticas las tablas `es` y `en` de
+// cualquier marco bilingüe —misma estructura, distinto texto— y las reportaba como copias. Para el
+// resto de reglas el defecto sigue siendo vaciarlo todo: ahí lo que importa es no contar las llaves
+// de un texto ni el `console.log` de un comentario.
+export function blankOut(text, { lineComment = '//', block = true, template = true, strings = true } = {}) {
   const out = text.split('');
   const blank = (i) => { if (out[i] !== '\n') out[i] = ' '; };
 
@@ -48,7 +53,7 @@ export function blankOut(text, { lineComment = '//', block = true, template = tr
     }
     // literal de texto
     const quote = text[i];
-    if (quote === '"' || quote === "'" || (template && quote === '`')) {
+    if (strings && (quote === '"' || quote === "'" || (template && quote === '`'))) {
       blank(i++);
       while (i < text.length) {
         if (text[i] === '\\') { blank(i); blank(i + 1); i += 2; continue; }

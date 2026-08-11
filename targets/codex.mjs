@@ -9,7 +9,7 @@ import * as kit from '../lib/targetkit.mjs';
 
 export const label = 'Codex CLI';
 
-export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun }) {
+export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun , tools = null, roles = [] }) {
   const plan = [];
   for (const s of skills) plan.push(`skill     .chalc/skills/${s}`);
   for (const m of mcps) plan.push(`mcp       .codex/config.toml  ::  ${m.id}`);
@@ -18,27 +18,13 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   plan.push('manifest  .chalc.json');
   if (dryRun) return { plan, written: false };
 
-  await kit.copySkills(CATALOG, skills, join(projectPath, '.chalc', 'skills'));
+  await kit.copySkills(CATALOG, skills, join(projectPath, '.chalc', 'skills'), { tools });
 
   // Scaffold de los métodos (specs/ del SDD): contenido del proyecto, va con cualquier asistente.
   await kit.copyMethodScaffolds(methods, projectPath);
 
-  const metas = await Promise.all(skills.map((s) => kit.readSkillMeta(CATALOG, s)));
-  const lines = [kit.START, '## ⚙️ Chalc'];
-  const principles = kit.mandatoryPrinciplesBlock(skills);
-  if (principles) lines.push('', principles);
-  const archRef = kit.architectureBlock(projectPath, architecture?.name);
-  if (archRef) lines.push('', archRef);
-  if (metas.length) {
-    lines.push('', '### Skills disponibles', '_Cuando la tarea lo amerite, lee el archivo indicado:_',
-      ...metas.map((m) => `- **${m.name}** — ${m.description} → \`.chalc/skills/${m.id}/SKILL.md\``));
-  }
-  if (mcps.length) lines.push('', '### Servidores MCP', ...mcps.map((m) => `- \`${m.id}\` — ${m.description || ''}`));
-  for (const me of methods) lines.push('', me.rulesText.trim());
-  // Revisor: aquí no hay subagentes, así que va como sección del mismo bloque gestionado (R12).
-  lines.push(...await kit.reviewerLines(CATALOG, { skills, specLang }));
-  lines.push(kit.END);
-  await kit.writeManagedBlock(join(projectPath, 'AGENTS.md'), lines.join('\n'));
+  const block = await kit.chalcBlock(CATALOG, { projectPath, skills, mcps, methods, roles, architecture, specLang });
+  await kit.writeManagedBlock(join(projectPath, 'AGENTS.md'), block);
 
   // MCP → .codex/config.toml. Sin parser TOML (cero dependencias): bloque gestionado con comentarios #,
   // igual que el bloque markdown — lo del usuario (model, profiles…) no se toca.

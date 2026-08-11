@@ -33,6 +33,7 @@ export const RULES = Object.freeze({
   anyType: 'any-type',
 
   // fronteras de arquitectura
+  duplication: 'duplication',
   layerBoundary: 'layer-boundary',
   featureBoundary: 'feature-boundary',
 

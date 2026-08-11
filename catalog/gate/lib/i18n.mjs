@@ -21,7 +21,7 @@ export const FRAME = {
     stages: {
       title: 'Etapas',
       name: 'Etapa', result: 'Resultado', command: 'Comando', code: 'Salida', duration: 'Duración',
-      tests: 'tests', mutation: 'mutación', smells: 'código', boundaries: 'fronteras',
+      tests: 'tests', mutation: 'mutación', smells: 'código', duplication: 'duplicación', boundaries: 'fronteras',
       traceability: 'trazabilidad', contract: 'contrato'
     },
     status: {
@@ -46,7 +46,7 @@ export const FRAME = {
     stages: {
       title: 'Stages',
       name: 'Stage', result: 'Result', command: 'Command', code: 'Exit', duration: 'Duration',
-      tests: 'tests', mutation: 'mutation', smells: 'code', boundaries: 'boundaries',
+      tests: 'tests', mutation: 'mutation', smells: 'code', duplication: 'duplication', boundaries: 'boundaries',
       traceability: 'traceability', contract: 'contract'
     },
     status: {
@@ -96,6 +96,8 @@ export const MESSAGES = {
     [RULES.debugOutput]: () => 'salida de depuración olvidada en el código',
     [RULES.anyType]: () => 'tipo sin tipar: anula la comprobación estática justo donde hace falta',
 
+    [RULES.duplication]: (d) => `${d.lines} líneas idénticas a "${d.other}:${d.otherLine}"`
+      + `${d.capped ? ' (el recorrido se acotó: puede haber más)' : ''}`,
     [RULES.layerBoundary]: (d) => `"${d.from}" importa "${d.to}" (${d.import}): rompe la dirección de las capas`,
     [RULES.featureBoundary]: (d) => `"${d.from}" importa "${d.to}" (${d.import}): los features no se importan entre sí`,
 
@@ -124,6 +126,8 @@ export const MESSAGES = {
     [RULES.debugOutput]: () => 'debug output left behind in the code',
     [RULES.anyType]: () => 'untyped value: it cancels static checking exactly where it is needed',
 
+    [RULES.duplication]: (d) => `${d.lines} lines identical to "${d.other}:${d.otherLine}"`
+      + `${d.capped ? ' (the scan was capped: there may be more)' : ''}`,
     [RULES.layerBoundary]: (d) => `"${d.from}" imports "${d.to}" (${d.import}): it breaks the direction of the layers`,
     [RULES.featureBoundary]: (d) => `"${d.from}" imports "${d.to}" (${d.import}): features do not import each other`,
 

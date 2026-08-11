@@ -1,0 +1,20 @@
+{
+  "id": "dotnet",
+  "label": ".NET / C#",
+  "priority": 20,
+  "detect": { "globs": ["*.csproj", "*.fsproj", "*.sln"] },
+  "test": { "rule": "fixed", "value": "dotnet test" },
+  "mutation": {
+    "rule": "fixed",
+    "value": {
+      "tool": "stryker-net",
+      "command": "dotnet stryker",
+      "report": "StrykerOutput/**/reports/mutation-report.json",
+      "format": "elements",
+      "install": "dotnet new tool-manifest && dotnet tool install dotnet-stryker",
+      "probe": ".config/dotnet-tools.json",
+      "scopeFlag": "--mutate",
+      "scopeJoin": "repeat"
+    }
+  }
+}

@@ -8,16 +8,7 @@
 // entre deuda de hace tres años.
 
 import { spawn } from 'node:child_process';
-import { readdir } from 'node:fs/promises';
-import { join } from 'node:path';
-
-// Extensiones que alguna etapa sabe revisar. Lo demás no entra en el recorrido de respaldo.
-const SOURCE_FILE = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|dart|cs|java|kt|py)$/;
-
-const SKIP_DIRS = new Set([
-  '.git', '.chalc', 'node_modules', 'dist', 'build', 'out', 'target', 'obj', 'bin',
-  '.next', '.nuxt', '.angular', '.dart_tool', '.gradle', '.venv', 'venv', 'coverage'
-]);
+import { sourceFiles, SOURCE_FILE } from './sources.mjs';
 
 // Salida de un comando de git, o null si git no está o el repo no existe.
 function git(args, cwd) {
@@ -38,20 +29,6 @@ export async function currentBranch(root) {
   return out ? out.trim() : '';
 }
 
-// Todos los fuentes del proyecto, en rutas relativas con '/'. Es el respaldo cuando no hay git.
-async function allSources(root, rel = '') {
-  const found = [];
-  let entries;
-  try { entries = await readdir(join(root, rel), { withFileTypes: true }); } catch { return found; }
-  for (const entry of entries) {
-    const child = rel ? `${rel}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) {
-      if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith('.')) found.push(...await allSources(root, child));
-    } else if (SOURCE_FILE.test(entry.name)) found.push(child);
-  }
-  return found;
-}
-
 // Archivos cambiados respecto a la base de la rama, más lo que aún no está commiteado. Rutas
 // relativas con '/'.
 //
@@ -59,7 +36,7 @@ async function allSources(root, rel = '') {
 // el portón aprobaría en silencio un repo que nunca miró — que es justo lo que esta spec quita. Con
 // git y sin cambios, [] sí es la respuesta correcta: no se tocó nada.
 export async function changedFiles(root, { base = '' } = {}) {
-  if (!await git(['rev-parse', '--is-inside-work-tree'], root)) return (await allSources(root)).sort();
+  if (!await git(['rev-parse', '--is-inside-work-tree'], root)) return (await sourceFiles(root)).files;
 
   const found = new Set();
 
@@ -70,7 +47,12 @@ export async function changedFiles(root, { base = '' } = {}) {
   }
 
   // Lo que está en el árbol de trabajo y todavía no se commiteó: es justo lo que se acaba de hacer.
-  const status = await git(['status', '--porcelain'], root);
+  //
+  // `-uall` es necesario: sin él, git colapsa lo no trackeado a la CARPETA (`?? src/`) en vez de
+  // listar sus archivos. El portón no puede lintar un directorio, así que los archivos nuevos —los
+  // de la tarea recién empezada— quedaban fuera de la revisión; y el advisor de la spec 008 medía
+  // la frescura contra la fecha de una carpeta, que cambia por motivos que no son código.
+  const status = await git(['status', '--porcelain', '-uall'], root);
   if (status) {
     for (const line of lines(status)) {
       const path = line.replace(/^\S+\s+/, '').split(' -> ').pop();
@@ -78,8 +60,20 @@ export async function changedFiles(root, { base = '' } = {}) {
     }
   }
 
-  return [...found].map((f) => f.replace(/\\/g, '/')).sort();
+  return [...found].map((f) => f.replace(/\\/g, '/')).filter(isUserSource).sort();
 }
+
+// Un archivo que alguna etapa sabe revisar y que es del usuario. El recorrido de respaldo ya
+// aplicaba estas dos reglas; la ruta de git devolvía todo lo que git nombrara, y esa asimetría se
+// notaba en dos sitios:
+//
+//   - `.chalc/` no está trackeado, así que `git status` lo listaba: la evidencia que el portón
+//     acababa de escribir contaba como archivo cambiado, siempre con fecha posterior a sí misma.
+//   - `tasks.md` sí está trackeado: marcar un checkbox invalidaba la medida que acababa de
+//     autorizar ese marcado.
+//
+// Los dos los destapó el advisor de la spec 008 al recorrer el ciclo en un repo real.
+const isUserSource = (file) => !file.startsWith('.chalc/') && SOURCE_FILE.test(file);
 
 // El punto del que salió la rama. Se prueban las bases habituales; la primera que exista manda.
 async function mergeBase(root) {

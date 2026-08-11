@@ -35,6 +35,7 @@ This way, an Angular project can receive its Angular skills, a NestJS one its ba
 | `chalc inspect` | Explains what it detects and why, without writing | no |
 | `chalc verify [path]` | Verifies a project: completeness (folders/README, architecture.md, specs/) + **architecture boundaries** (layers) | no |
 | `node .chalc/gate.mjs` | **Quality gate** of an equipped repo: tests + mutation + static checks; evidence in `.chalc/gate.md`. Not a chalc command — it runs in the repo, with or without chalc | no |
+| `node .chalc/next.mjs` | **Flow advisor** of an equipped repo: tells you the ONE next action of the task cycle, reading the repo's real state. Read-only. Not a chalc command — it runs in the repo, with or without chalc | no |
 | `chalc doctor` | Validates the catalog (rules, skills, MCP, methods, targets) | no |
 | `chalc configure` | Manages the catalog (rules/skills/MCP) via menu | no |
 | `chalc install <source>` | Installs a skill into the catalog and wires it to a rule | no |
@@ -401,9 +402,12 @@ chalc/
 │   ├── mcp/                 MCP server definitions
 │   ├── profiles/            per-task model profiles (chalc-default.json: spec/qa/repair)
 │   ├── methods/sdd/         the SDD method (constitution, es/en templates, rules, graphic)
-│   ├── agents/              the reviewer agent (es/en), projected in each target's format
+│   ├── agents/              the review roles: contract + prompt (es/en) per folder
 │   ├── hooks/               the opt-in turn-end hook, documented — never installed
-│   └── gate/                the quality gate: real code copied into `.chalc/` when equipping
+│   ├── gate/                the quality gate: real code copied into `.chalc/` when equipping
+│   ├── next/                the flow advisor: decides the ONE next action of the task cycle
+│   ├── tools/               what chalc knows per stack: tests, mutation, report and install
+│   └── mail/                the mailbox between the sides of a workspace
 ├── rules/                   criteria: which signal = which stack = what gets installed (incl. global.json)
 ├── targets/
 │   ├── claude.mjs           translator to Claude Code
@@ -635,6 +639,41 @@ the survivors and the findings — evidence you can read yourself.
 Configuration lives in **`.chalc/gate.json`** (thresholds, commands, report paths). Re-equipping
 regenerates the gate code and **keeps what you edited there**.
 
+### Duplication stops being an opinion
+
+The gate gains a seventh stage. It compares the files the task touched against the **whole source
+tree** and reports repeated blocks with the path and line of both copies:
+
+```
+src/pago.service.ts:6 — 7 lines identical to "src/factura.service.ts:6"
+```
+
+It catches the case that hurts most: **you copied from a file you never opened**. The reviewer could
+not see it — it has one task's diff in front of it, not the repo — and the gate did not measure it
+either: spec 007 had left it out of scope for fear of false positives.
+
+Three brakes address that fear:
+
+- **It only counts if you touched one of the two ends.** A repo with history has plenty of old
+  duplication; dumping all of it would bury today's work.
+- **Lines the grammar repeats do not count**: imports, lone closers, `else`, decorators. Five
+  `import` lines followed by a `}` look identical across half a repo.
+- **String contents ARE compared.** Blanking them made the `es` and `en` tables of any bilingual
+  frame identical. Running the stage on this very repo exposed it: 81 findings, nearly all language
+  tables. With strings preserved: 19, and real.
+
+It is tuned in `.chalc/gate.json`:
+
+```jsonc
+"lint": {
+  "duplication": { "enabled": true, "minLines": 6, "maxFiles": 4000 }
+}
+```
+
+The minimum is measured in **significant lines**, not file lines. And the reviewer stops opining on
+what a script now measures: its share becomes the duplication no script can see — two functions
+doing the same thing with different names and a different shape.
+
 ### Reviewer agent: what the gate cannot measure
 
 The gate measures and does not opine. Next to it, each repo gets a **reviewer agent** in its target's
@@ -644,16 +683,182 @@ constitution and **that repo's active skills**, and judges what only reading can
 test verifies the requirement or merely accompanies it, whether the abstraction is right, whether the
 name says what it does.
 
-It answers `OK` or a numbered list with `file:line`. **It does not modify files** — in Claude Code
-that is not asked for, it is granted: its tool list has no write tool.
+It answers `OK` or a numbered list with `file:line`. **It does not modify files**, with a single
+exception: it appends its verdict to `.chalc/review.md`, append-only. Without that trace, the advisor
+could not verify that the review happened.
 
-The hand-off printed by `spec-ia` and `feature` carries the closing cycle: run the gate → paste its
-output verbatim → fix → reviewer → tick the task. In a full-stack feature the cycle is **per repo**,
-naming each side's gate, and switching repos before closing the current one is forbidden.
+### Roles with a contract
+
+Each role's scope is declared **once, as data**, in `catalog/agents/<id>/contract.json`:
+
+```jsonc
+{
+  "id": "revisor", "order": 10, "cadence": "task",
+  "writes": [".chalc/review.md"],
+  "forbiddenWrites": ["**"],
+  "tools": ["Read", "Grep", "Glob", "Bash", "Write"]
+}
+```
+
+Both the permissions the target grants and the prose the role reads come from there, so they cannot
+drift apart. And there is a hard check: **a role that declares nothing in `writes` cannot receive a
+write tool**, and `Edit` is never granted — writing your own logbook and modifying someone else's
+code are not the same permission.
+
+There are two roles today, and they do not overlap:
+
+| Role | When | What it judges |
+|---|---|---|
+| `revisor` | every task | test quality, abstraction, naming, minimality |
+| `endurecedor` | when the feature closes | invalid input, error paths, edge cases, failing dependencies |
+
+**Cadence** matters because of cost: every pass is a model call. Running the hardener on all twenty
+tasks of a feature multiplies that cost twentyfold to find almost exactly what it would find at the
+end. It is tuned per repo in `.chalc/gate.json`:
+
+```jsonc
+"flow": {
+  "roles": [
+    { "id": "revisor",     "order": 10, "cadence": "task",    "required": true },
+    { "id": "endurecedor", "order": 20, "cadence": "feature", "required": true }
+  ]
+}
+```
+
+**Adding a role is adding a folder**: its contract and its prompt in both languages. All five targets
+project it and the advisor sequences it without a code change.
+
+> **Only Claude Code grants per-agent permissions.** In Cursor the role is a rule, and in Codex,
+> Copilot and Gemini a section of the managed block: there the scope is an **instruction, not a
+> restriction**, and what is emitted says so in those words. chalc tells you which of the two you got
+> when it equips the repo.
+
+### Flow advisor: the next step is decided by state, not by memory
+
+The gate measures and the reviewer judges, but for a long time **the order in which they were used
+lived in prose** inside the hand-off. Nobody read `.chalc/gate.md` back: you could run the gate, keep
+touching code, and tick the task with already-stale evidence.
+
+Equipping also leaves an **advisor**: `.chalc/next.mjs`, read-only and dependency-free.
+
+```bash
+node .chalc/next.mjs
+```
+
+```text
+NEXT_ACTION: run_gate
+REASON: You touched code at 15:04 and the evidence is from 14:32: it measures the old code.
+COMMAND: node .chalc/gate.mjs
+```
+
+It reads the repo's real state — evidence date, gate verdict, reviewer log, `tasks.md` checkboxes,
+changed files — and returns **one** action from this table, the first that applies:
+`blocked_config`, `run_gate`, `fix_gate`, `call_reviewer`, `fix_review`, `tick_task`, `work_task`,
+`done`. If it cannot tell where things stand, it answers `ask_human` and hands control back instead
+of guessing.
+
+`NEXT_ACTION` and `COMMAND` are **never translated** (the assistant consumes them); `REASON` is in
+the spec's language and always cites the datum that produced the action. A green from a `--fast` run,
+or from another branch, does not close a task: it goes back to `run_gate`.
+
+Approval gates are tuned in `.chalc/gate.json`:
+
+```jsonc
+"flow": {
+  "approvals": { "task": true, "feature": true },   // ask for your OK when closing
+  "review": { "required": true }                    // require the reviewer before ticking
+}
+```
+
+The hand-off printed by `spec-ia` and `feature` no longer recites steps: it tells the assistant to
+consult the advisor and obey its `COMMAND` until it answers `done`. In a full-stack feature the cycle
+is **per repo**, naming each side's advisor, and switching repos before closing the current one is
+forbidden.
 
 > Chalc **never installs the hook** that would run this automatically: hooks execute on their own and
 > `.claude/settings.json` is committed, so enabling it would impose a command on everyone who clones
 > the repo. The ready-to-paste block and the reasoning are left in `.chalc/gate-hook.md`.
+
+### The tool table: one file per language
+
+What chalc knows about each stack — which command runs its tests, which tool mutates it, how it is
+installed, where it writes its report and whether the gate can read it — lives in **one data file per
+language** under `catalog/tools/`:
+
+```jsonc
+// catalog/tools/maven.json
+{
+  "id": "maven", "label": "Java / Kotlin (Maven)", "priority": 50,
+  "detect": { "files": ["pom.xml"] },
+  "test": { "rule": "fixed", "value": "mvn test" },
+  "mutation": { "rule": "fixed", "value": {
+    "tool": "pit",
+    "command": "mvn org.pitest:pitest-maven:mutationCoverage",
+    "report": "target/pit-reports/**/mutations.xml",
+    "format": "pit"
+  }}
+}
+```
+
+**Two** things are derived from that same row that used to be maintained separately and by hand: the
+`.chalc/gate.json` the gate reads, and the tables of the `mutation-testing` skill the assistant
+reads. Keeping them in agreement no longer depends on someone remembering to edit both places.
+
+Variation that does not fit as a fixed value is expressed with a closed set of four rules — `fixed`,
+`jsonField`, `bySignal`, `byLookup` — not with ad-hoc conditionals in JSON. That is how the Stryker
+runner comes from the detected test framework and the Dart command from whether the `pubspec` names
+Flutter, without a single per-language branch in code.
+
+**Adding a stack is adding a file.** No changes to the detection, the gate, or the text of any skill.
+
+And the question "can the gate verify mutation here?" is answered by crossing the `format` the table
+declares with the parsers the gate actually has — not with a hand-written list that goes stale. Today
+it reads `elements`, `junit` and `pit`; Go, Rust and PHP have no parser yet, and the skill says so on
+its own.
+
+### Cross-side coordination: contract drift detects itself
+
+In a full-stack feature the contract is copied **identically** into each side's spec. When the
+backend changes it mid-feature it edits its own copy and moves on — and the others go stale. The
+frontend codes against something that no longer exists and finds out at integration, because the gate
+only detects vanished routes, not changed shapes or error codes.
+
+In worktree mode the sides are sibling folders, so the advisor compares them and says so:
+
+```text
+NEXT_ACTION: sync_contract
+REASON: The `back` contract changed and your copy is stale (2 line(s) apart).
+        Look at WHAT changed before moving on: coding against the old contract only shows up at integration.
+COMMAND: diff specs/003-pago/contracts/api.md ../back/specs/003-pago/contracts/api.md
+```
+
+**Nobody has to remember to tell anyone**: it compares the contents of two files that should be
+equal. And it comes **before** `run_gate`, because measuring against a stale contract burns a whole
+run — minutes, with mutation — to produce evidence you have to throw away.
+
+The command **shows** the difference; it never overwrites. Copying would be right almost always, but
+what would be lost — a note you had added to your copy — leaves no trace, and whoever adapts the code
+needs to know WHAT changed.
+
+### And a mailbox, for what no file can say
+
+"I'm blocked waiting on the payments endpoint" is not on disk. Every equipped repo carries
+`.chalc/mail.mjs`:
+
+```bash
+node .chalc/mail.mjs send --to front --message "Changed 422 to 409 on /pagos."
+node .chalc/mail.mjs read
+```
+
+No daemon, no live process: the sides share a filesystem, so the sender drops the note straight where
+the other reads it, in `<workspace>/.chalc-mail/` — **outside** every worktree, so nobody's
+`git status` gets polluted.
+
+The asymmetry is deliberate: **sending is optional, reading is not**. The advisor emits `read_mail`
+while unread notes remain, so a note that gets written definitely gets seen. A note is one line; what
+needs more than that needs a conversation with the user.
+
+In a mono-repo both features are off and emit nothing: there are no sides to coordinate with.
 
 ## Optional AI layer — generating specs from a user story
 

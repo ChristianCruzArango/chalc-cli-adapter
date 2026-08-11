@@ -14,9 +14,7 @@ de tener tests que **fallen** (Red).
    2. Confírmalos en **FALLO** (Red).
    3. Escribe el **mínimo código** para pasarlos (Green).
    4. Refactoriza sin romper tests.
-   5. **Cierra la tarea con el portón:** `node .chalc/gate.mjs`. Corre los tests, la herramienta de mutación y los linters, y escribe la evidencia en `.chalc/gate.md`. Pega su salida tal cual: el score sale de ahí, no de ti. Si sobreviven mutantes, refuerza los tests hasta matarlos (el portón exige ≥ 80%).
-   6. **Llama al agente revisor** (`revisor`). Si devuelve hallazgos, arréglalos y vuelve al paso 5.
-   7. No avances a la siguiente tarea con el portón en rojo o con hallazgos del revisor. Una corrida con `--fast` no cierra tarea: omite la mutación.
+   5. **Cierre de tarea — lo decide el advisor, no tu memoria:** corre `node .chalc/next.mjs`, haz lo que diga `NEXT_ACTION` y ejecuta su `COMMAND` si no está vacío; vuelve a preguntarle y repite hasta que responda `done`. Lee el estado real del repo (fecha de la evidencia, veredicto del portón, bitácora del revisor, `tasks.md`), así que no te saltes una acción ni decidas tú el orden. `ask_human` es lo único que corta el bucle: para y repórtalo. Quien mide es el portón (`node .chalc/gate.mjs`): exige un score de mutación ≥ 80% y lista los supervivientes, así que cuando el advisor mande `fix_gate`, lo que falta son tests que maten mutantes — no reintentos.
 
 ### Reglas duras
 - **Test-First:** ningún código de implementación antes de un test que falla y esté aprobado.

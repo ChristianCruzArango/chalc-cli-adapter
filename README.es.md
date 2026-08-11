@@ -35,6 +35,7 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 | `chalc inspect` | Explica qué detecta y por qué, sin escribir | no |
 | `chalc verify [ruta]` | Verifica un proyecto: completitud (carpetas/README, architecture.md, specs/) + **fronteras de arquitectura** (capas) | no |
 | `node .chalc/gate.mjs` | **Portón de calidad** de un repo equipado: tests + mutación + comprobaciones estáticas; evidencia en `.chalc/gate.md`. No es un comando de chalc — corre en el repo, con o sin chalc | no |
+| `node .chalc/next.mjs` | **Advisor de flujo** de un repo equipado: dice cuál es la ÚNICA acción siguiente del ciclo de tarea, leyendo el estado real del repo. Solo lectura. No es un comando de chalc — corre en el repo, con o sin chalc | no |
 | `chalc doctor` | Valida el catálogo (rules, skills, MCP, métodos, targets) | no |
 | `chalc configure` | Administra el catálogo (rules/skills/MCP) por menú | no |
 | `chalc install <fuente>` | Instala un skill al catálogo y lo cablea a una regla | no |
@@ -402,9 +403,12 @@ chalc/
 │   ├── mcp/                 definiciones de servidores MCP
 │   ├── profiles/            perfiles de modelos por tarea (chalc-default.json: spec/qa/repair)
 │   ├── methods/sdd/         el método SDD (constitución, plantillas es/en, reglas, gráfico)
-│   ├── agents/              el agente revisor (es/en), proyectado en el formato de cada target
+│   ├── agents/              los roles de revisión: contrato + prompt (es/en) por carpeta
 │   ├── hooks/               el hook opcional de fin de turno, documentado — nunca instalado
-│   └── gate/                el portón de calidad: código real que se copia a `.chalc/` al equipar
+│   ├── gate/                el portón de calidad: código real que se copia a `.chalc/` al equipar
+│   ├── next/                el advisor de flujo: decide la ÚNICA acción siguiente del ciclo de tarea
+│   ├── tools/               qué sabe chalc de cada stack: tests, mutación, reporte e instalación
+│   └── mail/                el buzón entre lados de un workspace
 ├── rules/                   criterio: qué señal = qué stack = qué se instala (incl. global.json)
 ├── targets/
 │   ├── claude.mjs           traductor a Claude Code
@@ -637,6 +641,41 @@ evidencia que puedes leer tú mismo.
 La configuración vive en **`.chalc/gate.json`** (umbrales, comandos, rutas de reporte). Re-equipar
 regenera el código del portón y **conserva lo que hayas editado ahí**.
 
+### La duplicación deja de ser opinión
+
+El portón gana una séptima etapa. Compara los archivos que la tarea tocó contra **todo el árbol de
+fuentes** y reporta los bloques repetidos con la ruta y la línea de las dos copias:
+
+```
+src/pago.service.ts:6 — 7 líneas idénticas a "src/factura.service.ts:6"
+```
+
+Caza el caso que más duele: **copiaste de un archivo que no abriste**. El revisor no lo veía —tiene
+delante el diff de una tarea, no el repo— y el portón tampoco lo medía: la spec 007 lo había dejado
+fuera de alcance por temor a los falsos positivos.
+
+Tres frenos evitan ese temor:
+
+- **Solo cuenta si tocaste una de las dos puntas.** Un repo con historia tiene duplicación vieja a
+  montones; volcarla entera enterraría el trabajo de hoy.
+- **Las líneas que repite la gramática no cuentan**: imports, cierres sueltos, `else`, decoradores.
+  Cinco `import` seguidos de un `}` aparecen idénticos en medio repo.
+- **El contenido de las cadenas SÍ se compara.** Vaciarlo volvía idénticas las tablas `es` y `en` de
+  cualquier marco bilingüe. Correr la etapa sobre este mismo repo lo destapó: 81 hallazgos, casi
+  todos tablas de idioma. Con las cadenas preservadas: 19, y reales.
+
+Se ajusta en `.chalc/gate.json`:
+
+```jsonc
+"lint": {
+  "duplication": { "enabled": true, "minLines": 6, "maxFiles": 4000 }
+}
+```
+
+El mínimo se mide en **líneas significativas**, no en líneas del archivo. Y el revisor deja de
+opinar sobre lo que ahora mide un script: lo suyo pasa a ser la duplicación que ningún script ve —
+dos funciones que hacen lo mismo con otros nombres y otra forma.
+
 ### Agente revisor: lo que el portón no puede medir
 
 El portón mide y no opina. A su lado, cada repo recibe un **agente revisor** en el formato de su
@@ -646,16 +685,182 @@ constitución y **las skills activas de ESE repo**, y juzga lo que solo se ve le
 comprueba el requisito o solo lo acompaña, si la abstracción es la correcta, si el nombre dice lo que
 hace.
 
-Responde `OK` o una lista numerada con `archivo:línea`. **No modifica archivos** — en Claude Code eso
-no se pide, se concede: su lista de herramientas no incluye ninguna de escritura.
+Responde `OK` o una lista numerada con `archivo:línea`. **No modifica archivos**, con una única
+excepción: anota su veredicto al final de `.chalc/review.md`, en modo solo añadir. Sin ese rastro, el
+advisor no podría comprobar que la revisión ocurrió.
 
-El hand-off que imprimen `spec-ia` y `feature` lleva el ciclo de cierre: corre el portón → pega su
-salida tal cual → arregla → revisor → marca la tarea. En una feature full-stack el ciclo es **por
-repo**, nombrando el portón de cada lado, y está prohibido cambiar de repo sin cerrar el actual.
+### Roles con contrato
+
+El alcance de cada rol se declara **una vez, como dato**, en `catalog/agents/<id>/contract.json`:
+
+```jsonc
+{
+  "id": "revisor", "order": 10, "cadence": "task",
+  "writes": [".chalc/review.md"],
+  "forbiddenWrites": ["**"],
+  "tools": ["Read", "Grep", "Glob", "Bash", "Write"]
+}
+```
+
+De ahí salen los permisos que el target concede y la prosa que el rol lee, así que no pueden
+desincronizarse. Y hay una verificación dura: **un rol que no declara nada en `writes` no puede
+recibir una herramienta de escritura**, y `Edit` no se concede nunca — escribir la bitácora propia y
+modificar código ajeno no son el mismo permiso.
+
+Hoy hay dos roles, y no se pisan:
+
+| Rol | Cuándo | Qué juzga |
+|---|---|---|
+| `revisor` | cada tarea | calidad del test, abstracción, nombres, mínimo |
+| `endurecedor` | al cerrar la feature | entradas inválidas, rutas de error, casos borde, dependencias que fallan |
+
+La **cadencia** importa por el coste: cada pasada es una llamada a un modelo. Meter al endurecedor en
+las veinte tareas de una feature multiplica ese coste por veinte para encontrar casi siempre lo mismo
+que encontraría al final. Se ajusta por repo en `.chalc/gate.json`:
+
+```jsonc
+"flow": {
+  "roles": [
+    { "id": "revisor",     "order": 10, "cadence": "task",    "required": true },
+    { "id": "endurecedor", "order": 20, "cadence": "feature", "required": true }
+  ]
+}
+```
+
+**Añadir un rol es añadir una carpeta**: su contrato y su prompt en los dos idiomas. Los cinco
+targets lo proyectan y el advisor lo secuencia sin tocar código.
+
+> **Solo Claude Code concede permisos por agente.** En Cursor el rol es una regla y en Codex, Copilot
+> y Gemini una sección del bloque gestionado: ahí el alcance es una **instrucción, no una
+> restricción**, y lo emitido lo dice con esas palabras. chalc avisa al equipar cuál de las dos cosas
+> te tocó.
+
+### Advisor de flujo: el siguiente paso lo decide el estado, no la memoria
+
+El portón mide y el revisor juzga, pero durante mucho tiempo **el orden en que se usaban vivía en
+prosa** dentro del hand-off. Nadie leía `.chalc/gate.md` de vuelta: se podía correr el portón, seguir
+tocando código y marcar la tarea con una evidencia ya rancia.
+
+Equipar deja también un **advisor**: `.chalc/next.mjs`, de solo lectura y sin dependencias.
+
+```bash
+node .chalc/next.mjs
+```
+
+```text
+NEXT_ACTION: run_gate
+REASON: Tocaste código a las 15:04 y la evidencia es de las 14:32: mide lo de antes.
+COMMAND: node .chalc/gate.mjs
+```
+
+Lee el estado real del repo —fecha de la evidencia, veredicto del portón, bitácora del revisor,
+checkboxes de `tasks.md`, archivos cambiados— y devuelve **una sola** acción de esta tabla, la
+primera que aplique: `blocked_config`, `run_gate`, `fix_gate`, `call_reviewer`, `fix_review`,
+`tick_task`, `work_task`, `done`. Si no puede saber en qué punto va, responde `ask_human` y devuelve
+el control en vez de adivinar.
+
+`NEXT_ACTION` y `COMMAND` **no se traducen** (los consume el asistente); `REASON` va en el idioma del
+spec y siempre cita el dato que produjo la acción. Un verde de una corrida `--fast`, o de otra rama,
+no cierra tarea: vuelve a `run_gate`.
+
+Las puertas de aprobación se ajustan en `.chalc/gate.json`:
+
+```jsonc
+"flow": {
+  "approvals": { "task": true, "feature": true },   // pedir tu OK al cerrar
+  "review": { "required": true }                    // exigir revisor antes de marcar
+}
+```
+
+El hand-off que imprimen `spec-ia` y `feature` ya no recita pasos: manda consultar el advisor y
+obedecer su `COMMAND` hasta que responda `done`. En una feature full-stack el ciclo es **por repo**,
+nombrando el advisor de cada lado, y está prohibido cambiar de repo sin cerrar el actual.
 
 > Chalc **nunca instala el hook** que haría esto automático: los hooks se ejecutan solos y
 > `.claude/settings.json` va commiteado, así que activarlo le impondría un comando a todo el que
 > clone el repo. El bloque listo para pegar y el porqué quedan en `.chalc/gate-hook.md`.
+
+### La tabla de herramientas: un archivo por lenguaje
+
+Lo que chalc sabe de cada stack —con qué comando se corren sus tests, con qué herramienta se muta,
+cómo se instala, dónde escribe su reporte y si el portón sabe leerlo— vive en **un archivo de datos
+por lenguaje** en `catalog/tools/`:
+
+```jsonc
+// catalog/tools/maven.json
+{
+  "id": "maven", "label": "Java / Kotlin (Maven)", "priority": 50,
+  "detect": { "files": ["pom.xml"] },
+  "test": { "rule": "fixed", "value": "mvn test" },
+  "mutation": { "rule": "fixed", "value": {
+    "tool": "pit",
+    "command": "mvn org.pitest:pitest-maven:mutationCoverage",
+    "report": "target/pit-reports/**/mutations.xml",
+    "format": "pit"
+  }}
+}
+```
+
+De esa misma fila salen **dos** cosas que antes se mantenían por separado y a mano: la
+`.chalc/gate.json` que el portón lee, y las tablas de la skill `mutation-testing` que el asistente
+lee. Que coincidan ya no depende de que alguien se acuerde de tocar los dos sitios.
+
+La variación que no cabe como valor fijo se expresa con un juego cerrado de cuatro reglas —`fixed`,
+`jsonField`, `bySignal`, `byLookup`—, no con condicionales sueltos en JSON. Así el runner de Stryker
+sale del framework de test detectado y el comando de Dart de si el `pubspec` nombra Flutter, sin una
+sola rama de código por lenguaje.
+
+**Añadir un stack es añadir un archivo.** No hay que tocar la detección, ni el portón, ni el texto de
+ninguna skill.
+
+Y la pregunta "¿puede el portón verificar la mutación aquí?" se responde cruzando el `format` que
+declara la tabla con los parsers que el portón tiene de verdad — no con una lista escrita a mano que
+se queda vieja. Hoy se leen `elements`, `junit` y `pit`; Go, Rust y PHP no tienen parser todavía y la
+skill lo dice sola.
+
+### Coordinación entre lados: la deriva de contrato se detecta sola
+
+En una feature full-stack el contrato se copia **idéntico** en la spec de cada lado. Cuando el back
+lo cambia a media feature, edita su copia y sigue — y las otras se quedan viejas. El front implementa
+contra algo que ya no existe y se entera al integrar, porque el portón solo detecta rutas
+desaparecidas, no cambios de forma ni de código de error.
+
+En modo worktree los lados son carpetas hermanas, así que el advisor lo compara y lo dice:
+
+```text
+NEXT_ACTION: sync_contract
+REASON: El contrato de `back` cambió y tu copia quedó vieja (2 línea(s) de diferencia).
+        Mira QUÉ cambió antes de seguir: implementar contra el contrato viejo se descubre al integrar.
+COMMAND: diff specs/003-pago/contracts/api.md ../back/specs/003-pago/contracts/api.md
+```
+
+**Nadie tiene que acordarse de avisar**: se compara el contenido de dos archivos que deberían ser
+iguales. Y va **antes** de `run_gate`, porque medir contra un contrato viejo gasta una corrida entera
+—minutos, con mutación— para producir una evidencia que hay que tirar.
+
+El comando **muestra** la diferencia; nunca sobrescribe. Copiar sería lo correcto casi siempre, pero
+lo que se perdería —una nota que hubieras añadido a tu copia— no deja rastro, y quien adapta código
+necesita saber QUÉ cambió.
+
+### Y un buzón, para lo que ningún archivo dice
+
+"Estoy bloqueado esperando el endpoint de pagos" no está en disco. Cada repo equipado lleva
+`.chalc/mail.mjs`:
+
+```bash
+node .chalc/mail.mjs send --to front --message "Cambié el 422 a 409 en /pagos."
+node .chalc/mail.mjs read
+```
+
+Sin demonio y sin proceso vivo: los lados comparten el sistema de archivos, así que quien escribe
+deja el aviso directamente donde el otro lo lee, en `<workspace>/.chalc-mail/` — **fuera** de todos
+los worktrees, para no ensuciar el `git status` de nadie.
+
+La asimetría es deliberada: **enviar es opcional, leer no**. El advisor emite `read_mail` mientras
+queden avisos sin abrir, así que uno escrito se ve seguro. Un aviso es una línea; lo que necesita más
+es una conversación con el usuario.
+
+En un mono-repo las dos cosas quedan apagadas y no emiten nada: no hay lados con quien coordinarse.
 
 ## Capa de IA opcional — generar specs desde una HU
 

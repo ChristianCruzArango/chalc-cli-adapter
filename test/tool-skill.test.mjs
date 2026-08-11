@@ -193,9 +193,15 @@ test('R5 — SKILL.md es exactamente lo que produce su plantilla, sin stack', as
   const template = await readFile(join(dir, 'SKILL.template.md'), 'utf8');
   const committed = await readFile(join(dir, 'SKILL.md'), 'utf8');
 
+  // El invariante es de CONTENIDO, no de bytes: git reescribe los finales de línea al hacer checkout
+  // según la plataforma, así que en Windows el archivo llega con CRLF y los bloques que se generan
+  // aquí se unen con `\n`. Comparar en crudo hacía pasar el test en Linux y fallar en los jobs de
+  // Windows — la peor forma de descubrirlo, porque en la máquina de quien lo escribió iba bien.
+  const sameText = (t) => String(t).replace(/\r\n/g, '\n');
+
   assert.equal(
-    committed,
-    renderMutationSkill(template, { stacks, stack: null, tools: null }),
+    sameText(committed),
+    sameText(renderMutationSkill(template, { stacks, stack: null, tools: null })),
     'SKILL.md quedó desactualizado respecto a SKILL.template.md o a la tabla de herramientas'
   );
 });

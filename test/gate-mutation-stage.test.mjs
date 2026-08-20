@@ -367,3 +367,79 @@ test('runMutation runs the full command when the tool has no scope flag', async 
 
   assert.equal(run.calls[0].command, 'npx stryker run');
 });
+
+// ── acotado a los TRAMOS que la tarea escribió ────────────────────────────────────────────────
+//
+// Mutar el archivo entero no solo mete ruido en el veredicto: cuesta el tiempo de probar cada
+// mutante del código que la tarea no tocó. En una corrida real fueron 598 mutantes y media hora
+// para medir unas decenas de líneas nuevas. Stryker sabe mutar tramos, así que se le dicen.
+
+test('runMutation narrows the scope to the written line ranges', async () => {
+  const dir = await project();
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate', scopeSpan: 'colon' }),
+    { root: dir, changed: ['src/precio.ts'], lines: new Map([['src/precio.ts', new Set([10, 11, 12, 40])]]), run }
+  );
+
+  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/precio.ts:10-12,src/precio.ts:40-40');
+});
+
+test('runMutation writes the ranges the way Stryker.NET reads them', async () => {
+  const dir = await project();
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate', scopeJoin: 'repeat', scopeSpan: 'braces' }),
+    { root: dir, changed: ['src/precio.ts'], lines: new Map([['src/precio.ts', new Set([10, 11])]]), run }
+  );
+
+  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/precio.ts{10..11}');
+});
+
+// Un archivo NUEVO no sale en ningún diff y no tiene tramos: hay que mutarlo entero, que es
+// exactamente lo que corresponde a un archivo que escribió la tarea.
+test('runMutation mutates a whole file when it has no line information', async () => {
+  const dir = await project();
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate', scopeSpan: 'colon' }),
+    { root: dir, changed: ['src/nuevo.ts'], lines: new Map([['src/otro.ts', new Set([1])]]), run }
+  );
+
+  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/nuevo.ts');
+});
+
+// Sin sintaxis de tramo declarada no se inventa ninguna: una herramienta que no la entienda se
+// quedaría sin mutantes, y eso se lee como "no se puede medir".
+test('runMutation keeps whole files when the tool declares no span syntax', async () => {
+  const dir = await project();
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate' }),
+    { root: dir, changed: ['src/precio.ts'], lines: new Map([['src/precio.ts', new Set([10])]]), run }
+  );
+
+  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/precio.ts');
+});
+
+// Los tramos alargan el comando, y la línea de comandos tiene tope (~32k en Windows). Pasado un
+// límite se vuelve a los archivos enteros: mide de más, que es el lado seguro, en vez de reventar
+// con un error del sistema que no dice nada del código.
+test('runMutation falls back to whole files when the ranges make the command too long', async () => {
+  const dir = await project();
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  // Muchos tramos sueltos en un mismo archivo: uno por cada línea impar.
+  const sueltas = new Set(Array.from({ length: 4000 }, (_, i) => i * 3 + 1));
+
+  await runMutation(
+    config({ scopeFlag: '--mutate', scopeSpan: 'colon' }),
+    { root: dir, changed: ['src/precio.ts'], lines: new Map([['src/precio.ts', sueltas]]), run }
+  );
+
+  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/precio.ts');
+});

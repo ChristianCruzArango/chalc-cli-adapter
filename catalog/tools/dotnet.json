@@ -14,6 +14,7 @@
       "install": "dotnet new tool-manifest && dotnet tool install dotnet-stryker",
       "probe": ".config/dotnet-tools.json",
       "scopeFlag": "--mutate",
+      "scopeSpan": "braces",
       "scopeJoin": "repeat"
     }
   }

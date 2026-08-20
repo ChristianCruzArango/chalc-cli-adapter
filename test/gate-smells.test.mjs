@@ -248,3 +248,148 @@ test('lintChanged reads the changed files and skips what it cannot lint', async 
   assert.equal(findings[0].file, 'src/precio.ts');
   assert.equal(findings[0].rule, 'one-thing-per-file');
 });
+
+// ── bloques de agrupación de pruebas ──────────────────────────────────────────────────────────
+//
+// `describe` agrupa casos, no es una unidad de diseño: medirlo con el límite de función obliga a
+// partir suites cohesivas, y al partirlas se duplican los fixtures y salta la regla de duplicación.
+// El límite sigue aplicando a lo que SÍ es una función: cada caso y cada gancho de preparación.
+
+test('lintSource does not measure a describe block against the function limit', async () => {
+  const cuerpo = Array.from({ length: 60 }, (_, i) => `  it('caso ${i}', () => { expect(${i}).toBe(${i}); });`);
+  const findings = lint('src/precio.spec.ts', [
+    "describe('Precio', () => {",
+    ...cuerpo,
+    '});'
+  ].join('\n'));
+
+  assert.deepEqual(
+    of(findings, 'function-too-long').map((f) => f.data.name),
+    [],
+    'el describe agrupa casos; no es una función que revisar'
+  );
+});
+
+test('lintSource still measures a single test case against the function limit', async () => {
+  const cuerpo = Array.from({ length: 50 }, (_, i) => `    const v${i} = ${i};`);
+  const findings = lint('src/precio.spec.ts', [
+    "describe('Precio', () => {",
+    "  it('hace demasiadas cosas', () => {",
+    ...cuerpo,
+    '  });',
+    '});'
+  ].join('\n'));
+
+  assert.deepEqual(
+    of(findings, 'function-too-long').map((f) => f.data.name),
+    ['it'],
+    'un caso larguísimo sigue siendo un caso que hace demasiado'
+  );
+});
+
+// ── atribución a lo que la tarea escribió ─────────────────────────────────────────────────────
+//
+// Acotar por archivo no basta: añadir dos líneas a un archivo de cuatrocientas traía todos los
+// hallazgos que ya vivían ahí. Con las líneas de la tarea, cada hallazgo se puede atribuir.
+
+const lintCon = (file, text, escritas, over = {}) =>
+  lintSource(text, { file, limits: limits(over), changedLines: new Set(escritas) });
+
+test('lintSource keeps a finding on a line the task wrote', async () => {
+  const findings = lintCon('src/precio.ts', [
+    'export const a = 1;',
+    'console.log("depuración");'
+  ].join('\n'), [2]);
+
+  assert.deepEqual(of(findings, 'debug-output').map((f) => f.line), [2]);
+});
+
+test('lintSource drops a finding on a line the task never touched', async () => {
+  const findings = lintCon('src/precio.ts', [
+    'export const a = 1;',
+    'console.log("depuración vieja");'
+  ].join('\n'), [1]);
+
+  assert.deepEqual(of(findings, 'debug-output'), [], 'esa línea ya estaba; no es de esta tarea');
+});
+
+test('lintSource stays quiet about a long function the task did not enter', async () => {
+  const cuerpo = Array.from({ length: 50 }, (_, i) => `  const v${i} = ${i};`);
+  const findings = lintCon('src/precio.ts', [
+    'export function total() {',
+    ...cuerpo,
+    '}',
+    'export const nueva = () => 1;'
+  ].join('\n'), [53]);
+
+  assert.deepEqual(of(findings, 'function-too-long'), []);
+});
+
+// Un archivo que YA estaba por encima del límite no es un hallazgo de quien le añade dos líneas.
+test('lintSource does not blame the task for a file that was already too long', async () => {
+  const texto = Array.from({ length: 303 }, (_, i) => `const v${i} = ${i};`).join('\n');
+
+  const findings = lintCon('src/precio.ts', texto, [10, 11]);
+
+  assert.deepEqual(of(findings, 'file-too-long'), [], '301 líneas ya pasaban del límite sin la tarea');
+});
+
+test('lintSource reports a file the task pushed over the limit', async () => {
+  const texto = Array.from({ length: 320 }, (_, i) => `const v${i} = ${i};`).join('\n');
+  const escritas = Array.from({ length: 30 }, (_, i) => 10 + i);
+
+  const findings = lintCon('src/precio.ts', texto, escritas);
+
+  assert.equal(of(findings, 'file-too-long').length, 1, 'sin esas 30 líneas el archivo cabía');
+});
+
+// Sin información de líneas se revisa el archivo entero: es el comportamiento seguro de siempre.
+test('lintSource reviews the whole file when no line information is given', async () => {
+  const findings = lint('src/precio.ts', 'export const a = 1;\nconsole.log("x");');
+
+  assert.equal(of(findings, 'debug-output').length, 1);
+});
+
+// ── deuda de tamaño que ya estaba ─────────────────────────────────────────────────────────────
+//
+// Las reglas de tamaño no se pueden atribuir por posición: la cabecera de una función de trescientas
+// líneas casi nunca se toca. Se atribuyen preguntando si SIN las líneas de la tarea seguirían
+// pasándose. Quien mete dos líneas en una función que ya medía 289 no es quien la dejó larga.
+
+test('lintSource does not blame the task for a function that was already too long', async () => {
+  const cuerpo = Array.from({ length: 60 }, (_, i) => `  const v${i} = ${i};`);
+  const findings = lintCon('src/precio.ts', [
+    'export function total() {',
+    ...cuerpo,
+    '}'
+  ].join('\n'), [30, 31]);
+
+  assert.deepEqual(of(findings, 'function-too-long'), [], 'sin esas dos líneas seguía midiendo 60');
+});
+
+test('lintSource reports a function the task made too long', async () => {
+  const cuerpo = Array.from({ length: 60 }, (_, i) => `  const v${i} = ${i};`);
+  const escritas = Array.from({ length: 40 }, (_, i) => 10 + i);
+  const findings = lintCon('src/precio.ts', [
+    'export function total() {',
+    ...cuerpo,
+    '}'
+  ].join('\n'), escritas);
+
+  assert.deepEqual(of(findings, 'function-too-long').map((f) => f.data.name), ['total']);
+});
+
+// El archivo medía 301 —ya pasado— y la tarea le cambió una línea por tres. Contar solo lo añadido
+// lo dejaba en 300 justo y le cobraba la deuda al que pasaba por ahí.
+test('lintSource counts removed lines when rebuilding the previous size', async () => {
+  const texto = Array.from({ length: 303 }, (_, i) => `const v${i} = ${i};`).join('\n');
+
+  const findings = lintSource(texto, {
+    file: 'src/precio.ts',
+    limits: limits(),
+    changedLines: new Set([10, 11, 12]),
+    removedLines: 1
+  });
+
+  assert.deepEqual(of(findings, 'file-too-long'), [], '303 - 3 + 1 = 301: ya estaba por encima');
+});

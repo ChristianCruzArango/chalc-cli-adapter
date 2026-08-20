@@ -265,3 +265,44 @@ test('R2 — la línea reportada es la del ARCHIVO, no el índice entre las sign
   const a = [d.a, d.b].find((x) => x.file === 'src/a.ts');
   assert.equal(a.line, 6, 'el bloque empieza en la línea 6 del archivo, no en la 1');
 });
+
+// ── ruido de gramática de otros stacks ────────────────────────────────────────────────────────
+//
+// El `import` de TS ya no contaba. El `using` de C# y el `from … import` de Python sí, y son lo
+// mismo: cabeceras que se repiten idénticas en cada archivo hermano porque el lenguaje obliga, no
+// porque nadie copiara nada. En una suite de pruebas del mismo servicio salían como bloques
+// duplicados de once líneas, y no hay forma de "arreglarlos".
+
+test('significantLines ignores a C# using block', async () => {
+  const código = significantLines([
+    'using System.Net.Http;',
+    'using FluentAssertions;',
+    'using Moq;',
+    'var total = 1;'
+  ].join('\n'));
+
+  assert.deepEqual(código.map((l) => l.code), ['var total = 1;']);
+});
+
+// `using (var x = …)` NO es una cabecera: es un bloque con cuerpo, y ahí sí puede haber copia.
+test('significantLines keeps a C# using resource block', async () => {
+  const código = significantLines('using (var cliente = new HttpClient())\n');
+
+  assert.deepEqual(código.map((l) => l.code), ['using (var cliente = new HttpClient())']);
+});
+
+test('significantLines ignores a Python from-import block', async () => {
+  const código = significantLines([
+    'from decimal import Decimal',
+    'from carrito.total import calcular',
+    'total = 1'
+  ].join('\n'));
+
+  assert.deepEqual(código.map((l) => l.code), ['total = 1']);
+});
+
+test('significantLines ignores a package declaration', async () => {
+  const código = significantLines('package com.xm.sicep.carrito;\nint total = 1;');
+
+  assert.deepEqual(código.map((l) => l.code), ['int total = 1;']);
+});

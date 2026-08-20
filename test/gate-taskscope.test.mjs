@@ -159,3 +159,34 @@ test('each side keeps its own scope', async () => {
   assert.deepEqual((await taskScope(back)).files, ['src/api.ts']);
   assert.deepEqual((await taskScope(front)).files, ['src/vista.ts']);
 });
+
+// ── las líneas, no solo los archivos ──────────────────────────────────────────────────────────
+//
+// El alcance viaja hasta las etapas para que puedan atribuir cada hallazgo. Las piezas se prueban
+// por separado, pero el cableado también tiene que estar: al armar el alcance con un `...spread` de
+// un Map, `lines` llegaba `undefined` y ninguna etapa filtraba nada — con todas las pruebas
+// unitarias en verde.
+
+test('taskScope reports which lines the task wrote and how many it removed', async () => {
+  const dir = await repo();
+  await write(dir, 'src/precio.ts', ['const a = 1;', 'const b = 2;', 'const c = 3;'].join('\n') + '\n');
+  const base = await commit(dir, 'base');
+  await sealBaseline(dir, { commit: base });
+
+  // Se cambia la segunda línea y se añade una cuarta.
+  await write(dir, 'src/precio.ts', ['const a = 1;', 'const b = 22;', 'const c = 3;', 'const d = 4;'].join('\n') + '\n');
+
+  const scope = await taskScope(dir);
+
+  assert.ok(scope.lines instanceof Map, 'las líneas llegan como mapa, no perdidas en un spread');
+  assert.ok(scope.removed instanceof Map);
+  assert.deepEqual([...scope.lines.get('src/precio.ts')].sort((x, y) => x - y), [2, 4]);
+  assert.equal(scope.removed.get('src/precio.ts'), 1, 'la línea que se reemplazó cuenta como borrada');
+});
+
+test('taskScope leaves the line maps empty outside a repo', async () => {
+  const scope = await taskScope(await plain());
+
+  assert.equal(scope.lines.size, 0);
+  assert.equal(scope.removed.size, 0);
+});

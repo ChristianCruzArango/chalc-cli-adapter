@@ -11,7 +11,14 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { analyze, blankOut, lineAt, linesOf } from './source.mjs';
+import { isTestFile } from './sources.mjs';
 import { RULES } from './rules.mjs';
+
+// Bloques que AGRUPAN casos de prueba. Solo se ignoran dentro de archivos de prueba: ahí no son una
+// unidad de diseño sino un índice, y medirlos con el límite de función obliga a partir suites
+// cohesivas —lo que duplica los fixtures y dispara la regla de duplicación—. El límite sigue
+// aplicando a lo que sí es una función: cada caso y cada gancho de preparación.
+const SUITE_BLOCKS = ['describe', 'context', 'suite', 'group', 'xdescribe', 'fdescribe', 'ddescribe'];
 
 // Clases que, por convención, coordinan en vez de modelar: un tipo declarado dentro de una de ellas
 // es un tipo que nadie va a volver a encontrar.
@@ -93,7 +100,9 @@ const DIALECTS = {
 const dialectFor = (file) => DIALECTS[(file.match(/\.[^./\\]+$/) || [''])[0].toLowerCase()] || null;
 
 // Un hallazgo es archivo, línea, regla y datos. La frase la arma el marco bilingüe (`i18n.mjs`).
-const finding = (file, line, rule, data = {}) => ({ file, line, rule, data });
+// `until` es la última línea que abarca cuando el hallazgo es de un tramo y no de un punto; sirve
+// para saber si la tarea escribió dentro.
+const finding = (file, line, rule, data = {}, until = line) => ({ file, line, until, rule, data });
 
 // ── reglas ────────────────────────────────────────────────────────────────────────────────────
 
@@ -132,14 +141,21 @@ function measurable(file, text, lines, dialect, limits) {
   }
 
   if (dialect.structural) {
-    const { functions, deepest } = analyze(lines, { maxDepth: limits.maxDepth });
+    const { functions, deepest } = analyze(lines, {
+      maxDepth: limits.maxDepth,
+      ignore: isTestFile(file) ? SUITE_BLOCKS : []
+    });
 
     for (const fn of functions) {
+      // El tramo va en el hallazgo porque una función larga es de quien le metió las líneas que la
+      // alargaron, aunque su cabecera lleve años ahí. Sin él, el hallazgo se atribuiría solo a
+      // quien tocara la primera línea.
+      const span = fn.line + Math.max(0, fn.length - 1);
       if (fn.length > limits.maxFunctionLines) {
-        found.push(finding(file, fn.line, RULES.functionTooLong, { name: fn.name, lines: fn.length, limit: limits.maxFunctionLines }));
+        found.push(finding(file, fn.line, RULES.functionTooLong, { name: fn.name, lines: fn.length, limit: limits.maxFunctionLines }, span));
       }
       if (fn.params > limits.maxParams) {
-        found.push(finding(file, fn.line, RULES.tooManyParams, { name: fn.name, params: fn.params, limit: limits.maxParams }));
+        found.push(finding(file, fn.line, RULES.tooManyParams, { name: fn.name, params: fn.params, limit: limits.maxParams }, span));
       }
     }
 
@@ -166,29 +182,74 @@ function measurable(file, text, lines, dialect, limits) {
 // Analiza un archivo ya leído. `file` es la ruta que se reporta y de la que sale el dialecto.
 // Devuelve los hallazgos ordenados por línea. Un archivo de un lenguaje que no se sabe leer devuelve
 // vacío: mejor no decir nada que decir algo falso.
-export function lintSource(text, { file, limits }) {
+export function lintSource(text, { file, limits, changedLines = null, removedLines = 0 }) {
   const dialect = dialectFor(file);
   if (!dialect) return [];
 
   const clean = blankOut(text, dialect.lex);
   const lines = linesOf(clean);
+  const scope = { changedLines, removedLines, total: lines.length, limits };
 
   return [
     ...onePerFile(file, lines, dialect),
     ...typeInService(file, clean, lines, dialect),
     ...measurable(file, clean, lines, dialect, limits)
-  ].sort((a, b) => a.line - b.line);
+  ]
+    .filter((found) => belongsToTask(found, scope))
+    .sort((a, b) => a.line - b.line);
+}
+
+// Cuántas de las líneas de la tarea caen dentro de `from`..`to`.
+const writtenIn = (changedLines, from, to) => {
+  let n = 0;
+  for (let i = from; i <= to; i++) if (changedLines.has(i)) n += 1;
+  return n;
+};
+
+// ¿Es este hallazgo de la tarea?
+//
+// Sin líneas anotadas, todos lo son: es el comportamiento seguro de siempre, y el que corresponde a
+// un archivo entero escrito hoy.
+//
+// Las reglas de TAMAÑO no se pueden atribuir por posición —la cabecera de una función de trescientas
+// líneas casi nunca se toca, y `file-too-long` vive en la línea 1—, así que se preguntan de otro
+// modo: ¿seguiría pasándose del límite sin lo que escribió la tarea? Si sí, la deuda ya estaba.
+// Quien añade dos líneas a un archivo de trescientas una no es quien lo dejó largo, y cobrárselo
+// solo enseña a ignorar el informe.
+//
+// Lo demás se atribuye por posición: basta con que la tarea haya escrito dentro del tramo.
+function belongsToTask(found, { changedLines, removedLines, total, limits }) {
+  if (!changedLines || !changedLines.size) return true;
+
+  if (found.rule === RULES.fileTooLong) {
+    const antes = total - writtenIn(changedLines, 1, total) + removedLines;
+    return antes <= limits.maxFileLines;
+  }
+
+  if (found.rule === RULES.functionTooLong) {
+    const desde = found.line;
+    const hasta = found.until ?? found.line;
+    // Las borradas no se pueden situar dentro de una función concreta, así que aquí la reconstrucción
+    // es solo con lo añadido. Erra hacia reportar, que es el lado seguro.
+    return found.data.lines - writtenIn(changedLines, desde, hasta) <= limits.maxFunctionLines;
+  }
+
+  return writtenIn(changedLines, found.line, found.until ?? found.line) > 0;
 }
 
 // Analiza los archivos cambiados de la tarea. Rutas relativas a `root`. Un archivo borrado o
 // ilegible se salta: viene en el diff, pero ya no hay nada que revisar y no puede tumbar la corrida.
-export async function lintChanged(files, { root, limits }) {
+export async function lintChanged(files, { root, limits, lines = null, removed = null }) {
   const found = [];
   for (const file of files) {
     if (!dialectFor(file)) continue;
     let text;
     try { text = await readFile(join(root, file), 'utf8'); } catch { continue; }
-    found.push(...lintSource(text, { file, limits }));
+    found.push(...lintSource(text, {
+      file, limits,
+      changedLines: lines?.get(file) ?? null,
+      removedLines: removed?.get(file) ?? 0
+    }));
   }
   return found;
 }

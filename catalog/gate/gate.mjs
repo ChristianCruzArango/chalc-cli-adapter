@@ -91,17 +91,17 @@ export async function runGate({ root = process.cwd(), fast = false, run = runCom
   //    informe dice CUÁL de los dos fue.
   if (fast) stages.push(skipped('mutation', 'fast'));
   else if (!tests.ok) stages.push(skipped('mutation', 'tests-failed'));
-  else stages.push(await runMutation(config, { root, changed: files, run }));
+  else stages.push(await runMutation(config, { root, changed: files, lines: scope.lines, run }));
 
   // 3. Etapas estáticas: baratas, siempre corren, y son las que dan hallazgos accionables aunque
   //    todo lo demás esté bloqueado.
-  const smells = await timed(() => lintChanged(files, { root, limits: config.lint }));
+  const smells = await timed(() => lintChanged(files, { root, limits: config.lint, lines: scope.lines, removed: scope.removed }));
   stages.push(staticStage('smells', smells.value, smells.ms));
 
   // Duplicación (spec 012): mira el árbol entero, pero solo reporta lo que tiene una punta en algo
   // que la tarea tocó. Va junto a `smells` porque las dos leen el mismo texto; el informe queda de
   // más local a más global — primero el archivo, luego el repo, luego las fronteras.
-  const duplication = await timed(() => lintDuplication(root, files, config.lint?.duplication));
+  const duplication = await timed(() => lintDuplication(root, files, config.lint?.duplication, scope.lines));
   stages.push(staticStage('duplication', duplication.value, duplication.ms));
 
   const boundaries = await timed(() => lintBoundariesIn(root, files));

@@ -17,13 +17,21 @@ export const UNDETECTED = new Set(['Survived', 'NoCoverage']);
 // Resume los mutantes en { score, killed, timeout, survived, noCoverage, total, survivors }.
 // `score` es null cuando no hay ni un mutante válido: sin base no hay veredicto, y el llamador debe
 // tratarlo como bloqueo en vez de dar por buena una cifra inventada.
-export function summarize(mutants) {
+//
+// `within(archivo, línea)` acota la cuenta a lo que la tarea escribió. Sin él se cuenta todo, que
+// es lo correcto cuando no se puede saber qué es de quién.
+export function summarize(mutants, { within = null } = {}) {
   const counts = { Killed: 0, Timeout: 0, Survived: 0, NoCoverage: 0 };
   const survivors = [];
 
   for (const m of mutants) {
     const status = m?.status;
     if (!DETECTED.has(status) && !UNDETECTED.has(status)) continue;
+    // Fuera del alcance de la tarea, el mutante no cuenta ni a favor ni en contra. Mutar el archivo
+    // entero mete en el denominador la deuda que ya estaba, y entonces el umbral deja de hablar de
+    // lo que se escribió hoy: premia añadir pruebas sobre código ajeno y castiga tocar un archivo
+    // grande. Los dos incentivos equivocados.
+    if (within && !within(m.file || '', m.line ?? 0)) continue;
     counts[status] += 1;
     if (UNDETECTED.has(status)) {
       survivors.push({ file: m.file || '', line: m.line ?? 0, mutator: m.mutator || '', status });

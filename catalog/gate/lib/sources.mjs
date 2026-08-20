@@ -33,6 +33,14 @@ export const isUserSource = (file) => {
   return !path.startsWith('.chalc/') && SOURCE_FILE.test(path);
 };
 
+// Cómo nombra cada stack a sus pruebas. Vive aquí, junto al resto del conocimiento sobre qué es
+// cada archivo, porque más de una etapa necesita distinguirlas: la trazabilidad les exige citar un
+// requisito, y el linter les aplica reglas distintas.
+export const TEST_FILE = /(?:\.spec\.|\.test\.|_test\.|_spec\.|(?:^|\/)test_[^/]*\.py$|Tests?\.(?:cs|java|kt)$|(?:^|\/)(?:tests?|__tests__)\/)/;
+
+// ¿Contiene pruebas este archivo?
+export const isTestFile = (file) => TEST_FILE.test(String(file ?? '').replace(/\\/g, '/'));
+
 // Todos los fuentes del proyecto, en rutas relativas con '/'.
 //
 // `max` acota el recorrido en repos enormes, y cuando se alcanza se DECLARA (R8): un recorte

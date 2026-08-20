@@ -185,3 +185,35 @@ test('R6 — el recorrido devuelve las rutas ORDENADAS: el informe tiene que ser
   assert.deepEqual(files, [...files].sort(), `sin orden estable, dos corridas dan informes distintos: ${files}`);
   assert.deepEqual(files, ['src/a.ts', 'src/m.ts', 'src/z.ts']);
 });
+
+// ── atribución por línea ──────────────────────────────────────────────────────────────────────
+//
+// Que un bloque duplicado esté en un archivo que la tarea tocó no lo hace suyo: el bloque puede
+// llevar años ahí y la tarea haber añadido dos líneas al final. Se reporta solo si la tarea escribió
+// DENTRO del bloque.
+
+test('lintDuplication ignores a duplicated block the task never wrote in', async () => {
+  const bloque = Array.from({ length: 8 }, (_, i) => `const v${i} = calcular(${i});`).join('\n');
+  const dir = await repo({
+    'src/a.ts': `${bloque}\nconst nuevo = 1;\n`,
+    'src/b.ts': `${bloque}\n`
+  });
+
+  // La tarea solo escribió la última línea de a.ts, fuera del bloque repetido.
+  const lineas = new Map([['src/a.ts', new Set([9])]]);
+
+  assert.deepEqual(await lintDuplication(dir, ['src/a.ts'], {}, lineas), []);
+});
+
+test('lintDuplication reports a duplicated block the task wrote', async () => {
+  const bloque = Array.from({ length: 8 }, (_, i) => `const v${i} = calcular(${i});`).join('\n');
+  const dir = await repo({
+    'src/a.ts': `${bloque}\n`,
+    'src/b.ts': `${bloque}\n`
+  });
+
+  const lineas = new Map([['src/a.ts', new Set([3])]]);
+
+  const findings = await lintDuplication(dir, ['src/a.ts'], {}, lineas);
+  assert.equal(findings.length, 1);
+});

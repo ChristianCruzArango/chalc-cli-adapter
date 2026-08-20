@@ -79,10 +79,11 @@ export function linesOf(text) {
 // ── firmas ────────────────────────────────────────────────────────────────────────────────────
 
 // Firma que abre en la línea `i`, o null. Devuelve el nombre y dónde está su paréntesis.
-function headerAt(lines, i) {
+// `ignore` son nombres que en ESTE archivo no abren una función que revisar.
+function headerAt(lines, i, ignore) {
   for (const re of [FUNCTION, ASSIGNED]) {
     const m = re.exec(lines[i]);
-    if (m && !NOT_FUNCTIONS.has(m[1])) return { name: m[1], paren: m.index + m[0].length - 1 };
+    if (m && !NOT_FUNCTIONS.has(m[1]) && !ignore.has(m[1])) return { name: m[1], paren: m.index + m[0].length - 1 };
   }
   return null;
 }
@@ -129,14 +130,15 @@ const delta = (line) => [...line].reduce((d, c) => d + (c === '{' ? 1 : c === '}
 // Recorre las líneas SANITIZADAS y devuelve { functions, deepest }.
 // - `functions`: { line, name, params, length } de cada función que se abre.
 // - `deepest`: la primera línea de cada función donde el anidamiento cruza `maxDepth`.
-export function analyze(lines, { maxDepth = 3 } = {}) {
+export function analyze(lines, { maxDepth = 3, ignore = [] } = {}) {
   const functions = [];
   const deepest = [];
   const open = [];        // funciones abiertas, la última es la que anida
   let depth = 0;
+  const skip = ignore instanceof Set ? ignore : new Set(ignore);
 
   for (let i = 0; i < lines.length; i++) {
-    const header = headerAt(lines, i);
+    const header = headerAt(lines, i, skip);
     if (header) {
       open.push({ line: i + 1, name: header.name, start: depth, opened: false, deep: false });
       functions.push({ line: i + 1, name: header.name, params: paramsFrom(lines, i, header.paren), length: 0 });

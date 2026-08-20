@@ -12,6 +12,7 @@ import { isUserSource } from './sources.mjs';
 import { readBaseline } from './baseline.mjs';
 import { readTouched } from './touched.mjs';
 import { resolveScope } from './scope.mjs';
+import { parseHunks, removedByFile } from './hunks.mjs';
 
 // Salida de un comando de git, o null si git no está o el repo no existe.
 function git(args, cwd) {
@@ -62,8 +63,29 @@ export async function taskScope(root) {
   return {
     ...resolveScope({ registry: registry.files, diff, diffSource: baseline.exists ? 'baseline' : 'branch' }),
     from: ref,
+    ...await changedLineInfo(root, ref),
     staleRegistry: registry.stale
   };
+}
+
+// Qué líneas escribió y cuántas borró la tarea en cada archivo ya versionado, para poder decir de
+// quién es cada hallazgo. Devuelve { lines: Map<archivo, Set<línea>>, removed: Map<archivo, número> }.
+//
+// Sin git los dos mapas van vacíos, y entonces cada archivo se revisa entero: es el comportamiento
+// seguro, porque sin diff no se puede atribuir nada.
+//
+// Los archivos nuevos no aparecen aquí, y no hace falta que aparezcan: sin entrada en el mapa se
+// revisan completos, que es exactamente lo que corresponde a un archivo que escribió la tarea.
+export async function changedLineInfo(root, ref) {
+  if (!await isRepo(root)) return { lines: new Map(), removed: new Map() };
+
+  // UN solo diff. `git diff <ref>` compara el árbol de trabajo contra la referencia, así que ya
+  // incluye lo commiteado y lo que no. Sumarle un `diff HEAD` contaría dos veces cada línea
+  // borrada —los Set de líneas lo disimulaban, el conteo de borradas no—, y con ese doble conteo
+  // un archivo parecería haber sido más grande de lo que era.
+  const texto = await git(['diff', '-U0', '--diff-filter=d', ref || 'HEAD'], root) || '';
+
+  return { lines: parseHunks(texto), removed: removedByFile(texto) };
 }
 
 // El commit actual, o '' si no se puede saber. Es lo que el portón sella como línea base de la

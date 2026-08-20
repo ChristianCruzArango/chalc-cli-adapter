@@ -10,11 +10,9 @@
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { newestSpec } from './spec.mjs';
+import { everySpec } from './spec.mjs';
+import { isTestFile } from './sources.mjs';
 import { RULES } from './rules.mjs';
-
-// Cómo nombra cada stack a sus pruebas. Un archivo que no es test no tiene nada que trazar.
-const TEST_FILE = /(?:\.spec\.|\.test\.|_test\.|_spec\.|(?:^|\/)test_[^/]*\.py$|Tests?\.(?:cs|java|kt)$|(?:^|\/)(?:tests?|__tests__)\/)/;
 
 // Requisito declarado en la spec: `- **R1** — WHEN … THE SYSTEM SHALL …`.
 const DECLARED = /\*\*(R\d+)\*\*/g;
@@ -35,12 +33,18 @@ const finding = (file, line, rule, data = {}) => ({ file, line, rule, data });
 // Comprueba la trazabilidad de los tests cambiados. `files` son rutas relativas a `root`.
 // Sin spec en el repo devuelve vacío: R7 es condicional, y sin requisitos no hay contra qué trazar.
 export async function checkTraceability(files, { root, specDir = 'specs' } = {}) {
-  const tests = files.filter((f) => TEST_FILE.test(f.replace(/\\/g, '/')));
+  const tests = files.filter(isTestFile);
   if (!tests.length) return [];
 
-  const spec = await newestSpec(root, specDir, 'spec.md');
-  if (!spec) return [];
-  const requirements = requirementsOf(spec.text);
+  const specs = await everySpec(root, specDir, 'spec.md');
+  if (!specs.length) return [];
+  const spec = specs[0];
+
+  // Una cita vale si el requisito existe en ALGUNA spec del repo, no solo en la vigente. Un test
+  // que cubre un requisito de una spec anterior lo cita con su R#, y exigirle que lo resuelva
+  // contra la de hoy convierte documentación correcta en un hallazgo. Lo que la regla persigue —una
+  // cita que no corresponde a nada— se sigue detectando: un R# inventado no está en ninguna.
+  const requirements = new Set(specs.flatMap((s) => [...requirementsOf(s.text)]));
 
   const found = [];
   for (const file of tests) {

@@ -33,7 +33,7 @@ function locationOf(attrs) {
 }
 
 // Parsea el texto del reporte. Misma salida que `parseElements` y `parsePit`.
-export function parseJUnit(text) {
+export function parseJUnit(text, opts = {}) {
   if (!/<testsuite\b/.test(text)) {
     throw new Error('mutation report: falta <testsuite>, el archivo no es un reporte junit');
   }
@@ -45,5 +45,5 @@ export function parseJUnit(text) {
     // mutmut no dice qué mutador aplicó: el campo va vacío en vez de inventarse un nombre.
     mutants.push({ ...locationOf(attrs), mutator: '', status });
   }
-  return summarize(mutants);
+  return summarize(mutants, opts);
 }

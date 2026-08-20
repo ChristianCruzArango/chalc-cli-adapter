@@ -8,7 +8,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseHunks, touchesChange, relativeTo, removedByFile } from '../catalog/gate/lib/hunks.mjs';
+import { parseHunks, touchesChange, relativeTo, removedByFile, rangesOf } from '../catalog/gate/lib/hunks.mjs';
 
 const diff = (...lines) => lines.join('\n');
 
@@ -149,4 +149,36 @@ test('removedByFile reports nothing for a pure addition', async () => {
   const mapa = removedByFile(diff('+++ b/src/precio.ts', '@@ -10,0 +11,2 @@', '+uno', '+dos'));
 
   assert.equal(mapa.get('src/precio.ts') ?? 0, 0);
+});
+
+// ── rangos contiguos ──────────────────────────────────────────────────────────────────────────
+//
+// Stryker sabe mutar tramos concretos de un archivo (`Archivo.cs{44..46}` en .NET, `a.ts:44-46` en
+// JS). Para aprovecharlo hay que convertir las líneas sueltas de la tarea en tramos.
+
+test('rangesOf turns consecutive lines into one range', async () => {
+  assert.deepEqual(rangesOf(new Set([10, 11, 12])), [[10, 12]]);
+});
+
+test('rangesOf keeps separate runs apart', async () => {
+  assert.deepEqual(rangesOf(new Set([10, 11, 40])), [[10, 11], [40, 40]]);
+});
+
+test('rangesOf sorts numerically, not as text', async () => {
+  assert.deepEqual(rangesOf(new Set([9, 10, 100])), [[9, 10], [100, 100]]);
+});
+
+test('rangesOf returns nothing for an empty set', async () => {
+  assert.deepEqual(rangesOf(new Set()), []);
+  assert.deepEqual(rangesOf(null), []);
+});
+
+// Tramos separados por un hueco diminuto se funden: mide unas pocas líneas de más, pero evita que
+// el comando crezca sin control. Errar hacia medir de MÁS es el lado seguro.
+test('rangesOf merges runs separated by a tiny gap', async () => {
+  assert.deepEqual(rangesOf(new Set([10, 11, 13, 14]), { gap: 2 }), [[10, 14]]);
+});
+
+test('rangesOf does not merge across a wide gap', async () => {
+  assert.deepEqual(rangesOf(new Set([10, 40]), { gap: 2 }), [[10, 10], [40, 40]]);
 });

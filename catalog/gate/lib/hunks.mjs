@@ -78,6 +78,28 @@ export function removedByFile(diffText) {
   return byFile;
 }
 
+// Las líneas de un archivo agrupadas en tramos contiguos: [[desde, hasta], …].
+//
+// Existe para poder DECIRLE a la herramienta de mutación qué medir. Stryker acepta tramos
+// (`Archivo.cs{44..46}` en .NET, `a.ts:44-46` en JS), así que con esto la corrida deja de mutar el
+// archivo entero: no solo es ruido menos, son minutos menos.
+//
+// `gap` funde tramos separados por un hueco diminuto. Mide unas pocas líneas de más a cambio de que
+// el comando no crezca sin control, y errar hacia medir de MÁS es el lado seguro.
+export function rangesOf(lines, { gap = 2 } = {}) {
+  if (!lines || !lines.size) return [];
+
+  const ordenadas = [...lines].map(Number).filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+  const rangos = [];
+
+  for (const line of ordenadas) {
+    const ultimo = rangos[rangos.length - 1];
+    if (ultimo && line - ultimo[1] <= gap) ultimo[1] = line;
+    else rangos.push([line, line]);
+  }
+  return rangos;
+}
+
 // La ruta de `file` relativa a `root`, en el vocabulario del diff.
 //
 // Los reportes de mutación no hablan el mismo idioma que git: Stryker.NET nombra cada archivo con

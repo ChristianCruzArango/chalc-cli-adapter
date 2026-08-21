@@ -1,0 +1,7 @@
+{
+  "id": "frontend-design",
+  "source": "npx skills add https://github.com/anthropics/skills --skill frontend-design",
+  "sourceType": "skillssh",
+  "contentSha256": "4eabc66183767153e404b39d1b839b1c37f2d82d86f0a0d7e880a579d8d62336",
+  "installedAt": "2026-08-21T18:20:56.030Z"
+}

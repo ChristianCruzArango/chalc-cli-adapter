@@ -14,7 +14,7 @@ function sh(args, cwd) { execFileSync('git', args, { cwd, stdio: 'ignore' }); }
 async function sideRepo(base, id, side, tasksMd) {
   const dest = join(base, id, side);
   await mkdir(dest, { recursive: true });
-  sh(['init', '-q'], dest);
+  sh(['init', '-q', '-b', 'main'], dest);   // -b main: no depender de init.defaultBranch del entorno
   sh(['config', 'user.email', 'a@b.c'], dest);
   sh(['config', 'user.name', 'Test'], dest);
   sh(['config', 'commit.gpgsign', 'false'], dest);
@@ -22,7 +22,6 @@ async function sideRepo(base, id, side, tasksMd) {
   await writeFile(join(dest, 'specs', id, 'tasks.md'), tasksMd, 'utf8');
   sh(['add', '.'], dest);
   sh(['commit', '-q', '-m', 'init'], dest);
-  sh(['branch', '-f', 'main'], dest);
   sh(['checkout', '-q', '-b', 'feat/x'], dest);
   await writeFile(join(dest, 'avance.txt'), 'x', 'utf8');
   sh(['add', '.'], dest);

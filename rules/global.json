@@ -7,7 +7,9 @@
     "minimal-implementation",
     "solid-principles",
     "modular-architecture",
-    "mutation-testing"
+    "mutation-testing",
+    "frontend-design",
+    "high-end-visual-design"
   ],
   "mcp": [],
   "optionalMcp": []

@@ -24,12 +24,12 @@ function flatten(files) {
 }
 
 // Parsea el texto del reporte. Misma salida que `parseJUnit` y `parsePit`.
-export function parseElements(text) {
+export function parseElements(text, opts = {}) {
   let json;
   try { json = JSON.parse(text); } catch { throw new Error('mutation report: JSON inválido'); }
   if (!json || typeof json.files !== 'object' || json.files === null) {
     throw new Error('mutation report: falta la sección "files" del esquema mutation-testing-elements');
   }
 
-  return summarize(flatten(json.files));
+  return summarize(flatten(json.files), opts);
 }

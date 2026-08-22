@@ -6,7 +6,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { createCcrStore } from '../lib/ccr.mjs';
-import { isStaleModel } from '../lib/ai.mjs';
+import { roleConfig, roleModelLabel } from '../lib/roleconfig.mjs';
 import { createAgentRegistry } from './agents/registry.mjs';
 import { inspectProject, readMcpServers, projectTree, mcpEnvironmentAllowlist } from './project.mjs';
 import { createTools } from './tools/registry.mjs';
@@ -134,32 +134,9 @@ function conversationSection(conversation, { max = 6, language } = {}) {
   return { key: 'conversación', text: `${f.convHeader}\n${text}`, required: false };
 }
 
-// Config efectiva de un ROL (cli.roles.planner|coder|reviewer). Dos formas en la config:
-//   - string: otro MODELO del mismo proveedor de la sesión (comportamiento clásico).
-//   - objeto {provider, model, apiKey?, baseURL?}: el rol corre en OTRO proveedor (p. ej. planner en
-//     OpenRouter con Opus, reviewer en OpenAI, coder en Ollama local). La config del rol se arma SIN
-//     heredar apiKey/baseURL/apiVersion del proveedor base — cruzar credenciales entre servicios
-//     rompe la llamada (una key de OpenRouter no abre OpenAI). cli.* sí se hereda (timeouts, think…).
-// Devuelve null si el rol no está configurado o el objeto está incompleto → usa el impl base.
-export function roleConfig(cfg, role) {
-  const m = cfg?.cli?.roles?.[role];
-  if (!m) return null;
-  // string fijado cuando el proveedor base era OTRO (p. ej. `qwen3-coder:30b` de Ollama y ahora
-  // OpenRouter): ese nombre no existe en el proveedor actual → uso el modelo base en vez de un 400.
-  if (typeof m === 'string') return isStaleModel(cfg, m, cfg?.cli?.rolesFor) ? null : { ...cfg, model: m };
-  if (!m.provider || !m.model) return null;
-  const { baseURL: _b, apiKey: _k, apiVersion: _v, ...base } = cfg || {};
-  return { ...base, ...m };
-}
-
-// Etiqueta del modelo de un rol para la UI ("pensando con X…"): el nombre a secas si es del mismo
-// proveedor, "modelo (proveedor)" si el rol corre en otro. null = rol sin configurar (modelo base).
-export function roleModelLabel(cfg, role) {
-  const m = cfg?.cli?.roles?.[role];
-  if (!m) return null;
-  if (typeof m === 'string') return isStaleModel(cfg, m, cfg?.cli?.rolesFor) ? null : m;   // null: se usa el base
-  return m.provider && m.model ? `${m.model} (${m.provider})` : null;
-}
+// La config efectiva de un rol vive en lib/roleconfig.mjs desde que el comando `debate` (spec 014)
+// pasó a ser su segundo consumidor. Se re-exporta para no romper a quien la importa desde aquí.
+export { roleConfig, roleModelLabel };
 
 // Sesión persistente: carga el proyecto UNA vez y mantiene conversación + store CCR entre mensajes,
 // como un CLI interactivo tipo Claude Code. `ask(task)` corre el loop conservando el contexto acumulado.

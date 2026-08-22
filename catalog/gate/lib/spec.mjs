@@ -10,22 +10,33 @@ import { join } from 'node:path';
 
 const NUMBERED = /^(\d+)-/;
 
-// Carpeta de spec más reciente que contiene `requires`, con el contenido de ese archivo.
-// Devuelve { dir, path, text } o null. Una carpeta sin el archivo pedido no descarta a las demás:
-// se sigue bajando por número hasta encontrar una que lo tenga.
-export async function newestSpec(root, specDir, requires) {
+// Todas las carpetas de spec que contienen `requires`, de la más reciente a la más antigua, con el
+// contenido de ese archivo. Devuelve [{ dir, path, text }].
+//
+// Existe porque no todo se resuelve contra la spec vigente. Lo que se implementa hoy sale de ella,
+// pero un test cambiado puede cubrir legítimamente un requisito de una spec anterior; sin poder
+// mirarlas todas, esa cita correcta se reporta como inventada.
+export async function everySpec(root, specDir, requires) {
   let entries;
-  try { entries = await readdir(join(root, specDir), { withFileTypes: true }); } catch { return null; }
+  try { entries = await readdir(join(root, specDir), { withFileTypes: true }); } catch { return []; }
 
   const numbered = entries
     .filter((e) => e.isDirectory() && NUMBERED.test(e.name))
     .sort((a, b) => Number(NUMBERED.exec(b.name)[1]) - Number(NUMBERED.exec(a.name)[1]));
 
+  const found = [];
   for (const entry of numbered) {
     const path = `${specDir}/${entry.name}/${requires}`;
     try {
-      return { dir: `${specDir}/${entry.name}`, path, text: await readFile(join(root, path), 'utf8') };
+      found.push({ dir: `${specDir}/${entry.name}`, path, text: await readFile(join(root, path), 'utf8') });
     } catch { /* esta carpeta no tiene ese archivo: se prueba la siguiente */ }
   }
-  return null;
+  return found;
+}
+
+// Carpeta de spec más reciente que contiene `requires`, con el contenido de ese archivo.
+// Devuelve { dir, path, text } o null. Una carpeta sin el archivo pedido no descarta a las demás:
+// se sigue bajando por número hasta encontrar una que lo tenga.
+export async function newestSpec(root, specDir, requires) {
+  return (await everySpec(root, specDir, requires))[0] || null;
 }

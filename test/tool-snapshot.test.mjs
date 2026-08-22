@@ -57,6 +57,7 @@ test('R11 — js + jest', async () => {
       install: 'npm i -D @stryker-mutator/core @stryker-mutator/jest-runner',
       probe: 'node_modules/.bin/stryker',
       scopeFlag: '--mutate',
+      scopeSpan: 'colon',
       threshold: 80,
       required: true
     },
@@ -140,6 +141,7 @@ test('R11 — dotnet', async () => {
       install: 'dotnet new tool-manifest && dotnet tool install dotnet-stryker',
       probe: '.config/dotnet-tools.json',
       scopeFlag: '--mutate',
+      scopeSpan: 'braces',
       scopeJoin: 'repeat',
       threshold: 80,
       required: true

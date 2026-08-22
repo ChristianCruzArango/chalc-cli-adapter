@@ -29,7 +29,7 @@ function sourcePath(mutatedClass, sourceFile) {
 const shortMutator = (mutator) => mutator.slice(mutator.lastIndexOf('.') + 1);
 
 // Parsea el texto del reporte. Misma salida que `parseElements` y `parseJUnit`.
-export function parsePit(text) {
+export function parsePit(text, opts = {}) {
   if (!/<mutations\b/.test(text)) {
     throw new Error('mutation report: falta <mutations>, el archivo no es un reporte de PIT');
   }
@@ -45,5 +45,5 @@ export function parsePit(text) {
       status
     });
   }
-  return summarize(mutants);
+  return summarize(mutants, opts);
 }

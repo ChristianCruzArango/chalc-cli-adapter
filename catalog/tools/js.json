@@ -23,6 +23,7 @@
       "format": "elements",
       "probe": "node_modules/.bin/stryker",
       "scopeFlag": "--mutate",
+      "scopeSpan": "colon",
       "setup": "**StrykerJS does not write the JSON report by default.** Its default reporters are HTML and\nprogress. Add the `json` reporter to `stryker.conf.json` (and commit it):\n\n```json\n{\n  \"reporters\": [\"html\", \"json\", \"progress\"],\n  \"jsonReporter\": { \"fileName\": \"{report}\" }\n}\n```"
     },
     "variants": [

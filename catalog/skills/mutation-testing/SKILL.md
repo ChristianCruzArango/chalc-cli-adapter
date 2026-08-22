@@ -113,6 +113,11 @@ Do not work around a blocker by editing the gate code: it is regenerated on ever
 Notes:
 - **StrykerJS = `@stryker-mutator/core` + ONE runner plugin** (table above). `npx stryker init` reuses
   your existing framework config; commit `stryker.conf.json`.
+- **Angular on Vitest: the vitest config Stryker uses MUST load the Angular plugin.** A stripped-down
+  `vitest.config.stryker.ts` without it cannot instantiate components with `templateUrl`: every such
+  spec dies with `Cannot read properties of null (reading 'ngModule')` and Stryker reports its mutants
+  as survivors. That is not missing coverage — those tests never ran — so the score is fiction. Fix
+  the config; never "add tests" to chase a number produced that way.
 - **Private registry?** Don't go global (it reads the same `.npmrc` and breaks plugin resolution).
   Scope only Stryker to public npm: `@stryker-mutator:registry=https://registry.npmjs.org/`, or fix the
   feed token. Report it if you can't.

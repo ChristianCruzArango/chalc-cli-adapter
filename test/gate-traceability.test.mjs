@@ -133,21 +133,58 @@ test('checkTraceability stays quiet when the repo has no spec', async () => {
   assert.deepEqual(await checkTraceability(['test/total.test.ts'], { root: dir }), []);
 });
 
-// El flujo de chalc trabaja siempre sobre la spec recién creada: es la que numera más alto.
-test('checkTraceability traces against the newest spec of the repo', async () => {
+// El flujo de chalc trabaja siempre sobre la spec recién creada: es la que numera más alto, y es a
+// la que apunta el aviso de un test que no cita nada.
+test('checkTraceability points a test that cites nothing at the newest spec', async () => {
   const dir = await project({
     'specs/006-viejo/spec.md': '- **R9** — WHEN algo THE SYSTEM SHALL otra cosa.',
     'specs/007-carrito/spec.md': spec,
-    'test/total.test.ts': '// R9 — de la spec vieja\n'
+    'test/total.test.ts': '// sin ninguna cita\n'
   });
 
   const findings = await checkTraceability(['test/total.test.ts'], { root: dir });
 
-  assert.equal(findings[0].rule, 'unknown-requirement');
+  assert.equal(findings[0].rule, 'no-requirement');
+  assert.match(findings[0].data.spec, /007-carrito/);
 });
 
 test('checkTraceability skips a test file deleted in the task', async () => {
   const dir = await project({ 'specs/007-carrito/spec.md': spec });
 
   assert.deepEqual(await checkTraceability(['test/borrado.test.ts'], { root: dir }), []);
+});
+
+// ── citas a requisitos de otra spec ───────────────────────────────────────────────────────────
+//
+// Un test que cubre un requisito de una spec anterior lo cita con su R#. Resolver solo contra la
+// spec vigente lo marcaba como inventado, que es un falso positivo con mal remedio: obliga a
+// reescribir documentación correcta para contentar a la herramienta.
+
+test('checkTraceability accepts a requirement declared in an older spec', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'chalc-trace-'));
+  await mkdir(join(root, 'specs/014-cronograma'), { recursive: true });
+  await mkdir(join(root, 'specs/021-parametrizacion'), { recursive: true });
+  await mkdir(join(root, 'tests'), { recursive: true });
+
+  await writeFile(join(root, 'specs/014-cronograma/spec.md'), '- **R11** — WHEN algo THE SYSTEM SHALL otra cosa');
+  await writeFile(join(root, 'specs/021-parametrizacion/spec.md'), '- **R2** — WHEN algo THE SYSTEM SHALL otra cosa');
+  await writeFile(join(root, 'tests/agregar.test.js'), '// cubre R11 de la spec del cronograma');
+
+  const found = await checkTraceability(['tests/agregar.test.js'], { root });
+
+  assert.deepEqual(found, [], 'R11 existe en specs/014: no es una cita inventada');
+});
+
+test('checkTraceability still reports a requirement that exists in no spec', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'chalc-trace-'));
+  await mkdir(join(root, 'specs/014-cronograma'), { recursive: true });
+  await mkdir(join(root, 'tests'), { recursive: true });
+
+  await writeFile(join(root, 'specs/014-cronograma/spec.md'), '- **R11** — WHEN algo THE SYSTEM SHALL otra cosa');
+  await writeFile(join(root, 'tests/agregar.test.js'), '// cubre R99');
+
+  const found = await checkTraceability(['tests/agregar.test.js'], { root });
+
+  assert.equal(found.length, 1, 'R99 no existe en ninguna spec: sigue siendo una cita inventada');
+  assert.equal(found[0].data.id, 'R99');
 });

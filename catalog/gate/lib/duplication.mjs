@@ -16,6 +16,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { blankOut } from './source.mjs';
 import { sourceFiles } from './sources.mjs';
+import { touchesChange } from './hunks.mjs';
 import { RULES } from './rules.mjs';
 
 // Líneas que se repiten por la GRAMÁTICA del lenguaje y no por copia. En TypeScript, cinco imports
@@ -23,6 +24,13 @@ import { RULES } from './rules.mjs';
 // falsos el primer día y nadie volvería a leer el informe.
 const GRAMMAR_NOISE = [
   /^(?:import|export)\b[^=]*$/,        // import … / export * from … (no `export const x = …`)
+  // Las mismas cabeceras en los otros stacks. Los specs hermanos de un mismo servicio comparten
+  // media docena de ellas palabra por palabra, y no hay forma de "deduplicarlas": las obliga el
+  // lenguaje. `using (var x = …)` NO entra aquí — eso es un bloque con cuerpo, y ahí sí puede
+  // haber copia.
+  /^(?:global\s+)?using\s+(?:static\s+)?[\w.]+\s*;?$/,   // C#
+  /^from\s+[\w.]+\s+import\b[^=]*$/,                     // Python
+  /^package\b[^=]*$/,                                    // Java / Kotlin / Dart
   /^[)\]}>;,\s]+$/,                    // cierres sueltos: } ) ]; });
   /^(?:else|try|do|finally)\s*\{?$/,
   /^@\w+\([^)]*\)$/,                   // un decorador solo en su línea
@@ -112,7 +120,7 @@ export function findDuplication(files, { minLines = 6 } = {}) {
 // Pero solo se REPORTA si una de las dos puntas está en algo que tocaste (R5). Es la misma regla que
 // rige el resto del linter: un repo con historia tiene duplicación vieja a montones, y volcarla
 // entera enterraría el trabajo de hoy.
-export async function lintDuplication(root, changed, config = {}) {
+export async function lintDuplication(root, changed, config = {}, changedLines = null) {
   const { enabled = true, minLines = 6, maxFiles = 4000 } = config;
   if (!enabled) return [];
 
@@ -131,6 +139,11 @@ export async function lintDuplication(root, changed, config = {}) {
     // El hallazgo apunta al archivo que tocaste; el otro va como dato.
     const mine = touched.has(a.file) ? a : touched.has(b.file) ? b : null;
     if (!mine) continue;
+
+    // Y que el archivo sea tuyo no basta: el bloque puede llevar años ahí y la tarea haber añadido
+    // dos líneas al final. Se reporta solo si escribiste DENTRO del bloque repetido.
+    if (!touchesChange(changedLines, mine.file, mine.line, mine.line + lines - 1)) continue;
+
     const other = mine === a ? b : a;
 
     findings.push({

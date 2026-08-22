@@ -40,12 +40,13 @@ This way, an Angular project can receive its Angular skills, a NestJS one its ba
 | `chalc configure` | Manages the catalog (rules/skills/MCP) via menu | no |
 | `chalc install <source>` | Installs a skill into the catalog and wires it to a rule | no |
 | `chalc spec` | Creates an empty `specs/NNN-feature` folder/template | no |
-| `chalc config-ia` | Configures the AI by packages: base (provider + key), `cli` (leader/developer/reviewer team), `spec`, `qa`, `repair` | yes (setup) |
+| `chalc config-ia` | Configures the AI by packages: base (provider + key), `cli` (leader/developer/reviewer team), `debate` (the two that argue your idea), `spec`, `qa`, `repair` | yes (setup) |
 | `chalc ai-doctor` | Shows provider, profile, and models resolved per task | no |
 | `chalc eval-ia` | Runs local evals of prompts/parsers without calling the provider | no |
 | `chalc spec-ia` | User story (Azure DevOps/Jira/Drive/Word/paste) → spec/plan/tasks | yes |
 | `chalc feature` | Full-stack orchestrator: ONE user story → API contract + back spec + front spec + optional mobile spec (same `NNN` in every repo). With `--worktree`: several stories in parallel, one isolated workspace per story | yes |
 | `chalc dashboard [folder]` | Read-only local dashboard of the worktree workspaces: task progress + git state per side, auto-refresh | no |
+| `chalc debate "<idea>"` | Two different models argue your idea from opposite stances (agreement must be justified) and leave a downloadable report in `.chalc/debate/` | yes |
 | `chalc-cli` | Interactive agent shell over your equipped project (approval-gated tools, skills, and MCP) | yes |
 | `chalc qa <path>` | Lists specs and validates the QA preflight (Docker + documentation) | no |
 | `chalc qa <path> --spec 004-login --plan` | Generates the QA plan traceable to a spec's requirements | no |
@@ -1086,6 +1087,89 @@ one Windows Terminal window with a fixed layout — the `dashboard` pane running
 one side (half the window, always readable) and the workspaces stacked evenly on the other side,
 each pane ready for you to type the agent command. If the page is already served by another
 process, the console view keeps working on its own.
+
+### 5) `chalc debate` — two models argue your idea and leave you a report
+
+```bash
+chalc config-ia debate                                  # once: who debates against whom
+chalc debate "an event queue for the checkout"          # the debate, with a report at the end
+chalc debate "…" --rounds 2                             # fewer rounds (default cap: 3)
+chalc debate "…" --judge                                # + an arbitrated verdict on what stayed open
+chalc debate "…" --dry-run                              # what it would cost: no calls, no files
+chalc debate "…" --out D:/reports/my-debate             # the report wherever you say
+chalc debate "…" --budget 20000                        # hard token brake: cuts and hands over what was paid
+chalc debate "…" --questions                            # forces the question round even with --yes
+```
+
+Before turning an idea into a spec, put it through contradiction. `chalc debate` sets **two different
+models** —each with its own provider and key— to argue it from opposite stances: **A proposes** and
+defends the design, **B challenges** it hunting for gaps, risks and unverified assumptions. Before
+starting, both read the idea and **ask you** what is missing; their questions are merged so you never
+answer the same thing twice, and whatever you leave unanswered lands in the report as an open
+question — it is never filled in with an assumption.
+
+**Agreement has to be earned.** The multi-agent debate literature points at conformity —yielding to
+the other argument just to avoid disagreeing— as the dominant failure mode, able to leave the debate
+below what a single model would produce. Chalc does not politely ask the model not to do it: it
+checks each turn.
+
+| Mitigation | How it is enforced |
+|---|---|
+| **Anonymity** | Neither side knows which model or vendor wrote the other's turn |
+| **Earned agreement** | An "I agree" that does not cite which objection was settled **and why** is discarded, and the debate goes on |
+| **Minimum round** | No agreement closes the debate before the proposal goes back through its author |
+| **Real dissent** | A debate where nobody ever objected does not close by agreement: it spends its rounds |
+| **Alternation** | Each round is opened by a different side: nobody always gets the last word |
+| **No winner** | The minutes pick no side and average no positions: disagreements are handed over face to face |
+| **Cost up front** | It shows the planned calls (9 with the default cap) and asks before spending |
+
+**A report both of them sign.** Once the minutes are written they go to the participant who did **not**
+draft them, to ratify: if that side raises corrections, they are applied before you get the document.
+In the first real run the reviewer raised **7 corrections** — all of the "you present this as agreed
+and it was not" kind — and they were folded in. If ratification could not happen (budget or failure),
+the report is still delivered but **declared unratified**: signing on the other's behalf would be a lie.
+
+When it ends it writes `.chalc/debate/NNN-<idea>/` — a new folder per debate, the previous one is never
+overwritten:
+
+- **`final.md`** — the deliverable, and **not the minutes of a quarrel**: it opens with **how your
+  idea stands after the debate** — what it is, how it works step by step, the rules that got settled
+  and where to start — written for whoever will build it. What they did not settle gets **no section
+  of its own**: it is marked `[PENDIENTE: …]` inside the proposal, at the point of the product it
+  affects and with what each side defended. Below that, one block per agreement with what was agreed,
+  **what each side contributed** and what it implies; then risks, your questions with their answers,
+  and next steps.
+- **`debate.md`** — the full evidence: the idea, the questions for the author, every turn with what it
+  opened and settled, how the disagreement ledger ended, **the literal corrections from whoever
+  ratified** and the minutes exactly as the model returned them.
+- **`debate.json`** — the debate as data, in case another command consumes it.
+
+
+**What it costs, measured.** The number of calls is fixed and announced before starting; there is no
+loop that can stay open. On top of that, four measures cut what goes in and out of each one:
+
+| Measure | Effect |
+|---|---|
+| **`--budget <tokens>`** | Real spend is checked **between turns**: once past it the debate closes, the **minutes are not paid for** (the most expensive call) and the report is written with what was already paid |
+| **Clarification only if someone can answer** | With no terminal or with `--yes` its 2 calls are not paid: 9 → 7. `--questions` forces it |
+| **A long idea is compressed once** | Above ~1,500 characters, 1 call summarises it and that summary travels in the other turns. The full text still goes to the question round, the report and `debate.json` |
+| **Bounded turns** | An output cap per turn plus concision asked for in the prompt: output costs about five times what input costs |
+
+Measured with realistic turn sizes and 3 rounds:
+
+| | Input | Output ceiling |
+|---|---|---|
+| Before | 17,000 tok (short idea) · 37,000 (idea pasted from a document) | 27,000 tok |
+| Now | 16,000 tok · **16,000** | **11,000 tok** |
+
+The token summary the CLI prints, and `chalc tokens`, confirm afterwards what was announced before.
+
+With `--judge` it adds a verdict on what stayed open, evaluating it **in both possible orders**: an
+LLM judge picks the first option it is shown around 68 % of the time, so if the verdict flips when
+they are swapped, chalc calls it a **tie** instead of handing you a fake winner.
+
+If a provider goes down mid-debate, the debate is not lost: a **partial report** is written with what
+was already paid for, stating on which round and which side it failed.
 
 ### Fidelity harness (the AI does NOT make things up)
 

@@ -1,0 +1,10 @@
+{
+  "id": "railway",
+  "kind": "stdio",
+  "description": "Servidor MCP oficial del CLI de Railway (proyectos, servicios, variables, logs y despliegues). Requiere el CLI instalado y `railway login`; opcional porque puede desplegar a producción.",
+  "requiresSecret": false,
+  "server": {
+    "command": "railway",
+    "args": ["mcp"]
+  }
+}

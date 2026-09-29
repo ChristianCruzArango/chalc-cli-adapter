@@ -1,0 +1,7 @@
+{
+  "id": "async-python-patterns",
+  "source": "npx skills add https://github.com/wshobson/agents --skill async-python-patterns -y",
+  "sourceType": "skillssh",
+  "contentSha256": "c1849d3d64678422e0ed637dd8dd3d5acbecb91b044b3f7d6cfd642a188e94ce",
+  "installedAt": "2026-09-29T19:32:01.144Z"
+}

@@ -1,0 +1,7 @@
+{
+  "id": "python-design-patterns",
+  "source": "npx skills add https://github.com/wshobson/agents --skill python-design-patterns -y",
+  "sourceType": "skillssh",
+  "contentSha256": "32d9905d574bb749b6dda97aa58706e639b8903b19c26e0212104484d3af662c",
+  "installedAt": "2026-09-29T19:31:57.979Z"
+}

@@ -2,10 +2,46 @@
   "version": 1,
   "skills": {
     "angular-migration": {
-      "source": "wshobson/agents",
-      "sourceType": "github",
-      "skillPath": "plugins/framework-migration/skills/angular-migration/SKILL.md",
-      "computedHash": "ca92d5713fdc25121a329a4d9ee034f546d30889b9d132f6391deea6898d6fd7"
+      "source": "npx skills add https://github.com/wshobson/agents --skill angular-migration",
+      "sourceType": "skillssh",
+      "contentSha256": "2f41a44d3053194b3a884f3f40606ebea58e96698efbfcdd7628f256f72e1665",
+      "installedAt": "2026-06-15T20:30:49.440Z"
+    },
+    "async-python-patterns": {
+      "source": "npx skills add https://github.com/wshobson/agents --skill async-python-patterns -y",
+      "sourceType": "skillssh",
+      "contentSha256": "c1849d3d64678422e0ed637dd8dd3d5acbecb91b044b3f7d6cfd642a188e94ce",
+      "installedAt": "2026-09-29T19:32:01.144Z"
+    },
+    "docker-expert": {
+      "source": "npx skills add https://github.com/sickn33/antigravity-awesome-skills --skill docker-expert -y",
+      "sourceType": "skillssh",
+      "contentSha256": "14840bcfb3fad72711975c3413416779ce5b9b14517fb5e326e248314e04f4d6",
+      "installedAt": "2026-09-29T19:32:20.242Z"
+    },
+    "frontend-design": {
+      "source": "npx skills add https://github.com/anthropics/skills --skill frontend-design",
+      "sourceType": "skillssh",
+      "contentSha256": "4eabc66183767153e404b39d1b839b1c37f2d82d86f0a0d7e880a579d8d62336",
+      "installedAt": "2026-08-21T18:20:56.030Z"
+    },
+    "python-code-style": {
+      "source": "npx skills add https://github.com/wshobson/agents --skill python-code-style -y",
+      "sourceType": "skillssh",
+      "contentSha256": "35ed0c437f33462187b0a89da8e5bfe9ac259dbc8731257c5445f1a5e1229acf",
+      "installedAt": "2026-09-29T19:31:45.648Z"
+    },
+    "python-design-patterns": {
+      "source": "npx skills add https://github.com/wshobson/agents --skill python-design-patterns -y",
+      "sourceType": "skillssh",
+      "contentSha256": "32d9905d574bb749b6dda97aa58706e639b8903b19c26e0212104484d3af662c",
+      "installedAt": "2026-09-29T19:31:57.979Z"
+    },
+    "python-testing-patterns": {
+      "source": "npx skills add https://github.com/wshobson/agents --skill python-testing-patterns -y",
+      "sourceType": "skillssh",
+      "contentSha256": "df2784d5531ce830d99a4aa0dd8af0f82ce4cf2ba59c620dbd176ce17515caf7",
+      "installedAt": "2026-09-29T19:32:04.232Z"
     }
   }
 }

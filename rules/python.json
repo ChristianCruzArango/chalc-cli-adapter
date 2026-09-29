@@ -6,7 +6,14 @@
     "anyFile": ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile", "manage.py"],
     "anyGlob": ["*.py"]
   },
-  "skills": ["python-best-practices", "python-testing"],
+  "skills": [
+    "python-best-practices",
+    "python-testing",
+    "python-code-style",
+    "python-design-patterns",
+    "async-python-patterns",
+    "python-testing-patterns"
+  ],
   "mcp": [],
   "optionalMcp": []
 }

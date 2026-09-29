@@ -1,0 +1,11 @@
+{
+  "id": "typesafe-docs",
+  "kind": "http",
+  "description": "Documentación viva de TypeSafe (Jev / System One) vía MCP remoto. Sin credenciales.",
+  "requiresSecret": false,
+  "note": "Transporte HTTP remoto: Claude Code, Cursor y Codex lo leen tal cual; en Gemini CLI la clave es `httpUrl`.",
+  "server": {
+    "type": "http",
+    "url": "https://docs.typesafe.ai/mcp"
+  }
+}

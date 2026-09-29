@@ -1,0 +1,7 @@
+{
+  "id": "python-testing-patterns",
+  "source": "npx skills add https://github.com/wshobson/agents --skill python-testing-patterns -y",
+  "sourceType": "skillssh",
+  "contentSha256": "df2784d5531ce830d99a4aa0dd8af0f82ce4cf2ba59c620dbd176ce17515caf7",
+  "installedAt": "2026-09-29T19:32:04.232Z"
+}

@@ -553,6 +553,18 @@ Ejemplo conceptual de MCP:
 }
 ```
 
+Un MCP remoto usa `server.url` (solo https) en lugar de `command`; el doctor rechaza que un MCP tenga ambos:
+
+```json
+{
+  "id": "typesafe-docs",
+  "kind": "http",
+  "description": "Documentación viva de TypeSafe vía MCP remoto",
+  "requiresSecret": false,
+  "server": { "type": "http", "url": "https://docs.typesafe.ai/mcp" }
+}
+```
+
 Después de configurar, revisa la salud del catálogo:
 
 ```bash

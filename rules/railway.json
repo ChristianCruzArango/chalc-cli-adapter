@@ -1,0 +1,11 @@
+{
+  "id": "railway",
+  "name": "Railway",
+  "language": "Config",
+  "detect": {
+    "anyFile": ["railway.json", "railway.toml"]
+  },
+  "skills": [],
+  "mcp": [],
+  "optionalMcp": ["railway"]
+}

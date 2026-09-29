@@ -552,6 +552,18 @@ Conceptual MCP example:
 }
 ```
 
+A remote MCP uses `server.url` (https only) instead of `command`; doctor rejects an MCP that has both:
+
+```json
+{
+  "id": "typesafe-docs",
+  "kind": "http",
+  "description": "Live TypeSafe documentation over remote MCP",
+  "requiresSecret": false,
+  "server": { "type": "http", "url": "https://docs.typesafe.ai/mcp" }
+}
+```
+
 After configuring, check the catalog's health:
 
 ```bash

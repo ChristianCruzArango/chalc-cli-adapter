@@ -1,0 +1,11 @@
+{
+  "id": "docker",
+  "name": "Docker",
+  "language": "Dockerfile",
+  "detect": {
+    "anyFile": ["Dockerfile", "docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"]
+  },
+  "skills": ["docker-expert"],
+  "mcp": [],
+  "optionalMcp": []
+}

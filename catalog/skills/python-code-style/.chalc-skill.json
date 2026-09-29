@@ -1,0 +1,7 @@
+{
+  "id": "python-code-style",
+  "source": "npx skills add https://github.com/wshobson/agents --skill python-code-style -y",
+  "sourceType": "skillssh",
+  "contentSha256": "35ed0c437f33462187b0a89da8e5bfe9ac259dbc8731257c5445f1a5e1229acf",
+  "installedAt": "2026-09-29T19:31:45.648Z"
+}

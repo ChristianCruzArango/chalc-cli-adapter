@@ -57,6 +57,22 @@ test('the real rules catalog recognizes a React Native repo (framework, not just
   assert.ok(!names.includes('JavaScript'), `javascript no debe listarse aparte: ${names.join(', ')}`);
 });
 
+test('a Python service deployed with Docker on Railway gets Python, Docker and Railway rules', async () => {
+  const rules = await loadJsonDir(resolve(ROOT, 'rules'));
+  const ctx = await detectContext(resolve(ROOT, 'test/fixtures/python-railway'));
+  const matched = matchRules(rules, ctx).filter((r) => !r.always);
+  const byId = Object.fromEntries(matched.map((r) => [r.id, r]));
+
+  assert.deepEqual(Object.keys(byId).sort(), ['docker', 'python', 'railway']);
+  for (const skill of ['python-code-style', 'python-design-patterns', 'async-python-patterns', 'python-testing-patterns']) {
+    assert.ok(byId.python.skills.includes(skill), `falta ${skill} en la regla python`);
+  }
+  assert.deepEqual(byId.docker.skills, ['docker-expert']);
+  // Railway MCP puede desplegar a producción: se ofrece, nunca se instala solo.
+  assert.deepEqual(byId.railway.mcp, []);
+  assert.deepEqual(byId.railway.optionalMcp, ['railway']);
+});
+
 test('formatDetect renders supported detection keys', () => {
   assert.equal(
     formatDetect({ detect: { allFile: ['pubspec.yaml'], anyGlob: ['*.dart'] } }),

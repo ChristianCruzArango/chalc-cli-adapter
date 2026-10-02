@@ -15,6 +15,7 @@ Use this skill when creating or changing project structure.
 - Dependencies point inward or sideways according to the selected architecture; avoid cycles.
 - Infrastructure and framework adapters must not leak into domain rules.
 - Tests live near the behavior they protect unless the project has a stronger convention.
+- Every folder has a `README.md` that briefly states what lives there and what it is for (2–5 lines). Create it together with the folder and update it when the folder's role changes. Skip generated, vendored, or tool-owned folders (`node_modules`, `dist`, `build`, `.git`, caches).
 
 ## Boundary Checklist
 

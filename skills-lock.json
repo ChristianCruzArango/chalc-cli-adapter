@@ -1,11 +1,11 @@
 {
   "version": 1,
   "skills": {
-    "angular-migration": {
-      "source": "npx skills add https://github.com/wshobson/agents --skill angular-migration",
+    "angular-developer": {
+      "source": "npx skills add https://github.com/angular/skills --skill angular-developer -y",
       "sourceType": "skillssh",
-      "contentSha256": "2f41a44d3053194b3a884f3f40606ebea58e96698efbfcdd7628f256f72e1665",
-      "installedAt": "2026-06-15T20:30:49.440Z"
+      "contentSha256": "217040b5ae809f8d54d50090bca2323d147bae6a4eb38d1037fa21e874c2d8d9",
+      "installedAt": "2026-10-02T22:33:25.074Z"
     },
     "async-python-patterns": {
       "source": "npx skills add https://github.com/wshobson/agents --skill async-python-patterns -y",

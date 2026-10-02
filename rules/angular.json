@@ -15,20 +15,10 @@
     ]
   },
   "skills": [
-    "angular-component",
-    "angular-di",
-    "angular-directives",
-    "angular-forms",
-    "angular-http",
-    "angular-routing",
-    "angular-signals",
-    "angular-ssr",
-    "angular-testing",
-    "angular-tooling",
+    "angular-developer",
     "tailwind-best-practices",
     "responsive-design",
-    "interface-design",
-    "angular-migration"
+    "interface-design"
   ],
   "mcp": [
     "angular-cli"

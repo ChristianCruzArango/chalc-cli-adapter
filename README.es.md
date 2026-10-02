@@ -506,7 +506,7 @@ no necesitan ese permiso.
 También puedes pegar comandos completos del nuevo CLI de skills:
 
 ```bash
-chalc install "npx skills add https://github.com/wshobson/agents --skill angular-migration" --allow-exec
+chalc install "npx skills add https://github.com/angular/skills --skill angular-developer" --allow-exec
 ```
 
 ### Mantener las skills instaladas al día: `chalc update`
@@ -517,7 +517,7 @@ verdad cambió — y regenera `skills-lock.json` como espejo fiel del catálogo:
 ```bash
 chalc update --check                 # solo reporta: al día / desactualizada / error (no escribe nada)
 chalc update                         # aplica actualizaciones (pregunta antes de git/npx; --allow-exec evita la pregunta)
-chalc update angular-migration       # actualiza solo la(s) skill(s) indicadas
+chalc update angular-developer      # actualiza solo la(s) skill(s) indicadas
 ```
 
 - Una fuente caída no aborta el resto: se reporta por skill y la corrida continúa.

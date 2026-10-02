@@ -1,0 +1,7 @@
+{
+  "id": "angular-developer",
+  "source": "npx skills add https://github.com/angular/skills --skill angular-developer -y",
+  "sourceType": "skillssh",
+  "contentSha256": "217040b5ae809f8d54d50090bca2323d147bae6a4eb38d1037fa21e874c2d8d9",
+  "installedAt": "2026-10-02T22:33:25.074Z"
+}

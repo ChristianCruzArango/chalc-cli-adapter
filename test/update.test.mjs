@@ -25,7 +25,7 @@ test('R7 e2e: chalc update --check sin --allow-exec reporta needs-exec y sale 0 
     });
   });
   assert.equal(r.code, 0, r.output);
-  assert.match(r.output, /angular-migration/);
+  assert.match(r.output, /angular-developer/);
   assert.match(r.output, /--allow-exec/);   // la razón needs-exec, localizada en ambos idiomas
 });
 

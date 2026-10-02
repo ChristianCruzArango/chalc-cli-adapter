@@ -74,6 +74,16 @@
         "files": "^jasmine\\.json$"
       }
     ],
+    "fallback": {
+      "id": "command",
+      "label": "Stryker already installed, command runner (node:test, etc.)",
+      "deps": [
+        "@stryker-mutator/core"
+      ],
+      "template": {
+        "install": "npm i -D @stryker-mutator/core"
+      }
+    },
     "template": {
       "install": "npm i -D @stryker-mutator/core @stryker-mutator/{runner}"
     }

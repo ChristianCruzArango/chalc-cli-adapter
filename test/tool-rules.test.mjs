@@ -161,6 +161,31 @@ test('R4 — byLookup no muta su base entre llamadas', () => {
   assert.deepEqual(stryker.base, { tool: 'stryker', command: 'npx --no-install stryker run', format: 'elements' });
 });
 
+const withFallback = {
+  ...stryker,
+  fallback: { id: 'command', deps: ['@stryker-mutator/core'], template: { install: 'npm i -D @stryker-mutator/core' } }
+};
+
+test('R4 — byLookup usa el fallback cuando la herramienta ya está instalada y ninguna variante coincide', () => {
+  assert.deepEqual(resolve(withFallback, input({ deps: { '@stryker-mutator/core': '10.0.0' } })), {
+    tool: 'stryker', command: 'npx --no-install stryker run', format: 'elements',
+    install: 'npm i -D @stryker-mutator/core'
+  });
+});
+
+test('R4 — byLookup prefiere la variante al fallback', () => {
+  const found = resolve(withFallback, input({ deps: { '@stryker-mutator/core': '10', jest: '^29' } }));
+  assert.match(found.install, /jest-runner/);
+});
+
+test('R4 — el fallback no rescata la ambigüedad: varias variantes siguen siendo "no sé"', () => {
+  assert.equal(resolve(withFallback, input({ deps: { '@stryker-mutator/core': '10', jest: '^29', karma: '^6' } })), null);
+});
+
+test('R4 — sin la herramienta instalada el fallback no aplica', () => {
+  assert.equal(resolve(withFallback, input({ deps: { lodash: '^4' } })), null);
+});
+
 // ── T6: lo desconocido ────────────────────────────────────────────────────────────────────────
 
 test('R4 — una regla desconocida no resuelve y no revienta', () => {

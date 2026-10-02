@@ -120,3 +120,18 @@ test('mergeBase finds the branch point and gives nothing outside a repo', async 
   assert.equal(await mergeBase(dir), head, 'en main, la base es HEAD');
   assert.equal(await mergeBase(await plain()), '');
 });
+
+// Monorepo: el portón de `back/` vive en una subcarpeta de un repo que la contiene. Debe ver solo lo
+// suyo, con rutas desde `back/` — no las de `front/` ni `back/src/...`, que desde ahí no existen.
+test('changedSince inside a subfolder of the repo sees only that side, with paths relative to it', async () => {
+  const dir = await repo();
+  await write(dir, 'back/src/a.ts', 'export const a = 1;\n');
+  await write(dir, 'front/src/b.ts', 'export const b = 1;\n');
+  const base = await commit(dir, 'base');
+
+  await write(dir, 'back/src/a.ts', 'export const a = 2;\n');
+  await write(dir, 'back/src/nuevo.ts', 'export const n = 1;\n');
+  await write(dir, 'front/src/b.ts', 'export const b = 2;\n');
+
+  assert.deepEqual(await changedSince(join(dir, 'back'), base), ['src/a.ts', 'src/nuevo.ts']);
+});

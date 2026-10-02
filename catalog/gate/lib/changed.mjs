@@ -83,7 +83,7 @@ export async function changedLineInfo(root, ref) {
   // incluye lo commiteado y lo que no. Sumarle un `diff HEAD` contaría dos veces cada línea
   // borrada —los Set de líneas lo disimulaban, el conteo de borradas no—, y con ese doble conteo
   // un archivo parecería haber sido más grande de lo que era.
-  const texto = await git(['diff', '-U0', '--diff-filter=d', ref || 'HEAD'], root) || '';
+  const texto = await git(['diff', '-U0', '--diff-filter=d', '--relative', ref || 'HEAD'], root) || '';
 
   return { lines: parseHunks(texto), removed: removedByFile(texto) };
 }
@@ -111,7 +111,7 @@ export async function changedSince(root, ref) {
   const found = new Set();
 
   if (ref) {
-    const diff = await git(['diff', '--name-only', '--diff-filter=d', ref], root);
+    const diff = await git(['diff', '--name-only', '--diff-filter=d', '--relative', ref], root);
     if (diff === null) return null;
     lines(diff).forEach((f) => found.add(f));
   }
@@ -122,11 +122,16 @@ export async function changedSince(root, ref) {
   // listar sus archivos. El portón no puede lintar un directorio, así que los archivos nuevos —los
   // de la tarea recién empezada— quedaban fuera de la revisión; y el advisor de la spec 008 medía
   // la frescura contra la fecha de una carpeta, que cambia por motivos que no son código.
-  const status = await git(['status', '--porcelain', '-uall'], root);
+  //
+  // `-- .` y el prefijo existen por el monorepo: con el portón en `back/` dentro de un repo que es la
+  // carpeta padre, `status` lista también lo de `front/` y da rutas desde la raíz del repo (el diff
+  // lo resuelve `--relative`). Sin esto el portón vería `back/src/x.ts`, que no existe desde `back/`.
+  const prefix = (await git(['rev-parse', '--show-prefix'], root) || '').trim();
+  const status = await git(['status', '--porcelain', '-uall', '--', '.'], root);
   if (status) {
     for (const line of lines(status)) {
       const path = line.replace(/^\S+\s+/, '').split(' -> ').pop();
-      if (path) found.add(path);
+      if (path && path.startsWith(prefix)) found.add(path.slice(prefix.length));
     }
   }
 

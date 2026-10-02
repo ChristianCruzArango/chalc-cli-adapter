@@ -11,6 +11,8 @@ import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { execFile } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { equipForSpec } from '../lib/commands/equip.mjs';
 
 async function project(files = {}) {
@@ -97,4 +99,33 @@ test('re-equipping keeps what the user configured in gate.json', async () => {
   const after = JSON.parse(await readFile(path, 'utf8'));
   assert.equal(after.mutation.threshold, 65);
   assert.equal(after.test.command, 'npm run test:ci');
+});
+
+// `chalc apply` también equipa: el target deja `.chalc/gate-hook.md` y la skill `mutation-testing`
+// manda cerrar con el portón, así que sin portón el repo quedaba con instrucciones a un archivo
+// inexistente. Se prueba por la CLI porque `runApply` lee la ruta y las banderas de argv.
+const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'chalc.mjs');
+const runCli = (args) => new Promise((done) => {
+  execFile(process.execPath, [CLI, ...args], { encoding: 'utf8' }, (error, stdout, stderr) => done({ code: error?.code ?? 0, output: stdout + stderr }));
+});
+
+test('chalc apply leaves the gate, the advisor and the mailbox in the equipped repo', async () => {
+  const proj = await jest();
+
+  const result = await runCli([proj, '--yes']);
+
+  assert.equal(result.code, 0, result.output);
+  assert.ok(existsSync(join(proj, '.chalc', 'gate-hook.md')));
+  assert.ok(existsSync(join(proj, '.chalc', 'gate.mjs')), 'el hook documenta un portón que no existe');
+  assert.ok(existsSync(join(proj, '.chalc', 'gate.json')));
+  assert.ok(existsSync(join(proj, '.chalc', 'next.mjs')));
+});
+
+test('chalc apply --dry-run writes no gate', async () => {
+  const proj = await jest();
+
+  const result = await runCli([proj, '--yes', '--dry-run']);
+
+  assert.equal(result.code, 0, result.output);
+  assert.equal(existsSync(join(proj, '.chalc', 'gate.mjs')), false);
 });

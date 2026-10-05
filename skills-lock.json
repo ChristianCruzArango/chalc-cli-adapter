@@ -13,6 +13,12 @@
       "contentSha256": "c1849d3d64678422e0ed637dd8dd3d5acbecb91b044b3f7d6cfd642a188e94ce",
       "installedAt": "2026-09-29T19:32:01.144Z"
     },
+    "code-security": {
+      "source": "npx skills add https://github.com/semgrep/skills --skill code-security -y",
+      "sourceType": "skillssh",
+      "contentSha256": "7bdb3678fa740f0877d35def2ea09ff3094a7f7033c9029dc9a7b2ebda1c64de",
+      "installedAt": "2026-10-05T16:14:27.030Z"
+    },
     "docker-expert": {
       "source": "npx skills add https://github.com/sickn33/antigravity-awesome-skills --skill docker-expert -y",
       "sourceType": "skillssh",
@@ -42,6 +48,24 @@
       "sourceType": "skillssh",
       "contentSha256": "df2784d5531ce830d99a4aa0dd8af0f82ce4cf2ba59c620dbd176ce17515caf7",
       "installedAt": "2026-09-29T19:32:04.232Z"
+    },
+    "security-and-hardening": {
+      "source": "npx skills add https://github.com/addyosmani/agent-skills --skill security-and-hardening -y",
+      "sourceType": "skillssh",
+      "contentSha256": "9d64c9e2881d79fc8cdaeb2c0663e0570934ea3d3041ac6a895de9e42fd1ad55",
+      "installedAt": "2026-10-05T16:14:21.486Z"
+    },
+    "security-review": {
+      "source": "npx skills add https://github.com/getsentry/skills --skill security-review -y",
+      "sourceType": "skillssh",
+      "contentSha256": "11055500b40ff886045d2aea9e46bcd2b7c4d28e8ee0d64fb0e260f48717d111",
+      "installedAt": "2026-10-05T16:14:24.699Z"
+    },
+    "security-threat-model": {
+      "source": "npx skills add https://github.com/openai/skills --skill security-threat-model -y",
+      "sourceType": "skillssh",
+      "contentSha256": "a262f878637565892051aa945c88e8748e743896c20925b59c5c2d7d79e061a7",
+      "installedAt": "2026-10-05T16:14:29.788Z"
     }
   }
 }

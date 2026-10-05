@@ -1,0 +1,7 @@
+{
+  "id": "code-security",
+  "source": "npx skills add https://github.com/semgrep/skills --skill code-security -y",
+  "sourceType": "skillssh",
+  "contentSha256": "7bdb3678fa740f0877d35def2ea09ff3094a7f7033c9029dc9a7b2ebda1c64de",
+  "installedAt": "2026-10-05T16:14:27.030Z"
+}

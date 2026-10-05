@@ -170,7 +170,8 @@ Arquitecturas disponibles (la IA recomienda la más liviana que encaje; tú deci
 
 Al crear, Chalc genera el proyecto base del scaffolder oficial, las carpetas de la arquitectura con su
 `README.md`, `docs/architecture.md`, `specs/` (método SDD), las skills globales (`minimal-implementation`,
-`clean-code`, `solid-principles`, `modular-architecture`, `mutation-testing`), las skills del stack, los MCP y el target
+`clean-code`, `solid-principles`, `modular-architecture`, `mutation-testing` y las de seguridad OWASP
+`security-and-hardening`, `security-review`, `code-security`, `security-threat-model`), las skills del stack, los MCP y el target
 IA elegido (`CLAUDE.md`, Cursor, Copilot, Gemini o Codex).
 
 #### Extensible a cualquier framework

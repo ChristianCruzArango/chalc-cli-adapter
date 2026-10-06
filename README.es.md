@@ -59,8 +59,9 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 | `chalc tokens <ruta> [--json]` | Muestra el gasto de IA acumulado del proyecto (tokens + USD estimado) por comando, tarea/rol y modelo | no |
 | `chalc update [id…] [--check]` | Sincroniza las skills instaladas con su fuente (git/skills.sh/local) y regenera `skills-lock.json`; `--check` solo reporta | no |
 
-Casi todos los comandos tienen su equivalente `npm run <comando>` (ej. `npm run spec-ia`) por si no haces
-`npm link`; las excepciones son `qa`, `deliver`, `verify`, `install` y `feature`, que se invocan como `npm start -- <comando> …`.
+Todos los comandos tienen su equivalente `npm run <comando>` (ej. `npm run spec-ia` o `npm run debate`) por si no
+haces `npm link`. El único renombrado es `chalc install`, que es `npm run install-skill` (npm reserva `install`
+como script de ciclo de vida). Recuerda el `--` antes de los argumentos: `npm run debate -- "tu idea"`.
 Todo el CLI es **bilingüe (es/en)**. Por defecto sigue el idioma del sistema operativo, pero puedes
 fijarlo una sola vez con **`chalc lang es`** o **`chalc lang en`** (queda guardado y se aplica a todos
 tus proyectos, sin tener que tocar variables de entorno cada vez).
@@ -117,7 +118,7 @@ chalc install <fuente> --force       # reemplaza un skill existente sin pregunta
 ### Crear desde cero (`chalc init`)
 
 `chalc init` es el flujo para quitar el dolor de empezar proyectos. Chalc lee una propuesta
-por texto o archivo (`--doc` soporta Word/PDF/Markdown/TXT vía `docread`), sugiere arquitecturas,
+por texto o archivo (`--doc` soporta Word/PDF/Excel/Markdown/TXT vía `docread`), sugiere arquitecturas,
 explica tradeoffs y deja que el usuario seleccione. La regla es: **Chalc sugiere, el usuario decide**.
 La IA nunca es autoridad: si propone algo fuera del catálogo, Chalc lo descarta y cae a una recomendación
 determinística.
@@ -138,8 +139,8 @@ chalc init dotnet mi-svc --architecture clean-architecture --verify   # --verify
 #### Paso a paso (flujo interactivo)
 1. **Stack** — eliges Angular / NestJS / .NET.
 2. **Nombre y carpeta** — dónde se crea el proyecto (`--dir` para fijarla sin preguntar).
-3. **Propuesta** — describes la idea por texto o adjuntas un documento (`--doc` lee Word/PDF/Markdown/TXT;
-   Word/PDF requieren herramientas del sistema — ver la nota en `spec-ia` —; en Windows usa `.md`/`.txt`).
+3. **Propuesta** — describes la idea por texto o adjuntas un documento (`--doc` lee Word/Excel/PDF/Markdown/TXT;
+   solo el `.doc` antiguo y los PDF escaneados necesitan herramientas del sistema — ver la nota en `spec-ia`).
 4. **La IA sugiere la arquitectura** (calibrada a tu propuesta) y, si tiene dudas que cambian la decisión,
    **te las pregunta**. Tú eliges la arquitectura final de la lista. Con `--no-ai` usas solo el análisis determinista.
 5. **Resumen y confirmación** — Chalc te muestra qué va a hacer (incluida la versión del CLI elegida) antes de crear.
@@ -360,7 +361,9 @@ chalc/
 │   ├── net.mjs              fetch con timeout/límites y validación de URLs externas
 │   ├── install.mjs          instalar/vendorizar skills (Git/skills.sh/local)
 │   ├── targetkit.mjs        utilidades compartidas por los targets (principios, arquitectura, bloques)
-│   ├── docread.mjs          extrae texto de Word/PDF/CSV/…
+│   ├── docread.mjs          extrae texto de Word/PDF/Excel/…
+│   ├── ole2.mjs             contenedor OLE2/CFB (Office binario antiguo)
+│   ├── xls.mjs              Excel .xls (BIFF8) → filas, RC4 incluido
 │   ├── sources.mjs          trae la HU de Azure DevOps / Jira / Drive
 │   ├── ── creación de proyectos (`chalc init`) ──
 │   ├── init.mjs             registro de stacks: arquitecturas, scaffolder oficial, versión de CLI por Node
@@ -998,12 +1001,17 @@ Flujo:
 
    | Fuente | Qué te pide |
    |---|---|
-   | Archivo local | ruta a `.md` / `.txt` (recomendado: se leen directo, sin herramientas extra) / Word / PDF / Excel→CSV |
+   | Archivo local | ruta a `.md` / `.txt` (recomendado: se leen directo, sin herramientas extra) / Word / PDF / Excel |
 
    > **Nota (Word/PDF):** `.docx`, `.odt`, `.rtf` y `.html` se leen con Node puro (zip + zlib), así que
    > funcionan igual en Windows, macOS y Linux, sin herramientas extra. Para `.pdf` Chalc usa `pdftotext`
    > si está instalado y, si no, un extractor propio (solo PDFs de texto: uno escaneado necesita OCR).
    > El `.doc` legacy sí requiere LibreOffice (`soffice`) en el PATH, o guárdalo como `.docx`.
+   >
+   > **Nota (Excel):** `.xlsx` y `.xls` también se leen con Node puro — no hace falta exportar a CSV.
+   > Cada hoja sale como `## Hoja: <nombre>` y sus filas separadas por tabuladores. Un `.xls` marcado
+   > "solo lectura recomendada" va cifrado con RC4 usando la constante que Excel escribe sola, y Chalc
+   > lo abre sin preguntar; un libro con contraseña real se reporta como protegido.
    | **Azure DevOps** | URL del work item + PAT → trae título + descripción + criterios |
    | **Jira** | URL del issue + email + token |
    | **Google Drive / URL** | la URL (export a texto) |

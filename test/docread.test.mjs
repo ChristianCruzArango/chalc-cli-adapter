@@ -162,3 +162,67 @@ test('.txt y .md siguen leyéndose directo', async () => {
   const missing = join(dir, 'no-existe.md');
   await assert.rejects(() => readDocument(missing), (e) => e.message === t('docNoFile', missing));
 });
+
+// ─────────────────────────────────────────────────────── hojas de cálculo .xlsx (spec 015)
+
+/** Arma un .xlsx mínimo: libro, relaciones, cadenas compartidas y una hoja. */
+function makeXlsx(sheetName, cellsXml, shared = []) {
+  const si = shared.map((s) => `<si><t>${s}</t></si>`).join('');
+  return makeZip({
+    'xl/workbook.xml': `<workbook><sheets><sheet name="${sheetName}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+    'xl/sharedStrings.xml': `<sst count="${shared.length}">${si}</sst>`,
+    'xl/worksheets/sheet1.xml': `<worksheet><sheetData>${cellsXml}</sheetData></worksheet>`
+  });
+}
+
+test('colIndex traduce la referencia de celda a índice de columna', () => {
+  assert.equal(_internals.colIndex('A1'), 0);
+  assert.equal(_internals.colIndex('Z9'), 25);
+  assert.equal(_internals.colIndex('AA1'), 26);
+  assert.equal(_internals.colIndex('BC12'), 54);
+});
+
+test('.xlsx: lee cadenas compartidas, números y fórmulas con resultado (R1, R7)', async () => {
+  const xlsx = makeXlsx(
+    'Modelo',
+    '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>' +
+      '<row r="2"><c r="A2"><v>7700000</v></c><c r="B2"><f>A2*2</f><v>15400000</v></c></row>',
+    ['Concepto', 'Valor']
+  );
+  const file = join(dir, 'libro.xlsx');
+  writeFileSync(file, xlsx);
+  const text = await readDocument(file);
+  assert.ok(text.includes(t('docSheet', 'Modelo')));
+  assert.match(text, /Concepto\tValor/);
+  assert.match(text, /7700000\t15400000/);
+});
+
+test('.xlsx: la cadena en línea y el booleano se leen (R1)', () => {
+  const xlsx = makeXlsx(
+    'H',
+    '<row r="1"><c r="A1" t="inlineStr"><is><t>en linea</t></is></c><c r="B1" t="b"><v>1</v></c></row>'
+  );
+  const [hoja] = _internals.xlsxToSheets(xlsx);
+  assert.deepEqual(hoja.rows, [['en linea', 'TRUE']]);
+});
+
+test('.xlsx: conserva la columna vacía intermedia (R5)', () => {
+  const xlsx = makeXlsx('H', '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1" t="s"><v>1</v></c></row>', ['A', 'C']);
+  const [hoja] = _internals.xlsxToSheets(xlsx);
+  assert.deepEqual(hoja.rows, [['A', '', 'C']]);
+});
+
+test('.xlsx: omite las hojas sin datos (R6)', () => {
+  const xlsx = makeXlsx('Vacia', '<row r="1"><c r="A1"/></row>');
+  assert.deepEqual(_internals.xlsxToSheets(xlsx), []);
+});
+
+test('.xlsx cifrado se reporta como protegido, no como zip corrupto (R4)', async () => {
+  // Office envuelve el .xlsx cifrado en un contenedor OLE2, no en un ZIP
+  const ole = Buffer.alloc(512);
+  Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]).copy(ole, 0);
+  const file = join(dir, 'cifrado.xlsx');
+  writeFileSync(file, ole);
+  await assert.rejects(() => readDocument(file), (e) => e.message === t('docXlsEncrypted'));
+});

@@ -438,16 +438,46 @@ test('runMutation narrows the scope to the written line ranges', async () => {
   assert.equal(run.calls[0].command, 'npx stryker run --mutate src/precio.ts:10-12,src/precio.ts:40-40');
 });
 
-test('runMutation writes the ranges the way Stryker.NET reads them', async () => {
+// Stryker.NET lee `{a..b}` como un TextSpan de Roslyn: posiciones de CARÁCTER, no líneas. Con números
+// de línea descarta como «Removed by mutate filter» justo los mutantes que la tarea escribió
+// (comprobado con Stryker.NET 4.16.0, spec 017). Roslyn no cuenta el BOM y `\r\n` son dos caracteres.
+test('runMutation writes the ranges the way Stryker.NET reads them: character positions', async () => {
+  const dir = await project();
+  await file(dir, 'src/Precio.cs', '﻿linea1\r\nint x = a ? 1 : 0;\r\nlinea3\r\n');
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate', scopeJoin: 'repeat', scopeSpan: 'braces' }),
+    { root: dir, changed: ['src/Precio.cs'], lines: new Map([['src/Precio.cs', new Set([2])]]), run }
+  );
+
+  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/Precio.cs{8..26}');
+});
+
+// Spec 017 (R3): sin texto no hay posiciones que calcular; se mide de más, que es el lado seguro.
+test('runMutation mutates a whole Stryker.NET file it cannot read', async () => {
   const dir = await project();
   const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
 
   await runMutation(
     config({ scopeFlag: '--mutate', scopeJoin: 'repeat', scopeSpan: 'braces' }),
-    { root: dir, changed: ['src/precio.ts'], lines: new Map([['src/precio.ts', new Set([10, 11])]]), run }
+    { root: dir, changed: ['src/Borrado.cs'], lines: new Map([['src/Borrado.cs', new Set([3])]]), run }
   );
 
-  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/precio.ts{10..11}');
+  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/Borrado.cs');
+});
+
+test('runMutation spans several Stryker.NET lines from the first character to the end of the last one', async () => {
+  const dir = await project();
+  await file(dir, 'src/Precio.cs', 'a\nbb\nccc\ndddd\n');
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate', scopeJoin: 'repeat', scopeSpan: 'braces' }),
+    { root: dir, changed: ['src/Precio.cs'], lines: new Map([['src/Precio.cs', new Set([2, 3])]]), run }
+  );
+
+  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/Precio.cs{2..8}');
 });
 
 // Un archivo NUEVO no sale en ningún diff y no tiene tramos: hay que mutarlo entero, que es

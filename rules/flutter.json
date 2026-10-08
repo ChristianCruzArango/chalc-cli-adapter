@@ -15,7 +15,8 @@
     "flutter-navigation",
     "flutter-async",
     "flutter-testing",
-    "flutter-performance"
+    "flutter-performance",
+    "flutter-store-assets"
   ],
   "mcp": ["dart"],
   "optionalMcp": []

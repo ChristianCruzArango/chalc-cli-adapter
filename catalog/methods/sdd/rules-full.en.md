@@ -21,6 +21,7 @@ you have tests that **fail** (Red).
 - **Traceability:** every requirement, contract, test and task references its `R#`.
 - **Living spec:** if scope changes, update the spec (and data-model/contracts) first.
 - **One thing per file:** interfaces, DTOs, types and each contract in their own file.
+- **Secure code:** BEFORE writing code that touches external input, authentication, sessions, permissions, secrets, storage, network, cryptography or logs, open the `secure-coding` skill (the section for your stack, which points you to the exact reference) and apply it. It is the exception to "skills on demand". The gate blocks the security signals visible on a line and the `seguridad` role reviews OWASP on every task; if it leaves findings, fix them starting with a test that demonstrates the vulnerability.
 
 ### How to work (stay focused)
 - **One task at a time:** before each task, state which `R#` it implements; when done, stop and wait for OK.

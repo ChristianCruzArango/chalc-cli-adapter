@@ -12,6 +12,8 @@
 // Devuelve la acción y los HECHOS que la produjeron, que es lo que R10 necesita para que el motivo
 // cite un dato y no repita el nombre del estado.
 
+import { checklistProblems } from './checklist.mjs';
+
 // Una corrida rápida omite la mutación a propósito, así que su verde no dice nada de la calidad de
 // las pruebas: para el advisor equivale a no tener evidencia (R14).
 // Sin git no hay ramas que comparar, así que esa comprobación no aplica (R11b). El portón resuelve
@@ -64,10 +66,22 @@ const sidesActive = (s) => !!s.flow.sides?.enabled;
 // Lo que impide aplicar la tabla siquiera (R11). Un `tasks.md` sin checkboxes no es una feature
 // terminada: confundirlo con `done` daría por cerrado un trabajo que no empezó.
 function unreadable(s) {
-  const problems = [...(s.problems || [])];
+  const problems = [...(s.problems || []), ...checklistIssues(s)];
   if (!s.tasks.hasTasksFile) problems.push('tasks-missing');
   else if (!s.tasks.total) problems.push('tasks-empty');
   return problems;
+}
+
+// Las entradas vigentes de los roles que declaran checklist y no la sostienen (spec 014, R29). Una
+// checklist que no se sostiene no prueba que se revisó nada, y cerrar la tarea con ella sería pasar
+// por encima de la revisión: el control vuelve a una persona.
+function checklistIssues(s) {
+  const facts = { mobile: !!s.platform?.mobile, scope: s.changed.files || [] };
+  return rolesOf(s).filter((role) => role.checklist).flatMap((role) => {
+    const entry = entryOf(s, role);
+    const found = entry ? checklistProblems(entry, { kind: role.checklist, ...facts }) : [];
+    return found.length ? [`${role.id}: ${found.join('; ')}`] : [];
+  });
 }
 
 // La tabla de R9, en orden. El primero que aplique manda: por eso cada condición solo describe SU
@@ -113,19 +127,22 @@ const TABLE = [
     // no ha empezado, y mandar a arreglar una corrida inexistente confunde a quien lo lea.
     action: 'fix_gate',
     when: (s) => s.gate.exists && s.gate.verdict !== 'pass',
-    facts: (s) => ({ verdict: s.gate.verdict, evidenceDate: s.gate.date })
+    facts: (s) => ({ verdict: s.gate.verdict, evidenceDate: s.gate.date, failed: s.gate.failedStages || [] })
   },
   // Los roles de cadencia `task` cierran la tarea; los de cadencia `feature` cierran la feature. La
   // acción es la misma (`call_role` / `fix_review`) y el rol viaja en los hechos: un vocabulario que
   // creciera con cada rol dejaría de ser un contrato de máquina.
+  //
+  // Todos exigen que HAYA evidencia: un rol revisa lo que el portón midió, y sin corrida no hay nada
+  // encima de lo que revisar. Sin esta guarda, una tarea recién empezada salía mandada a revisión.
   {
     action: 'call_role',
-    when: (s) => hasPendingTask(s) && pendingRole(s, 'task')?.entry === null,
+    when: (s) => s.gate.exists && hasPendingTask(s) && pendingRole(s, 'task')?.entry === null,
     facts: (s) => roleFacts(s, pendingRole(s, 'task'))
   },
   {
     action: 'fix_review',
-    when: (s) => hasPendingTask(s) && !!pendingRole(s, 'task')?.entry,
+    when: (s) => s.gate.exists && hasPendingTask(s) && !!pendingRole(s, 'task')?.entry,
     facts: (s) => roleFacts(s, pendingRole(s, 'task'))
   },
   {
@@ -141,12 +158,12 @@ const TABLE = [
   // Sin tareas pendientes: los roles de feature, y solo entonces, `done`.
   {
     action: 'call_role',
-    when: (s) => pendingRole(s, 'feature')?.entry === null,
+    when: (s) => s.gate.exists && pendingRole(s, 'feature')?.entry === null,
     facts: (s) => roleFacts(s, pendingRole(s, 'feature'))
   },
   {
     action: 'fix_review',
-    when: (s) => !!pendingRole(s, 'feature')?.entry,
+    when: (s) => s.gate.exists && !!pendingRole(s, 'feature')?.entry,
     facts: (s) => roleFacts(s, pendingRole(s, 'feature'))
   },
   {

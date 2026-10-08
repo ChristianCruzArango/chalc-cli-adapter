@@ -1,0 +1,23 @@
+{
+  "id": "seguridad",
+  "order": 5,
+  "cadence": "task",
+  "checklist": "owasp",
+  "summary": {
+    "es": "Revisor de seguridad de cierre de tarea: audita OWASP Top 10 (y MASVS en móvil) sobre los archivos de la tarea, después del portón y antes del revisor. Deja una checklist por categoría y OK o una lista numerada en .chalc/review.md. No modifica ningún otro archivo.",
+    "en": "Task-closing security reviewer: audits the OWASP Top 10 (and MASVS on mobile) over the task's files, after the gate and before the reviewer. Leaves a per-category checklist and OK or a numbered list in .chalc/review.md. Modifies no other file."
+  },
+  "writes": [
+    ".chalc/review.md"
+  ],
+  "forbiddenWrites": [
+    "**"
+  ],
+  "tools": [
+    "Read",
+    "Grep",
+    "Glob",
+    "Bash",
+    "Write"
+  ]
+}

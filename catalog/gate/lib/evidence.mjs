@@ -40,6 +40,7 @@ function statusOf(stage, frame) {
   if (stage.skipped) {
     if (stage.reason === 'fast') return frame.status.skippedFast;
     if (stage.reason === 'tests-failed') return frame.status.skippedDependency;
+    if (stage.reason === 'disabled') return frame.status.skippedDisabled;
     return frame.status.notApplicable;
   }
   return stage.ok ? frame.status.passed : frame.status.failed;
@@ -119,6 +120,18 @@ function findingsSection(stages, frame, lang) {
   ), ''];
 }
 
+// Lo suprimido con `chalc-allow` (spec 014, R12), con su motivo. Sin supresiones no hay sección: un
+// encabezado vacío se aprende a saltar, y entonces tampoco se lee el día que trae algo.
+function allowedSection(stages, frame) {
+  const allowed = stages.flatMap((s) => s.allowed || []);
+  if (!allowed.length) return [];
+
+  return [`## ${frame.allowedBlock.title}`, '', table(
+    [frame.findings.file, frame.findings.line, frame.findings.rule, frame.allowedBlock.reason],
+    allowed.map((a) => [a.file, a.line, a.rule, a.reason])
+  ), ''];
+}
+
 // Arma el informe. `stages` son los resultados tal como los devuelven las etapas; `meta` trae la
 // fecha, la rama, el rol del repo y la spec. Devuelve markdown.
 export function renderEvidence({ stages, meta, lang = 'en' }) {
@@ -155,7 +168,7 @@ export function renderEvidence({ stages, meta, lang = 'en' }) {
     ])
   ), '');
 
-  lines.push(...mutationSection(stages, frame), ...findingsSection(stages, frame, lang));
+  lines.push(...mutationSection(stages, frame), ...findingsSection(stages, frame, lang), ...allowedSection(stages, frame));
   return lines.join('\n');
 }
 
@@ -194,7 +207,8 @@ export function renderState({ stages, meta, fast }) {
       blocked: !!s.blocked,
       skipped: !!s.skipped,
       reason: s.reason || '',
-      findings: (s.findings || []).length
+      findings: (s.findings || []).length,
+      allowed: (s.allowed || []).length
     }))
   };
 }

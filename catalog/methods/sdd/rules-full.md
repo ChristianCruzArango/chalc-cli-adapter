@@ -21,6 +21,7 @@ de tener tests que **fallen** (Red).
 - **Trazabilidad:** cada requisito, contrato, test y tarea referencia su `R#`.
 - **Spec viva:** si el alcance cambia, se actualiza la spec (y data-model/contracts) primero.
 - **Una cosa por archivo:** interfaces, DTOs, types y cada contrato en su propio archivo.
+- **Código seguro:** ANTES de escribir código que toque entrada externa, autenticación, sesiones, permisos, secretos, almacenamiento, red, criptografía o logs, abre la skill `secure-coding` (la sección de tu stack, que te remite a la referencia concreta) y aplícala. Es la excepción a «skills bajo demanda». El portón bloquea las señales de seguridad que se ven en una línea y el rol `seguridad` revisa OWASP en cada tarea; si deja hallazgos, corrige empezando por un test que demuestre la vulnerabilidad.
 
 ### Cómo trabajar (mantén el foco)
 - **Una tarea a la vez:** antes de cada tarea di qué `R#` implementa; al terminarla, párate y espera OK.

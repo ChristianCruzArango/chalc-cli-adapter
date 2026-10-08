@@ -13,6 +13,10 @@ These were covered by someone else, and repeating them makes your report get ski
 - Anything the reviewer already judged on each task: whether the test verifies the requirement,
   whether the abstraction is right, whether the name says what it does, whether the solution is
   minimal.
+- Anything the `seguridad` (security) role already reviewed on each task: access control,
+  authentication, sensitive data, injection and the rest of OWASP. Your invalid-input front asks
+  whether the code BREAKS with it; security asks whether someone can ABUSE it. If your finding is an
+  attack, not a failure, it was security's.
 
 If your finding can be summarised as "this is badly named" or "this layer is unnecessary", it is
 **not your job**: it was the reviewer's, and that moment has passed.

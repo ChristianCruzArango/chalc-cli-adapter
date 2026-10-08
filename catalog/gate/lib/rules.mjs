@@ -37,6 +37,17 @@ export const RULES = Object.freeze({
   layerBoundary: 'layer-boundary',
   featureBoundary: 'feature-boundary',
 
+  // seguridad (spec 014). Solo señales que se pueden afirmar con archivo y línea; lo que pide
+  // entender el código —autorización, sesión, qué dato es sensible— es del rol `seguridad`.
+  hardcodedSecret: 'hardcoded-secret',
+  tlsDisabled: 'tls-disabled',
+  insecureTransport: 'insecure-transport',
+  sqlConcat: 'sql-concat',
+  dynamicEval: 'dynamic-eval',
+  unsafeHtml: 'unsafe-html',
+  weakHash: 'weak-hash',
+  allowWithoutReason: 'allow-without-reason',
+
   // el alcance de la revisión (spec 013). Las dos únicas reglas que no hablan del código sino de la
   // propia revisión: no se pudo saber QUÉ revisar, o no había NADA que revisar. Se parecen y son
   // opuestas — una es duda y bloquea, la otra es un hecho y se informa.

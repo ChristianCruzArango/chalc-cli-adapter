@@ -171,7 +171,7 @@ Arquitecturas disponibles (la IA recomienda la más liviana que encaje; tú deci
 
 Al crear, Chalc genera el proyecto base del scaffolder oficial, las carpetas de la arquitectura con su
 `README.md`, `docs/architecture.md`, `specs/` (método SDD), las skills globales (`minimal-implementation`,
-`clean-code`, `solid-principles`, `modular-architecture`, `mutation-testing` y las de seguridad OWASP
+`clean-code`, `solid-principles`, `modular-architecture`, `mutation-testing`, `secure-coding` y las de seguridad OWASP
 `security-and-hardening`, `security-review`, `code-security`, `security-threat-model`), las skills del stack, los MCP y el target
 IA elegido (`CLAUDE.md`, Cursor, Copilot, Gemini o Codex).
 
@@ -645,6 +645,7 @@ node .chalc/gate.mjs --fast    # omite la mutación (minutos) — NO cierra tare
 | tests | la suite del propio repo | `test.command` |
 | mutación | score ≥ umbral y mutantes supervivientes | el reporte nativo (Stryker, Stryker.NET, mutmut, PIT) |
 | código | una cosa por archivo, largo de archivo/función, parámetros, anidamiento, `catch` vacío, salida de depuración, `any` | archivos cambiados |
+| seguridad | secretos en el código, TLS desactivado, `http://`, SQL concatenado, `eval`, HTML sin escapar, MD5/SHA1 | líneas que escribió la tarea |
 | fronteras | imports que cruzan capas o features | el mismo linter de `chalc verify` |
 | trazabilidad | cada test cambiado cita un `R#` real | `specs/NNN-*/spec.md` |
 | contrato | cada ruta del contrato existe en el código | `contracts/api.md` |
@@ -737,6 +738,51 @@ El mínimo se mide en **líneas significativas**, no en líneas del archivo. Y e
 opinar sobre lo que ahora mide un script: lo suyo pasa a ser la duplicación que ningún script ve —
 dos funciones que hacen lo mismo con otros nombres y otra forma.
 
+### La seguridad se mide y se revisa en cada tarea
+
+El OWASP vivía en skills que el modelo abría «cuando lo ameritara», o sea casi nunca. Ahora entra en
+el ciclo por tres puertas, y ninguna depende de que alguien se acuerde:
+
+**1. Al escribir.** La regla dura «Código seguro» del método obliga a abrir la skill global
+`secure-coding` ANTES de escribir código que toque entrada externa, autenticación, permisos,
+secretos, almacenamiento, red, criptografía o logs. Es corta a propósito: una tabla OWASP Top 10 y,
+para apps móviles (Flutter, Android, iOS), los 8 grupos de MASVS (`flutter_secure_storage`, pinning,
+`usesCleartextTraffic`, deep links, WebView, `--obfuscate`…). Cada categoría remite al archivo
+concreto de las skills de terceros, que no se editan.
+
+**2. En el portón.** La etapa `seguridad` corre después de `duplicación`, solo sobre las líneas que
+escribió la tarea, y bloquea lo que se puede afirmar con archivo y línea en TS/JS, Dart, C#, Java,
+Kotlin y Python:
+
+| Regla | Detecta |
+|---|---|
+| `hardcoded-secret` | claves con forma conocida (AWS, Google, GitHub, Stripe, Slack, clave privada) y nombres de secreto con un literal. Nombra el secreto, nunca copia su valor |
+| `tls-disabled` | `badCertificateCallback => true`, `rejectUnauthorized: false`, `verify=False`… |
+| `insecure-transport` | `http://` a un host que no es local |
+| `sql-concat` | SQL armado con `+` o interpolación en vez de parámetros |
+| `dynamic-eval` | `eval`, `new Function` o un comando de shell armado con datos |
+| `unsafe-html` | `innerHTML`, `dangerouslySetInnerHTML`… con datos sin sanear |
+| `weak-hash` | MD5 y SHA1 |
+
+Un falso positivo se justifica en la misma línea o la anterior, con un motivo de al menos tres
+palabras, y queda listado en `gate.md` bajo «Supresiones de seguridad»:
+
+```
+// chalc-allow: weak-hash — RC4 de Excel exige MD5 por especificación
+```
+
+Apagar la etapa (`"security": { "enabled": false }` en `.chalc/gate.json`) es posible, pero el
+informe lo dice: «desactivada en .chalc/gate.json».
+
+**3. En la revisión.** El rol `seguridad` entra en cada tarea, antes del revisor, y revisa lo que un
+regex no ve: autorización (IDOR), sesión, datos sensibles, validación de entradas, SSRF,
+deserialización. No puede dar `OK` de palabra: deja en `.chalc/review.md` **una línea por categoría**
+(A01–A10, y MASVS en móvil) con `revisado — archivo:línea` o `no aplica — motivo`, y **el advisor
+la comprueba**. Si falta una categoría, si lo revisado no son líneas de la tarea o si un «no aplica»
+no explica por qué, la tarea no cierra: responde `ask_human`. Un hallazgo vuelve como `fix_review`
+con la instrucción de empezar por un test que demuestre la vulnerabilidad, y el revisor comprueba
+después que la corrección ataca la causa.
+
 ### Agente revisor: lo que el portón no puede medir
 
 El portón mide y no opina. A su lado, cada repo recibe un **agente revisor** en el formato de su
@@ -768,11 +814,12 @@ desincronizarse. Y hay una verificación dura: **un rol que no declara nada en `
 recibir una herramienta de escritura**, y `Edit` no se concede nunca — escribir la bitácora propia y
 modificar código ajeno no son el mismo permiso.
 
-Hoy hay dos roles, y no se pisan:
+Hoy hay tres roles, y no se pisan:
 
 | Rol | Cuándo | Qué juzga |
 |---|---|---|
-| `revisor` | cada tarea | calidad del test, abstracción, nombres, mínimo |
+| `seguridad` | cada tarea, antes del revisor | OWASP Top 10 (y MASVS en móvil), con checklist que el advisor comprueba |
+| `revisor` | cada tarea | calidad del test, abstracción, nombres, mínimo; que las correcciones de seguridad sean reales |
 | `endurecedor` | al cerrar la feature | entradas inválidas, rutas de error, casos borde, dependencias que fallan |
 
 La **cadencia** importa por el coste: cada pasada es una llamada a un modelo. Meter al endurecedor en
@@ -782,6 +829,7 @@ que encontraría al final. Se ajusta por repo en `.chalc/gate.json`:
 ```jsonc
 "flow": {
   "roles": [
+    { "id": "seguridad",   "order": 5,  "cadence": "task",    "required": true, "checklist": "owasp" },
     { "id": "revisor",     "order": 10, "cadence": "task",    "required": true },
     { "id": "endurecedor", "order": 20, "cadence": "feature", "required": true }
   ]

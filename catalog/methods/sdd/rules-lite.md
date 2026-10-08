@@ -21,6 +21,7 @@ de tener tests que **fallen** (Red).
 - **Trazabilidad:** toda tarea y todo test apunta a un requisito de la spec.
 - **Spec viva:** si el código o el alcance cambia, actualiza la spec primero.
 - **Una cosa por archivo:** interfaces, DTOs y types en su propio archivo, nunca dentro de servicios/componentes.
+- **Código seguro:** ANTES de escribir código que toque entrada externa, autenticación, sesiones, permisos, secretos, almacenamiento, red, criptografía o logs, abre la skill `secure-coding` (la sección de tu stack, que te remite a la referencia concreta) y aplícala. Es la excepción a «skills bajo demanda». El portón bloquea las señales de seguridad que se ven en una línea y el rol `seguridad` revisa OWASP en cada tarea; si deja hallazgos, corrige empezando por un test que demuestre la vulnerabilidad.
 
 ### Cómo trabajar (mantén el foco)
 - **Una tarea a la vez:** antes de cada tarea di qué `R#` implementa; al terminarla, párate y espera OK.

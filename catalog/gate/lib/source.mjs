@@ -32,9 +32,14 @@ const ASSIGNED = /^\s*(?:export\s+)?(?:const|let|var|final|val)\s+([A-Za-z_$][\w
 // cualquier marco bilingüe —misma estructura, distinto texto— y las reportaba como copias. Para el
 // resto de reglas el defecto sigue siendo vaciarlo todo: ahí lo que importa es no contar las llaves
 // de un texto ni el `console.log` de un comentario.
+//
+// Con `strings: false` los literales se RECORREN igual, solo que sin vaciarlos: si no se recorrieran,
+// el `//` de `"http://…"` se leería como el inicio de un comentario y se llevaría el resto de la
+// línea. La etapa de seguridad (spec 014, R10) busca justo esas URLs dentro de los literales.
 export function blankOut(text, { lineComment = '//', block = true, template = true, strings = true } = {}) {
   const out = text.split('');
-  const blank = (i) => { if (out[i] !== '\n') out[i] = ' '; };
+  const blankComment = (i) => { if (out[i] !== '\n') out[i] = ' '; };
+  const blankLiteral = strings ? blankComment : () => {};
 
   let i = 0;
   while (i < text.length) {
@@ -42,25 +47,25 @@ export function blankOut(text, { lineComment = '//', block = true, template = tr
     if (block && text.startsWith('/*', i)) {
       const end = text.indexOf('*/', i + 2);
       const stop = end < 0 ? text.length : end + 2;
-      for (let j = i; j < stop; j++) blank(j);
+      for (let j = i; j < stop; j++) blankComment(j);
       i = stop;
       continue;
     }
     // comentario de línea
     if (lineComment && text.startsWith(lineComment, i)) {
-      while (i < text.length && text[i] !== '\n') blank(i++);
+      while (i < text.length && text[i] !== '\n') blankComment(i++);
       continue;
     }
     // literal de texto
     const quote = text[i];
-    if (strings && (quote === '"' || quote === "'" || (template && quote === '`'))) {
-      blank(i++);
+    if (quote === '"' || quote === "'" || (template && quote === '`')) {
+      blankLiteral(i++);
       while (i < text.length) {
-        if (text[i] === '\\') { blank(i); blank(i + 1); i += 2; continue; }
-        if (text[i] === quote) { blank(i++); break; }
+        if (text[i] === '\\') { blankLiteral(i); blankLiteral(i + 1); i += 2; continue; }
+        if (text[i] === quote) { blankLiteral(i++); break; }
         // Un literal de una línea sin cerrar no puede tragarse el resto del archivo.
         if (text[i] === '\n' && quote !== '`') break;
-        blank(i++);
+        blankLiteral(i++);
       }
       continue;
     }
@@ -88,9 +93,10 @@ function headerAt(lines, i, ignore) {
   return null;
 }
 
-// Número de parámetros de la firma que empieza en `lines[i]` con `(` en `paren`. Recorre las líneas
-// que hagan falta: una firma repartida en varias líneas es justo la que suele tener demasiados.
-function paramsFrom(lines, i, paren) {
+// La firma que empieza en `lines[i]` con `(` en `paren`: cuántos parámetros tiene y qué viene justo
+// después del paréntesis que la cierra, en esa misma línea. Recorre las líneas que hagan falta: una
+// firma repartida en varias líneas es justo la que suele tener demasiados.
+function signatureFrom(lines, i, paren) {
   let depth = 0;
   let text = '';
   for (let row = i; row < lines.length; row++) {
@@ -100,14 +106,28 @@ function paramsFrom(lines, i, paren) {
       if ('([{<'.includes(c)) depth += 1;
       else if (')]}>'.includes(c)) {
         depth -= 1;
-        if (depth === 0) return count(text);
+        if (depth === 0) return { params: count(text), after: afterClose(lines, row, col) };
       }
       if (depth >= 1 && !(row === i && col === paren)) text += c;
     }
     text += ' ';
   }
-  return count(text);
+  return { params: count(text), after: '' };
 }
+
+// Lo que sigue al paréntesis de cierre: el resto de la línea o, si está vacío, la siguiente línea con
+// algo. Ahí se ve si la firma abre un cuerpo o era una llamada.
+function afterClose(lines, row, col) {
+  const rest = lines[row].slice(col + 1).trim();
+  if (rest) return rest;
+  const next = lines.slice(row + 1).find((line) => line.trim());
+  return next ? `\n${next.trim()}` : '';
+}
+
+// ¿Lo que sigue a la firma abre un cuerpo de función? En Dart: `{`, `=>`, `async`, `async*`, `sync*`,
+// o `:` de una lista de inicializadores en la misma línea. Una llamada sigue con `,`, `;` o `)`, y en
+// un árbol de widgets de Flutter TODO son llamadas (`Text(`, `const SizedBox(`, `return Container(`).
+const DART_BODY = /^(?:\{|=>|async\b|sync\*|:)|^\n(?:\{|=>|async\b|sync\*)/;
 
 // Cuenta parámetros separando por las comas de primer nivel (las de dentro de genéricos, objetos o
 // callbacks no separan nada).
@@ -130,7 +150,10 @@ const delta = (line) => [...line].reduce((d, c) => d + (c === '{' ? 1 : c === '}
 // Recorre las líneas SANITIZADAS y devuelve { functions, deepest }.
 // - `functions`: { line, name, params, length } de cada función que se abre.
 // - `deepest`: la primera línea de cada función donde el anidamiento cruza `maxDepth`.
-export function analyze(lines, { maxDepth = 3, ignore = [] } = {}) {
+//
+// `requireBody` exige que la firma abra un cuerpo para contarla como función. Lo pide Dart, donde la
+// forma `Nombre(` al inicio de línea es casi siempre la llamada a un constructor.
+export function analyze(lines, { maxDepth = 3, ignore = [], requireBody = false } = {}) {
   const functions = [];
   const deepest = [];
   const open = [];        // funciones abiertas, la última es la que anida
@@ -139,9 +162,10 @@ export function analyze(lines, { maxDepth = 3, ignore = [] } = {}) {
 
   for (let i = 0; i < lines.length; i++) {
     const header = headerAt(lines, i, skip);
-    if (header) {
+    const signature = header && signatureFrom(lines, i, header.paren);
+    if (header && (!requireBody || DART_BODY.test(signature.after))) {
       open.push({ line: i + 1, name: header.name, start: depth, opened: false, deep: false });
-      functions.push({ line: i + 1, name: header.name, params: paramsFrom(lines, i, header.paren), length: 0 });
+      functions.push({ line: i + 1, name: header.name, params: signature.params, length: 0 });
     }
 
     depth += delta(lines[i]);
@@ -157,20 +181,24 @@ export function analyze(lines, { maxDepth = 3, ignore = [] } = {}) {
       }
     }
 
-    // Se cierran las funciones cuyo cuerpo terminó. Una función de una sola expresión
-    // (`get x() => y;`) nunca abre llave: se cierra en cuanto la sentencia acaba.
-    while (open.length) {
-      const last = open[open.length - 1];
-      const closedBody = last.opened && depth <= last.start;
-      const oneLiner = !last.opened && depth === last.start && lines[i].trimEnd().endsWith(';');
-      if (!closedBody && !oneLiner) break;
-      open.pop();
-      const fn = functions.find((f) => f.line === last.line && f.name === last.name);
-      if (fn) fn.length = i + 1 - last.line + 1;
-    }
+    closeFinished({ open, functions }, depth, i, lines[i]);
   }
 
   return { functions, deepest };
+}
+
+// Cierra las funciones cuyo cuerpo terminó en la línea `i` y anota su largo. Una función de una sola
+// expresión (`get x() => y;`) nunca abre llave: se cierra en cuanto la sentencia acaba.
+function closeFinished({ open, functions }, depth, i, line) {
+  while (open.length) {
+    const last = open[open.length - 1];
+    const closedBody = last.opened && depth <= last.start;
+    const oneLiner = !last.opened && depth === last.start && line.trimEnd().endsWith(';');
+    if (!closedBody && !oneLiner) return;
+    open.pop();
+    const fn = functions.find((f) => f.line === last.line && f.name === last.name);
+    if (fn) fn.length = i + 1 - last.line + 1;
+  }
 }
 
 // Número de línea (1-based) de una posición dentro del texto.

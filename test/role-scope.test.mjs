@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const AGENTS = join(ROOT, 'catalog', 'agents');
 
-const ROLES = ['revisor', 'endurecedor'];
+const ROLES = ['seguridad', 'revisor', 'endurecedor'];
 const VARIANTS = ['agent.md', 'agent.en.md'];
 
 const promptOf = (role, variant) => readFile(join(AGENTS, role, variant), 'utf8');

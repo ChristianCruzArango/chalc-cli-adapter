@@ -37,6 +37,14 @@ const staleReason = (f, texts) => {
   return texts.aged(f);
 };
 
+// Un hallazgo de seguridad se corrige empezando por un test que reproduzca el ataque (spec 014, R22):
+// sin él, la corrección no se puede comprobar y la vulnerabilidad vuelve con el siguiente cambio.
+const isSecurity = (f) => (f.failed || []).includes('security') || f.role === 'seguridad';
+const SECURITY_FIX = {
+  es: ' Es de seguridad: primero escribe un test que demuestre la vulnerabilidad, y solo después corrige.',
+  en: ' It is a security finding: first write a test that demonstrates the vulnerability, and only then fix it.'
+};
+
 // Marco del advisor. Paridad exacta de claves entre es y en: el test la exige.
 export const FRAME = {
   es: {
@@ -52,10 +60,12 @@ export const FRAME = {
         never: (x) => `Hay ${x.files} archivo(s) cambiado(s) y todavía ninguna evidencia.`,
         aged: (x) => `Tocaste código a las ${at(x.newestMtime)} y la evidencia es de las ${at(x.evidenceDate)}: mide lo de antes.`
       }),
-      fix_gate: (f) => `La evidencia de las ${at(f.evidenceDate)} salió con veredicto \`${f.verdict}\`. Arregla lo que reporta .chalc/gate.md.`,
+      fix_gate: (f) => `La evidencia de las ${at(f.evidenceDate)} salió con veredicto \`${f.verdict}\`. Arregla lo que reporta .chalc/gate.md.`
+        + (isSecurity(f) ? SECURITY_FIX.es : ''),
       call_role: (f) => `El portón aprobó a las ${at(f.evidenceDate)} y falta que pase el agente \`${f.role}\``
         + (f.cadence === 'feature' ? ' antes de dar la feature por terminada.' : ' por esta tarea.'),
-      fix_review: (f) => `El agente \`${f.role}\` dejó ${f.findings} hallazgo(s) a las ${at(f.reviewDate)} en .chalc/review.md.`,
+      fix_review: (f) => `El agente \`${f.role}\` dejó ${f.findings} hallazgo(s) a las ${at(f.reviewDate)} en .chalc/review.md.`
+        + (isSecurity(f) ? SECURITY_FIX.es : ''),
       tick_task: (f) => `Portón verde y revisión limpia: marca «${f.task}» en tasks.md (${f.done + 1}/${f.total}).`
         + (f.waitForApproval ? ' Después PARA y espera mi OK antes de seguir.' : ''),
       work_task: (f) => `Toca «${f.task}» (${f.done}/${f.total} hechas). TDD estricto: test que falla, código mínimo, refactor.`,
@@ -76,10 +86,12 @@ export const FRAME = {
         never: (x) => `There are ${x.files} changed file(s) and no evidence yet.`,
         aged: (x) => `You touched code at ${at(x.newestMtime)} and the evidence is from ${at(x.evidenceDate)}: it measures the old code.`
       }),
-      fix_gate: (f) => `The evidence from ${at(f.evidenceDate)} came out \`${f.verdict}\`. Fix what .chalc/gate.md reports.`,
+      fix_gate: (f) => `The evidence from ${at(f.evidenceDate)} came out \`${f.verdict}\`. Fix what .chalc/gate.md reports.`
+        + (isSecurity(f) ? SECURITY_FIX.en : ''),
       call_role: (f) => `The gate passed at ${at(f.evidenceDate)} and the \`${f.role}\` agent still has to run`
         + (f.cadence === 'feature' ? ' before the feature can be called done.' : ' for this task.'),
-      fix_review: (f) => `The \`${f.role}\` agent left ${f.findings} finding(s) at ${at(f.reviewDate)} in .chalc/review.md.`,
+      fix_review: (f) => `The \`${f.role}\` agent left ${f.findings} finding(s) at ${at(f.reviewDate)} in .chalc/review.md.`
+        + (isSecurity(f) ? SECURITY_FIX.en : ''),
       tick_task: (f) => `Gate green and review clean: tick "${f.task}" in tasks.md (${f.done + 1}/${f.total}).`
         + (f.waitForApproval ? ' Then STOP and wait for my OK before moving on.' : ''),
       work_task: (f) => `Next up: "${f.task}" (${f.done}/${f.total} done). Strict TDD: failing test, minimum code, refactor.`,

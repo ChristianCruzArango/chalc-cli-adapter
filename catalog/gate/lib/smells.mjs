@@ -18,7 +18,8 @@ import { RULES } from './rules.mjs';
 // unidad de diseño sino un índice, y medirlos con el límite de función obliga a partir suites
 // cohesivas —lo que duplica los fixtures y dispara la regla de duplicación—. El límite sigue
 // aplicando a lo que sí es una función: cada caso y cada gancho de preparación.
-const SUITE_BLOCKS = ['describe', 'context', 'suite', 'group', 'xdescribe', 'fdescribe', 'ddescribe'];
+// `main` está por Dart: en `package:test` toda suite vive dentro de un `void main() { … }` obligatorio.
+const SUITE_BLOCKS = ['describe', 'context', 'suite', 'group', 'xdescribe', 'fdescribe', 'ddescribe', 'main'];
 
 // Clases que, por convención, coordinan en vez de modelar: un tipo declarado dentro de una de ellas
 // es un tipo que nadie va a volver a encontrar.
@@ -49,7 +50,10 @@ const DART = {
   publicType: /^\s*(?:abstract\s+|sealed\s+|final\s+|base\s+)*(?:class|mixin|enum|extension|typedef)\s+([A-Za-z]\w*)/,
   typeDecl: null,
   anyType: /(?::\s*dynamic\b|\bas\s+dynamic\b)/,
-  debug: /(?:^|[^.\w])print\s*\(/
+  debug: /(?:^|[^.\w])print\s*\(/,
+  // Un árbol de widgets es una cascada de llamadas con forma `Nombre(`: solo es función lo que abre
+  // un cuerpo.
+  requireBody: true
 };
 
 const CS = {
@@ -100,9 +104,9 @@ const DIALECTS = {
 const dialectFor = (file) => DIALECTS[(file.match(/\.[^./\\]+$/) || [''])[0].toLowerCase()] || null;
 
 // Un hallazgo es archivo, línea, regla y datos. La frase la arma el marco bilingüe (`i18n.mjs`).
-// `until` es la última línea que abarca cuando el hallazgo es de un tramo y no de un punto; sirve
-// para saber si la tarea escribió dentro.
-const finding = (file, line, rule, data = {}, until = line) => ({ file, line, until, rule, data });
+// `until` es la última línea que abarca: la misma que `line` para un punto, y el final de la función
+// para los hallazgos de tramo (`functionSmells`). Sirve para saber si la tarea escribió dentro.
+const finding = (file, line, rule, data = {}) => ({ file, line, until: line, rule, data });
 
 // ── reglas ────────────────────────────────────────────────────────────────────────────────────
 
@@ -132,8 +136,23 @@ function typeInService(file, text, lines, dialect) {
   return found;
 }
 
+// Lo que sobra en UNA función: largo y parámetros. El tramo va en el hallazgo porque una función larga
+// es de quien le metió las líneas que la alargaron, aunque su cabecera lleve años ahí. Sin él, el
+// hallazgo se atribuiría solo a quien tocara la primera línea.
+function functionSmells(file, fn, limits) {
+  const span = fn.line + Math.max(0, fn.length - 1);
+  const found = [];
+  if (fn.length > limits.maxFunctionLines) {
+    found.push(finding(file, fn.line, RULES.functionTooLong, { name: fn.name, lines: fn.length, limit: limits.maxFunctionLines }));
+  }
+  if (fn.params > limits.maxParams) {
+    found.push(finding(file, fn.line, RULES.tooManyParams, { name: fn.name, params: fn.params, limit: limits.maxParams }));
+  }
+  return found.map((f) => ({ ...f, until: span }));
+}
+
 // Smells de tamaño y forma. Solo donde el análisis estructural es fiable.
-function measurable(file, text, lines, dialect, limits) {
+function measurable({ file, text, lines, dialect }, limits) {
   const found = [];
 
   if (lines.length > limits.maxFileLines) {
@@ -143,21 +162,11 @@ function measurable(file, text, lines, dialect, limits) {
   if (dialect.structural) {
     const { functions, deepest } = analyze(lines, {
       maxDepth: limits.maxDepth,
-      ignore: isTestFile(file) ? SUITE_BLOCKS : []
+      ignore: isTestFile(file) ? SUITE_BLOCKS : [],
+      requireBody: !!dialect.requireBody
     });
 
-    for (const fn of functions) {
-      // El tramo va en el hallazgo porque una función larga es de quien le metió las líneas que la
-      // alargaron, aunque su cabecera lleve años ahí. Sin él, el hallazgo se atribuiría solo a
-      // quien tocara la primera línea.
-      const span = fn.line + Math.max(0, fn.length - 1);
-      if (fn.length > limits.maxFunctionLines) {
-        found.push(finding(file, fn.line, RULES.functionTooLong, { name: fn.name, lines: fn.length, limit: limits.maxFunctionLines }, span));
-      }
-      if (fn.params > limits.maxParams) {
-        found.push(finding(file, fn.line, RULES.tooManyParams, { name: fn.name, params: fn.params, limit: limits.maxParams }, span));
-      }
-    }
+    for (const fn of functions) found.push(...functionSmells(file, fn, limits));
 
     for (const d of deepest) {
       found.push(finding(file, d.line, RULES.deepNesting, { name: d.name, depth: d.depth, limit: limits.maxDepth }));
@@ -193,7 +202,7 @@ export function lintSource(text, { file, limits, changedLines = null, removedLin
   return [
     ...onePerFile(file, lines, dialect),
     ...typeInService(file, clean, lines, dialect),
-    ...measurable(file, clean, lines, dialect, limits)
+    ...measurable({ file, text: clean, lines, dialect }, limits)
   ]
     .filter((found) => belongsToTask(found, scope))
     .sort((a, b) => a.line - b.line);

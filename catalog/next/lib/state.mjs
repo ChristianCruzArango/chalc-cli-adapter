@@ -13,7 +13,7 @@
 // Un estado de una versión anterior de chalc puede no traer `fast`, y asumirlo `false` cerraría
 // tareas con corridas que jamás midieron mutación.
 
-const NONE = { exists: false, date: 0, verdict: 'unknown', fast: true, closesTask: false, branch: '', spec: '', role: '' };
+const NONE = { exists: false, date: 0, verdict: 'unknown', fast: true, closesTask: false, branch: '', spec: '', role: '', failedStages: [] };
 
 const VERDICTS = new Set(['pass', 'fail', 'blocked']);
 
@@ -37,6 +37,13 @@ export function parseGateState(text) {
     closesTask: raw.closesTask === true,
     branch: String(raw.branch ?? ''),
     spec: String(raw.spec ?? ''),
-    role: String(raw.role ?? '')
+    role: String(raw.role ?? ''),
+    failedStages: failedStagesOf(raw.stages)
   };
 }
+
+// Las etapas que corrieron y no pasaron (spec 014, R22). Con ellas el motivo de `fix_gate` puede decir
+// QUÉ arreglar primero; un estado de una versión anterior, sin etapas, no tiene ninguna.
+const failedStagesOf = (stages) => (Array.isArray(stages) ? stages : [])
+  .filter((s) => isPlainObject(s) && !s.ok && !s.skipped)
+  .map((s) => String(s.stage ?? ''));

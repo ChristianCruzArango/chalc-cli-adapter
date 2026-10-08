@@ -22,13 +22,13 @@ export const FRAME = {
       title: 'Etapas',
       name: 'Etapa', result: 'Resultado', command: 'Comando', code: 'Salida', duration: 'Duración',
       scope: 'alcance',
-      tests: 'tests', mutation: 'mutación', smells: 'código', duplication: 'duplicación', boundaries: 'fronteras',
+      tests: 'tests', mutation: 'mutación', smells: 'código', duplication: 'duplicación', security: 'seguridad', boundaries: 'fronteras',
       traceability: 'trazabilidad', contract: 'contrato'
     },
     status: {
       passed: 'pasó', failed: 'no pasa', blocked: 'bloqueada',
       skippedFast: 'omitida por --fast', skippedDependency: 'no ejecutada: los tests fallaron',
-      notApplicable: 'no aplica en este repo'
+      notApplicable: 'no aplica en este repo', skippedDisabled: 'desactivada en .chalc/gate.json'
     },
     mutation: {
       title: 'Mutación',
@@ -36,6 +36,8 @@ export const FRAME = {
       file: 'Archivo', line: 'Línea', mutator: 'Mutador', state: 'Estado'
     },
     findings: { title: 'Hallazgos', file: 'Archivo', line: 'Línea', rule: 'Regla', detail: 'Detalle', none: 'Sin hallazgos.' },
+    // Lo suprimido con `chalc-allow` (spec 014, R12): no cuenta como hallazgo, pero se muestra con su motivo.
+    allowedBlock: { title: 'Supresiones de seguridad (chalc-allow)', reason: 'Motivo' },
     // El alcance (spec 013, R7). `source` se traduce porque el informe lo lee una persona: "registro"
     // y "base de la rama" son dos revisiones muy distintas con el mismo aspecto.
     scopeBlock: {
@@ -65,13 +67,13 @@ export const FRAME = {
       title: 'Stages',
       name: 'Stage', result: 'Result', command: 'Command', code: 'Exit', duration: 'Duration',
       scope: 'scope',
-      tests: 'tests', mutation: 'mutation', smells: 'code', duplication: 'duplication', boundaries: 'boundaries',
+      tests: 'tests', mutation: 'mutation', smells: 'code', duplication: 'duplication', security: 'security', boundaries: 'boundaries',
       traceability: 'traceability', contract: 'contract'
     },
     status: {
       passed: 'passed', failed: 'failed', blocked: 'blocked',
       skippedFast: 'skipped by --fast', skippedDependency: 'not run: the tests failed',
-      notApplicable: 'not applicable in this repo'
+      notApplicable: 'not applicable in this repo', skippedDisabled: 'disabled in .chalc/gate.json'
     },
     mutation: {
       title: 'Mutation',
@@ -79,6 +81,7 @@ export const FRAME = {
       file: 'File', line: 'Line', mutator: 'Mutator', state: 'State'
     },
     findings: { title: 'Findings', file: 'File', line: 'Line', rule: 'Rule', detail: 'Detail', none: 'No findings.' },
+    allowedBlock: { title: 'Security suppressions (chalc-allow)', reason: 'Reason' },
     scopeBlock: {
       title: 'Task scope',
       source: 'Source', from: 'Since', files: 'Files reviewed',
@@ -132,6 +135,15 @@ export const MESSAGES = {
 
     [RULES.duplication]: (d) => `${d.lines} líneas idénticas a "${d.other}:${d.otherLine}"`
       + `${d.capped ? ' (el recorrido se acotó: puede haber más)' : ''}`,
+    [RULES.hardcodedSecret]: () => 'secreto escrito en el código: léelo de una variable de entorno o de la configuración segura, y rótalo si ya llegó a un commit',
+    [RULES.tlsDisabled]: () => 'verificación TLS desactivada: acepta cualquier certificado y abre la puerta a un intermediario; valida el certificado o fija el del servidor',
+    [RULES.insecureTransport]: (d) => `conexión sin cifrar (${d.match}): usa https`,
+    [RULES.sqlConcat]: () => 'consulta SQL armada con texto: usa parámetros enlazados (?, :nombre) en vez de concatenar o interpolar valores',
+    [RULES.dynamicEval]: () => 'ejecución de código dinámico con datos variables: quien controle esos datos ejecuta su propio código; usa una tabla de operaciones permitidas',
+    [RULES.unsafeHtml]: () => 'HTML escrito sin escapar: un dato con <script> se ejecuta; usa textContent o escapa el valor',
+    [RULES.weakHash]: (d) => `hash débil (${d.match}): para integridad usa SHA-256; para contraseñas, bcrypt o argon2`,
+    [RULES.allowWithoutReason]: (d) => `"chalc-allow: ${d.rule}" sin motivo: escribe por qué es seguro (chalc-allow: ${d.rule} — <motivo>) o corrige el hallazgo`,
+
     [RULES.layerBoundary]: (d) => `"${d.from}" importa "${d.to}" (${d.import}): rompe la dirección de las capas`,
     [RULES.featureBoundary]: (d) => `"${d.from}" importa "${d.to}" (${d.import}): los features no se importan entre sí`,
 
@@ -165,6 +177,15 @@ export const MESSAGES = {
 
     [RULES.duplication]: (d) => `${d.lines} lines identical to "${d.other}:${d.otherLine}"`
       + `${d.capped ? ' (the scan was capped: there may be more)' : ''}`,
+    [RULES.hardcodedSecret]: () => 'secret written in the code: read it from an environment variable or secure configuration, and rotate it if it already reached a commit',
+    [RULES.tlsDisabled]: () => 'TLS verification disabled: it accepts any certificate and lets a man in the middle in; validate the certificate or pin the server one',
+    [RULES.insecureTransport]: (d) => `unencrypted connection (${d.match}): use https`,
+    [RULES.sqlConcat]: () => 'SQL query built from text: use bound parameters (?, :name) instead of concatenating or interpolating values',
+    [RULES.dynamicEval]: () => 'dynamic code execution with variable data: whoever controls that data runs their own code; use a table of allowed operations',
+    [RULES.unsafeHtml]: () => 'HTML written unescaped: a value carrying <script> runs; use textContent or escape the value',
+    [RULES.weakHash]: (d) => `weak hash (${d.match}): use SHA-256 for integrity; bcrypt or argon2 for passwords`,
+    [RULES.allowWithoutReason]: (d) => `"chalc-allow: ${d.rule}" with no reason: write why it is safe (chalc-allow: ${d.rule} — <reason>) or fix the finding`,
+
     [RULES.layerBoundary]: (d) => `"${d.from}" imports "${d.to}" (${d.import}): it breaks the direction of the layers`,
     [RULES.featureBoundary]: (d) => `"${d.from}" imports "${d.to}" (${d.import}): features do not import each other`,
 

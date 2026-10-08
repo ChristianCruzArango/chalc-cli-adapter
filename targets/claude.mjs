@@ -16,7 +16,7 @@ export const label = 'Claude Code';
 export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun , tools = null, roles = [] }) {
   const plan = [];
   for (const s of skills) plan.push(`skill     .claude/skills/${s}`);
-  plan.push('agent     .claude/agents/revisor.md');
+  for (const role of roles) plan.push(`agent     .claude/agents/${role.id}.md`);
   plan.push('doc       .chalc/gate-hook.md  (hook opcional, para pegar a mano)');
   for (const m of mcps) plan.push(`mcp       .mcp.json  ::  ${m.id}`);
   for (const me of methods) plan.push(`método    ${me.id}${me.mode && me.mode !== 'default' ? ` (${me.mode})` : ''}  (scaffold + reglas)`);

@@ -25,7 +25,7 @@ const headingsOf = (markdown) => String(markdown ?? '').split(/\r?\n/).filter((l
 //
 // `FINDINGS: 0` es una contradicción del contrato: sin hallazgos, el veredicto es `OK`. Aceptar las
 // dos formas dejaría el cierre a merced de cómo el modelo decidió redactarlo esta vez.
-function parseEntry(heading) {
+function parseEntry(heading, body = []) {
   const match = ENTRY.exec(heading);
   if (!match) return null;
 
@@ -33,14 +33,47 @@ function parseEntry(heading) {
   const findings = verdict === 'OK' ? 0 : Number(verdict.replace(/\D+/g, ''));
   if (verdict !== 'OK' && findings === 0) return null;
 
-  return { date: Date.parse(iso), commit, role, ok: verdict === 'OK', findings };
+  return { date: Date.parse(iso), commit, role, ok: verdict === 'OK', findings, ...bodyFacts(body) };
+}
+
+// Una línea de checklist (spec 014, R28): `- A01 <nombre>: revisado — archivo:línea, …` o
+// `- A02 <nombre>: no aplica — <motivo>`. Las palabras se aceptan en los dos idiomas del spec; el id
+// de la categoría no se traduce.
+const CHECK = /^\s*[-*]\s*(A\d{2}|MASVS-[A-Z]+)\b[^:\n]*:\s*(revisado|reviewed|no aplica|not applicable|n\/a)\s*(?:—|--|-)?\s*(.*)$/i;
+const REVIEWED = /^(?:revisado|reviewed)$/i;
+
+// Lo que dice el cuerpo de una entrada: su checklist y cuántos puntos numerados trae. Lo lee todo
+// rol; quién DEBE traer checklist lo decide su contrato, no este lector.
+function bodyFacts(body) {
+  const checklist = {};
+  let numbered = 0;
+  for (const line of body) {
+    if (/^\s*\d+\.\s/.test(line)) numbered += 1;
+    const m = CHECK.exec(line);
+    if (!m) continue;
+    const [, id, word, rest] = m;
+    checklist[id.toUpperCase()] = REVIEWED.test(word)
+      ? { status: 'reviewed', refs: rest.match(/[\w./\\-]+:\d+/g) || [] }
+      : { status: 'na', reason: rest.trim() };
+  }
+  return { checklist, numbered };
+}
+
+// Cada encabezado `##` con las líneas que tiene debajo, hasta el siguiente.
+function sectionsOf(markdown) {
+  const sections = [];
+  for (const line of String(markdown ?? '').split(/\r?\n/)) {
+    if (/^##[^#]/.test(line)) sections.push({ heading: line, body: [] });
+    else if (sections.length) sections.at(-1).body.push(line);
+  }
+  return sections;
 }
 
 // TODAS las entradas legibles. Con varios roles ya no basta la última: cada rol se cubre con la suya
 // (spec 009, R8), y la del endurecedor no dice nada del revisor. Las que no se entienden se saltan —
 // aquí no invalidan la lectura entera, porque una entrada rota de hace tres tareas no debe borrar la
 // buena de hoy.
-export const allReviews = (markdown) => headingsOf(markdown).map(parseEntry).filter(Boolean);
+export const allReviews = (markdown) => sectionsOf(markdown).map((s) => parseEntry(s.heading, s.body)).filter(Boolean);
 
 // La última entrada. Si la última línea `##` no cumple el formato, la lectura entera se invalida:
 // rescatar la anterior cerraría la tarea con una revisión que miró otro código.

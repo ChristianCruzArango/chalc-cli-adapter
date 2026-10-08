@@ -20,6 +20,9 @@ const DEFAULTS = {
     // positivos, y un linter que se equivoca se acaba apagando entero.
     duplication: { enabled: true, minLines: 6, maxFiles: 4000 }
   },
+  // Seguridad (spec 014). Encendida por defecto: un repo equipado antes de esta spec no trae la
+  // clave, y apagarla tiene que ser una decisión escrita, no el efecto de una config vieja.
+  security: { enabled: true },
   spec: { dir: 'specs' },
   // Cómo se TRABAJA, frente al resto de la config, que dice cómo se MIDE (spec 008, R17). Comparte
   // archivo porque es el mismo ciclo y porque la fusión de R16 ya está resuelta aquí. Los defaults

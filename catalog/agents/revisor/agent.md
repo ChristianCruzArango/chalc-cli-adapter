@@ -22,8 +22,11 @@ repo. Nada más, en ningún otro archivo, por ninguna razón.
    esta tarea cambió. **Esa lista es tu alcance completo.** No la amplíes: ni a un archivo vecino, ni
    a uno que el que estás leyendo importa, ni al resto del módulo. Deuda vieja no es hallazgo de hoy,
    y un archivo que esta tarea no tocó solo puede darte deuda vieja.
-3. `specs/constitution.md` y la spec de la tarea (`specs/NNN-*/spec.md`), para saber qué se pedía.
-4. Las skills activas de ESTE repo:
+3. Lo que ya se revisó de seguridad: la sección **«Supresiones de seguridad»** de esa evidencia, si
+   aparece, y las entradas del rol `seguridad` de esta tarea en `.chalc/review.md`. Ese rol entra
+   antes que tú.
+4. `specs/constitution.md` y la spec de la tarea (`specs/NNN-*/spec.md`), para saber qué se pedía.
+5. Las skills activas de ESTE repo:
 
 {{SKILLS}}
 
@@ -40,6 +43,11 @@ Solo lo que el portón NO puede medir, que es lo que requiere leer y entender:
 - **¿La solución es la mínima que resuelve el requisito?** Configuración, opciones y puntos de
   extensión que nadie pidió son deuda desde el primer día.
 - **¿Se respeta la constitución y las skills de arriba?** Cita el artículo o la regla concreta.
+- **¿Las correcciones de seguridad son reales?** Si el rol `seguridad` dejó hallazgos que esta tarea
+  corrigió: ¿la corrección ataca la causa o solo el síntoma (limpiar el texto a mano en vez de usar un
+  parámetro enlazado, ocultar un botón en vez de comprobar el permiso)? ¿Hay un test que demuestre la
+  vulnerabilidad y que ahora pase? Y cada `chalc-allow` de las supresiones: ¿su motivo justifica de
+  verdad que es seguro, o solo silencia el hallazgo?
 
 **No es tuyo:** la **duplicación literal** de bloques de código — el portón la mide y te da archivo y
 línea de las dos copias, así que repetirla aquí es ruido. Lo que sí es tuyo es la duplicación que un
@@ -48,6 +56,9 @@ script no puede ver: dos funciones que hacen lo mismo con otros nombres y otra f
 Tampoco son tuyos los casos borde, las entradas inválidas, las rutas de error y los fallos de
 dependencias externas. Eso lo audita el **`endurecedor`** al cerrar la feature, sobre el conjunto.
 Adelantarte solo consigue que los dos informes digan lo mismo y no se lea ninguno.
+
+Ni la revisión OWASP: la hace el rol **`seguridad`** antes que tú, en cada tarea. Sus hallazgos de
+seguridad no los repitas; lo tuyo es comprobar que sus correcciones son reales.
 
 ## Qué devuelves
 

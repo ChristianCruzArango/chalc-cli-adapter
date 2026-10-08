@@ -19,6 +19,7 @@ import { frameOf, messageOf } from './lib/i18n.mjs';
 import { lintBoundariesIn } from './lib/boundaries.mjs';
 import { lintChanged } from './lib/smells.mjs';
 import { lintDuplication } from './lib/duplication.mjs';
+import { lintSecurity } from './lib/security.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { newestSpec } from './lib/spec.mjs';
 import { renderEvidence, renderState, verdictOf, writeEvidence, writeState } from './lib/evidence.mjs';
@@ -47,16 +48,11 @@ const timed = async (fn) => {
 // ejecutar herramientas reales. Devuelve { code, verdict, closesTask, stages, evidence }.
 export async function runGate({ root = process.cwd(), fast = false, run = runCommand, changed = null } = {}) {
   const { config, error } = await loadConfig(root);
-  const lang = config.language || 'en';
+  const out = { root, lang: config.language || 'en', fast };
 
   // Sin config el portón no sabe qué comprobar. Eso es un bloqueo, no "todo por defecto": lo
   // contrario sería aprobar una tarea por no encontrar un archivo.
-  if (error) {
-    return finish(root, lang, [{
-      stage: 'tests', ok: false, blocked: true, reason: 'no-config', command: '', code: null, ms: 0,
-      findings: [{ file: '', line: 0, rule: RULES.noTestCommand, data: { detail: error } }]
-    }], { branch: await currentBranch(root), role: '', spec: '' }, fast);
-  }
+  if (error) return finish(out, [noConfigStage(error)], { branch: await currentBranch(root), role: '', spec: '' });
 
   // El alcance: qué archivos revisa esta corrida (spec 013). Una lista inyectada ES un alcance
   // determinado —los tests del portón la usan para no depender de git— y se respeta tal cual.
@@ -69,7 +65,7 @@ export async function runGate({ root = process.cwd(), fast = false, run = runCom
   // Sin saber QUÉ revisar no se revisa (R4b). La salida histórica era el árbol de fuentes entero, y
   // eso no es revisar de más: es cambiar de pregunta sin avisar, y enterrar la tarea de hoy bajo la
   // deuda de tres años. Es un bloqueo —"no pude comprobarlo"—, no un fallo.
-  if (scope.undetermined) return finish(root, lang, [scopeStage(RULES.scopeUndetermined, {}, true)], meta, fast);
+  if (scope.undetermined) return finish(out, [scopeStage(RULES.scopeUndetermined, {}, true)], meta);
 
   // Sabiendo que no cambió nada, se dice y no se aprueba (R13). "No hay nada que revisar" y "está
   // todo bien" no son lo mismo: confundirlos cierra tareas sin una línea de código medida.
@@ -77,32 +73,49 @@ export async function runGate({ root = process.cwd(), fast = false, run = runCom
   // Aquí caen también las tareas cuyo único cambio no es fuente —solo documentación, solo config— y
   // las que solo borran archivos. No es un descuido: el portón mide código, y de esas no tiene nada
   // que medir. El informe dice exactamente eso, que es lo que permite decidir a quien lo lea.
-  if (!scope.files.length) return finish(root, lang, [scopeStage(RULES.scopeEmpty, { from: scope.from }, false)], meta, fast);
+  if (!scope.files.length) return finish(out, [scopeStage(RULES.scopeEmpty, { from: scope.from }, false)], meta);
 
-  const files = scope.files;
-  const stages = [];
+  const task = { root, files: scope.files, scope };
+  const stages = [...await executedStages(config, { ...task, run, fast }), ...await staticStages(config, task)];
+  return finish(out, stages, meta);
+}
 
+// La config que falta o no se puede leer, como etapa bloqueada.
+const noConfigStage = (error) => ({
+  stage: 'tests', ok: false, blocked: true, reason: 'no-config', command: '', code: null, ms: 0,
+  findings: [{ file: '', line: 0, rule: RULES.noTestCommand, data: { detail: error } }]
+});
+
+// Las etapas que ejecutan herramientas del repo: tests y mutación.
+async function executedStages(config, { root, files, scope, run, fast }) {
   // 1. Tests. Todo lo demás depende de esto: mutar o revisar estilo sobre una suite en rojo es
   //    gastar minutos en un informe que nadie va a leer.
   const tests = await runTests(config, { root, run });
-  stages.push(tests);
 
   // 2. Mutación. Se omite por `--fast` (R11) o porque los tests fallaron (R10), y en ambos casos el
   //    informe dice CUÁL de los dos fue.
-  if (fast) stages.push(skipped('mutation', 'fast'));
-  else if (!tests.ok) stages.push(skipped('mutation', 'tests-failed'));
-  else stages.push(await runMutation(config, { root, changed: files, lines: scope.lines, run }));
+  if (fast) return [tests, skipped('mutation', 'fast')];
+  if (!tests.ok) return [tests, skipped('mutation', 'tests-failed')];
+  return [tests, await runMutation(config, { root, changed: files, lines: scope.lines, run })];
+}
 
-  // 3. Etapas estáticas: baratas, siempre corren, y son las que dan hallazgos accionables aunque
-  //    todo lo demás esté bloqueado.
+// 3. Etapas estáticas: baratas, siempre corren, y son las que dan hallazgos accionables aunque todo
+//    lo demás esté bloqueado. El orden va de más local a más global: primero el archivo, luego el
+//    repo, luego las fronteras.
+async function staticStages(config, { root, files, scope }) {
+  const stages = [];
+
   const smells = await timed(() => lintChanged(files, { root, limits: config.lint, lines: scope.lines, removed: scope.removed }));
   stages.push(staticStage('smells', smells.value, smells.ms));
 
   // Duplicación (spec 012): mira el árbol entero, pero solo reporta lo que tiene una punta en algo
-  // que la tarea tocó. Va junto a `smells` porque las dos leen el mismo texto; el informe queda de
-  // más local a más global — primero el archivo, luego el repo, luego las fronteras.
+  // que la tarea tocó. Va junto a `smells` porque las dos leen el mismo texto.
   const duplication = await timed(() => lintDuplication(root, files, config.lint?.duplication, scope.lines));
   stages.push(staticStage('duplication', duplication.value, duplication.ms));
+
+  // Seguridad (spec 014): las señales que se pueden afirmar con archivo y línea. Apagarla es una
+  // decisión escrita en gate.json, y aun así el informe dice que se apagó (R14).
+  stages.push(await securityStage(config, { root, files, lines: scope.lines }));
 
   const boundaries = await timed(() => lintBoundariesIn(root, files));
   stages.push(staticStage('boundaries', boundaries.value.map(asFinding), boundaries.ms));
@@ -115,7 +128,15 @@ export async function runGate({ root = process.cwd(), fast = false, run = runCom
   }));
   stages.push(staticStage('contract', contract.value, contract.ms));
 
-  return finish(root, lang, stages, meta, fast);
+  return stages;
+}
+
+// La etapa de seguridad. Lleva además lo suprimido con `chalc-allow`, que no cuenta como hallazgo
+// pero la evidencia tiene que mostrar: una supresión que nadie ve es una etapa apagada por partes.
+async function securityStage(config, { root, files, lines }) {
+  if (config.security?.enabled === false) return skipped('security', 'disabled');
+  const security = await timed(() => lintSecurity(files, { root, lines }));
+  return { ...staticStage('security', security.value.findings, security.ms), allowed: security.value.allowed };
 }
 
 // La etapa que reporta un alcance con el que no se puede trabajar. No cuelga de ningún archivo —el
@@ -137,7 +158,8 @@ const asFinding = (v) => ({
 // Escribe la evidencia y decide el código de salida. El veredicto sale de `verdictOf`, el MISMO
 // cálculo que titula el informe: si el archivo dijera "APROBADO" y el proceso saliera con 1, la
 // evidencia dejaría de serlo.
-async function finish(root, lang, stages, meta, fast) {
+// `out` dice dónde y cómo se escribe: { root, lang, fast }.
+async function finish({ root, lang, fast }, stages, meta) {
   const verdict = verdictOf(stages);
   // Una corrida rápida no cierra una tarea aunque salga verde: no se midió la calidad de las
   // pruebas, que es justo lo que más cuesta y lo que más se omite.
@@ -171,16 +193,19 @@ async function sealTask(root) {
 }
 
 // Resumen por consola. La evidencia completa está en el archivo; esto es para no tener que abrirlo.
+// Va a stdout porque es la salida de la CLI, no depuración.
+const say = (text) => process.stdout.write(`${text}\n`);
+
 function report(result, lang) {
   const frame = frameOf(lang);
-  console.log(`\n${frame.title}: ${frame.verdict[result.verdict]}  ·  ${result.evidence}`);
+  say(`\n${frame.title}: ${frame.verdict[result.verdict]}  ·  ${result.evidence}`);
   for (const stage of result.stages) {
     for (const finding of stage.findings) {
       const where = finding.file ? `${finding.file}:${finding.line}` : frame.stages[stage.stage] || stage.stage;
-      console.log(`  ${where} — ${messageOf(finding.rule, finding.data, lang)}`);
+      say(`  ${where} — ${messageOf(finding.rule, finding.data, lang)}`);
     }
   }
-  if (!result.closesTask && result.verdict === 'pass') console.log(`\n${frame.fast}`);
+  if (!result.closesTask && result.verdict === 'pass') say(`\n${frame.fast}`);
 }
 
 // Entrada de línea de comandos. Solo corre cuando se invoca el archivo, no al importarlo desde los

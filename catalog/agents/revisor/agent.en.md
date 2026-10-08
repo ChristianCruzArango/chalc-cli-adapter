@@ -22,8 +22,11 @@ repo code. Nothing else, in no other file, for no reason.
    list is your entire scope.** Do not widen it: not to a neighbouring file, not to one the file
    you are reading imports, not to the rest of the module. Old debt is not a finding of today, and a
    file this task did not touch can only give you old debt.
-3. `specs/constitution.md` and the task's spec (`specs/NNN-*/spec.md`), so you know what was asked for.
-4. The active skills of THIS repo:
+3. What security has already reviewed: the **"Security suppressions"** section of that evidence, if
+   present, and this task's `seguridad` role entries in `.chalc/review.md`. That role comes in before
+   you.
+4. `specs/constitution.md` and the task's spec (`specs/NNN-*/spec.md`), so you know what was asked for.
+5. The active skills of THIS repo:
 
 {{SKILLS}}
 
@@ -40,6 +43,11 @@ Only what the gate cannot measure — the part that requires reading and underst
 - **Is this the smallest solution that meets the requirement?** Configuration, options and extension
   points nobody asked for are debt from day one.
 - **Is the constitution honoured, and the skills above?** Cite the specific article or rule.
+- **Are the security fixes real?** If the `seguridad` role left findings this task fixed: does the fix
+  attack the cause or only the symptom (cleaning the text by hand instead of a bound parameter, hiding
+  a button instead of checking the permission)? Is there a test that demonstrates the vulnerability
+  and now passes? And each `chalc-allow` among the suppressions: does its reason really justify that
+  it is safe, or does it just silence the finding?
 
 **Not yours:** **literal duplication** of code blocks — the gate measures it and gives you the file
 and line of both copies, so repeating it here is noise. What IS yours is the duplication a script
@@ -48,6 +56,9 @@ cannot see: two functions doing the same thing with different names and a differ
 Also not yours: edge cases, invalid input, error paths and external dependency failures. The
 **`endurecedor`** (hardener) audits those when the feature closes, over the whole set. Getting ahead
 of it only makes both reports say the same thing, and then neither gets read.
+
+Nor the OWASP review: the **`seguridad`** (security) role does it before you, on every task.
+Do not repeat its security findings; yours is to check that its fixes are real.
 
 ## What you return
 

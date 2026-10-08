@@ -11,6 +11,10 @@ Estas cosas ya las cubrió otro, y repetirlas hace que tu informe se lea en diag
   opines sobre ellas**: no las calculaste tú.
 - Lo que el revisor ya juzgó en cada tarea: si el test comprueba el requisito, si la abstracción es
   la correcta, si el nombre dice lo que hace, si la solución es la mínima.
+- Lo que el rol `seguridad` ya revisó en cada tarea: control de acceso, autenticación, datos
+  sensibles, inyección y el resto del OWASP. Tu frente de entradas inválidas pregunta si el código se
+  ROMPE con ellas; el de seguridad, si alguien puede ABUSAR de él. Si tu hallazgo es un ataque, no un
+  fallo, era de seguridad.
 
 Si tu hallazgo se puede resumir como "esto está mal nombrado" o "esta capa sobra", **no es tuyo**:
 era del revisor y su momento ya pasó.

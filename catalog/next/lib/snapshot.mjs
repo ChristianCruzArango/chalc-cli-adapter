@@ -12,6 +12,7 @@
 // Prohibición (R8): SOLO LECTURA. Ni crear, ni modificar, ni borrar — el advisor observa el estado,
 // no participa en él.
 
+import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { currentBranch, taskScope } from '../../gate/lib/changed.mjs';
@@ -118,6 +119,29 @@ async function readContract(root, sides, specDir, findSpec) {
   };
 }
 
+// ¿Es una app móvil? (spec 014, R28). Flutter, React Native y los proyectos nativos llevan su carpeta de
+// plataforma en la raíz; con ella, la checklist de seguridad exige también los grupos de MASVS.
+export const isMobileRepo = (root) => existsSync(join(root, 'android')) || existsSync(join(root, 'ios'));
+
+// El tasks.md de la spec vigente, o el problema que impidió leerlo.
+const tasksOrProblem = (problems, root, specDir, findSpec) => attempt(
+  problems, 'tasks.md',
+  () => readTasks(root, specDir, findSpec),
+  { hasTasksFile: false, done: 0, total: 0, current: '', mtime: 0 }
+);
+
+// Cómo se trabaja en este repo: puertas, roles y lados, con los defaults de siempre para lo que el
+// `gate.json` no declare.
+function flowOf(gateConfig) {
+  const review = { ...FLOW_DEFAULT.review, ...(gateConfig.flow?.review || {}) };
+  return {
+    approvals: { ...FLOW_DEFAULT.approvals, ...(gateConfig.flow?.approvals || {}) },
+    review,
+    roles: rolesOr(gateConfig.flow?.roles, review),
+    sides: gateConfig.flow?.sides
+  };
+}
+
 // Los hechos del repo en `root`. Las lecturas del portón se inyectan para poder probar el manejo de
 // fallos sin romper la instalación. Devuelve el snapshot que consume `decide`.
 export async function snapshot(root, {
@@ -132,28 +156,19 @@ export async function snapshot(root, {
   const files = scope.files;
   const currentRef = await attempt(problems, 'git', () => branch(root), '');
 
-  const tasks = await attempt(
-    problems, 'tasks.md',
-    () => readTasks(root, gateConfig.spec?.dir || 'specs', findSpec),
-    { hasTasksFile: false, done: 0, total: 0, current: '', mtime: 0 }
-  );
+  const tasks = await tasksOrProblem(problems, root, gateConfig.spec?.dir || 'specs', findSpec);
 
   const gate = parseGateState(await textOf(join(root, STATE_REL)));
   const reviewText = await textOf(join(root, REVIEW_REL));
-  const review = { ...FLOW_DEFAULT.review, ...(gateConfig.flow?.review || {}) };
-  const sides = gateConfig.flow?.sides;
+  const flow = flowOf(gateConfig);
+  const sides = flow.sides;
 
   return {
     tasks,
     gate: { ...gate, pending: Array.isArray(gateConfig.pending) ? gateConfig.pending : [] },
     review: { ...lastReview(reviewText), entries: allReviews(reviewText) },
     changed: { files, newestMtime: await newestOf(root, files), source: scope.source, undetermined: scope.undetermined },
-    flow: {
-      approvals: { ...FLOW_DEFAULT.approvals, ...(gateConfig.flow?.approvals || {}) },
-      review,
-      roles: rolesOr(gateConfig.flow?.roles, review),
-      sides
-    },
+    flow,
     contract: await attempt(problems, 'contrato del lado dueño',
       () => readContract(root, sides, gateConfig.spec?.dir || 'specs', findSpec),
       { differs: false, lines: 0, ownerId: '', minePath: '', ownerPath: '' }),
@@ -161,6 +176,7 @@ export async function snapshot(root, {
       () => (sides?.enabled && sides.mail ? unreadMail(join(root, sides.mail), sides.me) : { unread: 0, from: [] }),
       { unread: 0, from: [] }),
     git: { isRepo: !!currentRef, branch: currentRef },
+    platform: { mobile: isMobileRepo(root) },
     // El idioma del SPEC, no el del CLI: el advisor vive dentro del repo del usuario y habla como
     // se escribió su spec. Solo afecta al motivo — la acción y el comando nunca se traducen.
     lang: gateConfig.language || 'en',

@@ -10,6 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import { allReviews } from '../catalog/next/lib/review.mjs';
 import { decide } from '../catalog/next/lib/decide.mjs';
 import { reasonOf } from '../catalog/next/lib/i18n.mjs';
@@ -152,7 +153,7 @@ test('R18: an equipped repo without the memory tree keeps a working advisor', as
   await emitGate(root, { language: 'es' });
   await emitNext(root);
 
-  const { readMemoryFacts: emitted } = await import(join(root, '.chalc', 'next', 'lib', 'memory.mjs'));
+  const { readMemoryFacts: emitted } = await import(pathToFileURL(join(root, '.chalc', 'next', 'lib', 'memory.mjs')).href);
   assert.deepEqual(await emitted(root, { task: 'T1' }), { concepts: [], entries: [] });
 });
 

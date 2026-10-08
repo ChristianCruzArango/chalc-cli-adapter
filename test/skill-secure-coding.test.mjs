@@ -14,7 +14,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SKILLS = join(ROOT, 'catalog', 'skills');
-const skill = await readFile(join(SKILLS, 'secure-coding', 'SKILL.md'), 'utf8');
+// En Windows git puede sacar el archivo con CRLF: se normaliza para que el frontmatter se lea igual.
+const skill = (await readFile(join(SKILLS, 'secure-coding', 'SKILL.md'), 'utf8')).replace(/\r\n/g, '\n');
 
 test('R26: the skill declares itself as chalc-authored with a name and a description', () => {
   const front = skill.match(/^---\n([^]*?)\n---/)?.[1] || '';

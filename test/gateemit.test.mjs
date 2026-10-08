@@ -185,7 +185,7 @@ test('emitGate restores every empty mutation scope key, each one from the catalo
   const proj = await project({ 'A.sln': '', 'src/A/A.csproj': '<Project Sdk="Microsoft.NET.Sdk"></Project>' });
   const source = await fakeCatalog();
   const { config } = await emitGate(proj, { sourceDir: source });
-  const old = { ...config, mutation: { ...config.mutation, command: 'dotnet stryker -c 2', scopeFlag: '', scopeSpan: '', scopeJoin: '' } };
+  const old = { ...config, mutation: { ...config.mutation, command: 'dotnet stryker -c 2', scopeFlag: '', scopeSpan: '', scopeJoin: '', projectFlag: '' } };
   await writeFile(join(proj, '.chalc', 'gate.json'), JSON.stringify(old, null, 2), 'utf8');
 
   await emitGate(proj, { sourceDir: source });
@@ -194,6 +194,7 @@ test('emitGate restores every empty mutation scope key, each one from the catalo
   assert.equal(cfg.mutation.scopeFlag, '--mutate');
   assert.equal(cfg.mutation.scopeSpan, 'braces');
   assert.equal(cfg.mutation.scopeJoin, 'repeat');
+  assert.equal(cfg.mutation.projectFlag, '--project', 'spec 018, R4');
   assert.equal(cfg.mutation.command, 'dotnet stryker -c 2');
 });
 

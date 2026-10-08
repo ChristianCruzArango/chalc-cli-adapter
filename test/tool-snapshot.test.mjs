@@ -143,6 +143,7 @@ test('R11 — dotnet', async () => {
       scopeFlag: '--mutate',
       scopeSpan: 'braces',
       scopeJoin: 'repeat',
+      projectFlag: '--project',
       threshold: 80,
       required: true
     },

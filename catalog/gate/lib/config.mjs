@@ -13,7 +13,7 @@ export const CONFIG_REL = '.chalc/gate.json';
 
 const DEFAULTS = {
   test: { command: '' },
-  mutation: { tool: '', command: '', report: '', format: '', install: '', probe: '', scopeFlag: '', scopeJoin: '', threshold: 80, required: true },
+  mutation: { tool: '', command: '', report: '', format: '', install: '', probe: '', scopeFlag: '', scopeJoin: '', projectFlag: '', threshold: 80, required: true },
   lint: {
     maxFileLines: 300, maxFunctionLines: 40, maxParams: 4, maxDepth: 3,
     // Duplicación (spec 012). Mínimo conservador a propósito: esta etapa vive o muere por los falsos

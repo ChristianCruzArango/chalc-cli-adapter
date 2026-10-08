@@ -345,6 +345,83 @@ test('runMutation scopes each file to its own project when the repo has several'
   assert.equal(run.calls[0].command, 'npx stryker run --mutate **/Precios/Total.cs');
 });
 
+// ── spec 018: Stryker.NET solo sobre el proyecto que cambió ───────────────────────────────────
+//
+// En modo solución Stryker.NET compila y corre la suite de TODOS los proyectos aunque los mutantes
+// estén en uno: 1448 s para 2 mutantes en un repo real. Con `--project` trabaja solo sobre ese, y
+// rechaza un segundo `--project`.
+
+async function solucionDeDosProyectos() {
+  const dir = await project();
+  await file(dir, 'src/Tienda.Dominio/Tienda.Dominio.csproj', '<Project />');
+  await file(dir, 'src/Tienda.Dominio/Precios/Total.cs', 'class Total {}');
+  await file(dir, 'src/Tienda.Dominio/Precios/Iva.cs', 'class Iva {}');
+  await file(dir, 'src/Tienda.Api/Tienda.Api.csproj', '<Project />');
+  await file(dir, 'src/Tienda.Api/Precios.cs', 'class Precios {}');
+  return dir;
+}
+
+test('runMutation passes the one project the task changed when the tool declares a project flag (spec 018, R1)', async () => {
+  const dir = await solucionDeDosProyectos();
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate', scopeJoin: 'repeat', projectFlag: '--project' }),
+    {
+      root: dir,
+      changed: ['src/Tienda.Dominio/Precios/Total.cs', 'src/Tienda.Dominio/Precios/Iva.cs', 'tests/Tienda.Dominio.Tests/TotalTests.cs'],
+      run
+    }
+  );
+
+  assert.equal(
+    run.calls[0].command,
+    'npx stryker run --mutate **/Precios/Total.cs --mutate **/Precios/Iva.cs --project Tienda.Dominio.csproj'
+  );
+});
+
+test('runMutation passes no project when the task changed code in two projects (spec 018, R2)', async () => {
+  const dir = await solucionDeDosProyectos();
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate', scopeJoin: 'repeat', projectFlag: '--project' }),
+    { root: dir, changed: ['src/Tienda.Dominio/Precios/Total.cs', 'src/Tienda.Api/Precios.cs'], run }
+  );
+
+  assert.doesNotMatch(run.calls[0].command, /--project/);
+});
+
+// Dos proyectos distintos pueden llamarse igual en carpetas distintas: compararlos por nombre los
+// confundiría y le pasaría a la herramienta un `--project` que no sabe a cuál de los dos se refiere.
+test('runMutation tells apart two projects that share a name in different folders (spec 018, R2)', async () => {
+  const dir = await project();
+  await file(dir, 'src/Ventas/Dominio/Dominio.csproj', '<Project />');
+  await file(dir, 'src/Ventas/Dominio/Total.cs', 'class Total {}');
+  await file(dir, 'src/Compras/Dominio/Dominio.csproj', '<Project />');
+  await file(dir, 'src/Compras/Dominio/Orden.cs', 'class Orden {}');
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate', scopeJoin: 'repeat', projectFlag: '--project' }),
+    { root: dir, changed: ['src/Ventas/Dominio/Total.cs', 'src/Compras/Dominio/Orden.cs'], run }
+  );
+
+  assert.doesNotMatch(run.calls[0].command, /--project/);
+});
+
+test('runMutation passes no project when the tool declares no project flag (spec 018, R3)', async () => {
+  const dir = await solucionDeDosProyectos();
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate', scopeJoin: 'repeat' }),
+    { root: dir, changed: ['src/Tienda.Dominio/Precios/Total.cs'], run }
+  );
+
+  assert.equal(run.calls[0].command, 'npx stryker run --mutate **/Precios/Total.cs');
+});
+
 test('runMutation repeats the scope flag for tools that do not take a comma-separated list', async () => {
   const dir = await project();
   const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });

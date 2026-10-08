@@ -15,7 +15,8 @@
       "probe": ".config/dotnet-tools.json",
       "scopeFlag": "--mutate",
       "scopeSpan": "braces",
-      "scopeJoin": "repeat"
+      "scopeJoin": "repeat",
+      "projectFlag": "--project"
     }
   }
 }

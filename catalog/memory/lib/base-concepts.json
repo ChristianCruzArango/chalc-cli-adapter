@@ -1,0 +1,14 @@
+{
+  "dinero": { "synonyms": ["dinero", "plata", "money", "moneda", "monedas", "currency", "precio", "price", "monto", "amount", "valor monetario", "tarifa", "fee", "saldo", "balance", "pago", "pagar", "paga", "payment", "pay", "cobro", "cobrar", "charge", "factura", "invoice", "dolar", "dollar", "euro", "centavo", "cent", "impuesto", "tax", "iva", "descuento", "discount", "transaccion", "transaction", "reembolso", "refund", "presupuesto", "budget", "gasto", "expense", "ingreso", "income", "deuda", "debt", "tarjeta de credito", "credit card", "tarjeta de debito", "debit card", "peso colombiano", "pesos colombianos"] },
+  "fechas": { "synonyms": ["fecha", "date", "hora", "time", "timestamp", "dia", "day", "mes", "meses", "month", "año", "year", "semana", "week", "calendario", "calendar", "zona horaria", "timezone", "utc", "vencimiento", "plazo", "deadline", "periodo", "period", "due date", "fecha de vencimiento"] },
+  "identidad": { "synonyms": ["usuario", "user", "persona", "person", "cliente", "customer", "perfil", "profile", "cuenta de usuario", "miembro", "member", "propietario", "owner"] },
+  "autenticacion": { "synonyms": ["login", "logout", "sesion", "session", "inicia", "iniciar", "contraseña", "password", "token", "jwt", "oauth", "autenticacion", "authentication", "credencial", "credential", "otp", "biometria", "biometric", "signin", "signup"] },
+  "autorizacion": { "synonyms": ["permiso", "permission", "rol", "role", "acceso", "access", "autorizacion", "authorization", "admin", "privilegio", "privilege", "politica", "policy"] },
+  "datos-personales": { "synonyms": ["email", "correo", "telefono", "phone", "direccion", "address", "addresses", "cedula", "dni", "pasaporte", "passport", "nacimiento", "birth", "pii", "privacidad", "privacy", "consentimiento", "consent"] },
+  "archivos": { "synonyms": ["archivo", "file", "fichero", "subida", "upload", "descarga", "download", "adjunto", "attachment", "imagen", "image", "pdf", "csv", "excel"] },
+  "red": { "synonyms": ["http", "https", "api", "endpoint", "url", "request", "peticion", "response", "respuesta", "servidor", "server", "webhook", "socket", "websocket", "cors", "fetch"] },
+  "almacenamiento": { "synonyms": ["base de datos", "database", "db", "sql", "cache", "almacenamiento", "storage", "persistencia", "persistence", "sharedpreferences", "localstorage", "migracion", "migration", "sqlite"] },
+  "notificaciones": { "synonyms": ["notificacion", "notification", "recordatorio", "reminder", "push"] },
+  "idioma": { "synonyms": ["idioma", "language", "traduccion", "translation", "l10n", "i18n", "locale", "localizacion", "localization"] },
+  "_ambiguous": { "words": ["peso", "pesos", "card", "cards", "tarjeta", "tarjetas", "path", "ruta", "rutas", "table", "tabla", "alert", "alerta", "aviso", "due", "rate", "nombre", "name", "registro", "documento", "document", "repositorio", "repository", "cuenta", "account"] }
+}

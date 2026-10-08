@@ -24,6 +24,7 @@ de tener tests que **fallen** (Red).
 - **Código seguro:** ANTES de escribir código que toque entrada externa, autenticación, sesiones, permisos, secretos, almacenamiento, red, criptografía o logs, abre la skill `secure-coding` (la sección de tu stack, que te remite a la referencia concreta) y aplícala. Es la excepción a «skills bajo demanda». El portón bloquea las señales de seguridad que se ven en una línea y el rol `seguridad` revisa OWASP en cada tarea; si deja hallazgos, corrige empezando por un test que demuestre la vulnerabilidad.
 
 ### Cómo trabajar (mantén el foco)
+- **Memoria del proyecto:** al escribir una spec, llena `Conceptos:` con los de `node .chalc/memory.mjs concepts` (uno nuevo solo si ninguno encaja): con ellos el advisor te entrega en cada tarea las reglas que el proyecto ya aprendió. Para algo puntual, busca con `node .chalc/memory.mjs search <palabras>` antes de explorar el repo.
 - **Una tarea a la vez:** antes de cada tarea di qué `R#` implementa; al terminarla, párate y espera OK.
 - **Skills bajo demanda:** abre solo la skill que la tarea activa necesita (`.claude/skills` o `.chalc/skills`); no las pre-cargues todas.
 - **Lectura acotada:** lee la constitución, esta spec/plan/tasks (y data-model/contracts) y los archivos que toca la tarea; no explores todo el repo.

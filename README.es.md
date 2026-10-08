@@ -35,6 +35,7 @@ Así, un proyecto Angular puede recibir sus skills de Angular, un NestJS sus reg
 | `chalc inspect` | Explica qué detecta y por qué, sin escribir | no |
 | `chalc verify [ruta]` | Verifica un proyecto: completitud (carpetas/README, architecture.md, specs/) + **fronteras de arquitectura** (capas) | no |
 | `node .chalc/gate.mjs` | **Portón de calidad** de un repo equipado: tests + mutación + comprobaciones estáticas; evidencia en `.chalc/gate.md`. No es un comando de chalc — corre en el repo, con o sin chalc | no |
+| `node .chalc/memory.mjs` | **Memoria del proyecto**: busca lo aprendido (`search`, `get`, `concepts`) y lo captura al cerrar cada tarea (`capture`). No es un comando de chalc — corre en el repo | no |
 | `node .chalc/next.mjs` | **Advisor de flujo** de un repo equipado: dice cuál es la ÚNICA acción siguiente del ciclo de tarea, leyendo el estado real del repo. Solo lectura. No es un comando de chalc — corre en el repo, con o sin chalc | no |
 | `chalc doctor` | Valida el catálogo (rules, skills, MCP, métodos, targets) | no |
 | `chalc configure` | Administra el catálogo (rules/skills/MCP) por menú | no |
@@ -782,6 +783,34 @@ la comprueba**. Si falta una categoría, si lo revisado no son líneas de la tar
 no explica por qué, la tarea no cierra: responde `ask_human`. Un hallazgo vuelve como `fix_review`
 con la instrucción de empezar por un test que demuestre la vulnerabilidad, y el revisor comprueba
 después que la corrección ataca la causa.
+
+### Memoria del proyecto: lo aprendido no se repite
+
+Cada sesión empezaba de cero, y un error que el proyecto ya había corregido podía volver en otra spec.
+Ahora chalc **aprende de su propio ciclo** y le entrega a cada tarea solo lo que le toca:
+
+- **Se escribe sola, sin tokens.** Al cerrar una tarea (`tick_task` trae el comando
+  `node .chalc/memory.mjs capture`), chalc guarda las `Regla aprendida (<concepto>): …` que dejaron
+  los roles, las tareas marcadas `[bug]` y cada `chalc-allow` con su motivo. El modelo no decide qué
+  guardar.
+- **Se ordena por concepto, no por palabra.** «money», «plata», «moneda» o «tarifa» son `dinero`: una
+  regla aprendida con «monto» le llega a una spec que habla de «tarifas». Un diccionario base trae
+  los conceptos frecuentes (sin palabras ambiguas como `card` o `path`), y el repo aprende los suyos.
+- **Carga perezosa.** Nada se carga al iniciar sesión. El advisor mira de qué conceptos habla la
+  tarea —su texto y sus `R#`; si no, la línea `Conceptos:` de la spec— y pone en el motivo de
+  `work_task` y `call_role` como mucho 5 entradas de una línea. Con 20.000 entradas (5 MB) la búsqueda
+  tarda ~0,1 s y sigue devolviendo unas pocas líneas: el tamaño del archivo no lo lee la IA.
+- **Se hace cumplir.** Cada rol confirma en su entrada cada regla que recibió (`cumple`, `no cumple`
+  o `no aplica — motivo`); si falta una, el advisor responde `ask_human`. Una regla cuyo código cambió
+  sale marcada como posiblemente vieja.
+- **Compartida.** Vive en `.chalc/memory/` y se commitea: la lee cualquier asistente y todo el equipo.
+  Equipar de nuevo regenera el código, nunca los datos.
+
+```
+node .chalc/memory.mjs search <palabras>   # como mucho 8 líneas
+node .chalc/memory.mjs get <id>            # el detalle de una entrada
+node .chalc/memory.mjs concepts            # los conceptos, para escribir una spec
+```
 
 ### Agente revisor: lo que el portón no puede medir
 

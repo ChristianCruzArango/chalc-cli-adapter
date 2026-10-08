@@ -13,7 +13,7 @@
 // Un estado de una versión anterior de chalc puede no traer `fast`, y asumirlo `false` cerraría
 // tareas con corridas que jamás midieron mutación.
 
-const NONE = { exists: false, date: 0, verdict: 'unknown', fast: true, closesTask: false, branch: '', spec: '', role: '', failedStages: [] };
+const NONE = { exists: false, date: 0, verdict: 'unknown', fast: true, closesTask: false, branch: '', spec: '', role: '', failedStages: [], suppressions: [] };
 
 const VERDICTS = new Set(['pass', 'fail', 'blocked']);
 
@@ -38,9 +38,16 @@ export function parseGateState(text) {
     branch: String(raw.branch ?? ''),
     spec: String(raw.spec ?? ''),
     role: String(raw.role ?? ''),
-    failedStages: failedStagesOf(raw.stages)
+    failedStages: failedStagesOf(raw.stages),
+    suppressions: suppressionsOf(raw.suppressions)
   };
 }
+
+// Las supresiones aceptadas por el portón (spec 015, R13). Una entrada sin regla o sin archivo no
+// dice qué se aceptó, y no se toma.
+const suppressionsOf = (list) => (Array.isArray(list) ? list : [])
+  .filter((s) => isPlainObject(s) && s.rule && s.file)
+  .map(({ file, line, rule, reason }) => ({ file: String(file), line: Number(line) || 0, rule: String(rule), reason: String(reason ?? '') }));
 
 // Las etapas que corrieron y no pasaron (spec 014, R22). Con ellas el motivo de `fix_gate` puede decir
 // QUÉ arreglar primero; un estado de una versión anterior, sin etapas, no tiene ninguna.

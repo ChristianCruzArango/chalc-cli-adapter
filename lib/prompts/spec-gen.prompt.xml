@@ -53,6 +53,15 @@ ${CONSTITUTION}
     </forbidden>
   </ears_notation>
 
+  <concepts>
+    The spec MUST carry, right below its title, the line `Conceptos: <a>, <b>` (`Concepts:` when the
+    output language is English) naming the domain concepts it touches. The project memory uses them to
+    hand each task the rules it already learned, so reuse the existing names: pick from this list when
+    one fits, and create a new lowercase concept only when none does. Only concepts the document talks
+    about — never invent domain.
+${CONCEPTS}
+  </concepts>
+
   <file_formats>
     Respect the EXACT structure of these templates. Output content language: ${LANGUAGE}. Mode: ${MODE}.
     <template file="spec.md">

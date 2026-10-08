@@ -45,6 +45,47 @@ const SECURITY_FIX = {
   en: ' It is a security finding: first write a test that demonstrates the vulnerability, and only then fix it.'
 };
 
+// La memoria de la tarea, en una sola línea dentro del motivo (spec 015, R15, R16): el contrato de
+// tres líneas del advisor no cambia. Como mucho las pocas entradas que eligió `recall`, cada una con
+// su id para pedir el detalle.
+const KIND = { es: { bug: 'bug', rule: 'regla', decision: 'decisión' }, en: { bug: 'bug', rule: 'rule', decision: 'decision' } };
+const STALE = { es: ' (posible-vieja)', en: ' (possibly stale)' };
+
+// Un título largo se corta en el último espacio antes del límite, con «…»: cortar una palabra a la
+// mitad cambia lo que dice.
+const shorten = (text, max = 90) => {
+  const plain = String(text);
+  if (plain.length <= max) return plain;
+  const cut = plain.slice(0, max);
+  return `${cut.slice(0, cut.lastIndexOf(' ') > 0 ? cut.lastIndexOf(' ') : max).replace(/[\s,.;:]+$/, '')}…`;
+};
+
+const item = (e, lang) => `${e.id} (${KIND[lang][e.kind] || e.kind}) ${shorten(e.title)}`
+  + `${e.files?.length ? ` [${e.files.slice(0, 2).join(', ')}]` : ''}${e.stale ? STALE[lang] : ''}`;
+const listOf = (entries, lang) => entries.map((e) => item(e, lang)).join('; ');
+
+const MEMORY_NOTE = {
+  es: {
+    work: (m) => ` Memoria de esta tarea (no repitas lo que ya pasó): ${listOf(m, 'es')}. Detalle: node .chalc/memory.mjs get <id>.`,
+    role: (rules, decisions) => (rules.length ? ` Verifica estas reglas aprendidas y deja una línea por cada una: ${listOf(rules, 'es')}.` : '')
+      + (decisions.length ? ` Decisiones aceptadas (no las reportes): ${listOf(decisions, 'es')}.` : '')
+      + ' Detalle: node .chalc/memory.mjs get <id>.'
+  },
+  en: {
+    work: (m) => ` Memory for this task (do not repeat what already happened): ${listOf(m, 'en')}. Detail: node .chalc/memory.mjs get <id>.`,
+    role: (rules, decisions) => (rules.length ? ` Verify these learned rules and leave one line for each: ${listOf(rules, 'en')}.` : '')
+      + (decisions.length ? ` Accepted decisions (do not report them): ${listOf(decisions, 'en')}.` : '')
+      + ' Detail: node .chalc/memory.mjs get <id>.'
+  }
+};
+
+const workMemory = (f, lang) => (f.memory?.length ? MEMORY_NOTE[lang].work(f.memory) : '');
+const roleMemory = (f, lang) => {
+  if (!f.memory?.length) return '';
+  const decisions = f.memory.filter((e) => e.kind === 'decision');
+  return MEMORY_NOTE[lang].role(f.memory.filter((e) => e.kind !== 'decision'), decisions);
+};
+
 // Marco del advisor. Paridad exacta de claves entre es y en: el test la exige.
 export const FRAME = {
   es: {
@@ -63,13 +104,13 @@ export const FRAME = {
       fix_gate: (f) => `La evidencia de las ${at(f.evidenceDate)} salió con veredicto \`${f.verdict}\`. Arregla lo que reporta .chalc/gate.md.`
         + (isSecurity(f) ? SECURITY_FIX.es : ''),
       call_role: (f) => `El portón aprobó a las ${at(f.evidenceDate)} y falta que pase el agente \`${f.role}\``
-        + (f.cadence === 'feature' ? ' antes de dar la feature por terminada.' : ' por esta tarea.'),
+        + (f.cadence === 'feature' ? ' antes de dar la feature por terminada.' : ' por esta tarea.') + roleMemory(f, 'es'),
       fix_review: (f) => `El agente \`${f.role}\` dejó ${f.findings} hallazgo(s) a las ${at(f.reviewDate)} en .chalc/review.md.`
         + (isSecurity(f) ? SECURITY_FIX.es : ''),
-      tick_task: (f) => `Portón verde y revisión limpia: marca «${f.task}» en tasks.md (${f.done + 1}/${f.total}).`
+      tick_task: (f) => `Portón verde y revisión limpia: primero corre el COMMAND (guarda en la memoria lo que enseñó la tarea) y después marca «${f.task}» en tasks.md (${f.done + 1}/${f.total}).`
         + (f.waitForApproval ? ' Después PARA y espera mi OK antes de seguir.' : ''),
-      work_task: (f) => `Toca «${f.task}» (${f.done}/${f.total} hechas). TDD estricto: test que falla, código mínimo, refactor.`,
-      done: (f) => `Las ${f.total} tareas están marcadas. La feature terminó.`,
+      work_task: (f) => `Toca «${f.task}» (${f.done}/${f.total} hechas). TDD estricto: test que falla, código mínimo, refactor.` + workMemory(f, 'es'),
+      done: (f) => `Las ${f.total} tareas están marcadas. La feature terminó: corre el COMMAND para guardar en la memoria lo que enseñó el cierre.`,
       ask_human: (f) => `No puedo saber en qué punto va esto: ${list(f.problems)}. Dímelo tú en vez de que yo lo adivine.`
     }
   },
@@ -89,13 +130,13 @@ export const FRAME = {
       fix_gate: (f) => `The evidence from ${at(f.evidenceDate)} came out \`${f.verdict}\`. Fix what .chalc/gate.md reports.`
         + (isSecurity(f) ? SECURITY_FIX.en : ''),
       call_role: (f) => `The gate passed at ${at(f.evidenceDate)} and the \`${f.role}\` agent still has to run`
-        + (f.cadence === 'feature' ? ' before the feature can be called done.' : ' for this task.'),
+        + (f.cadence === 'feature' ? ' before the feature can be called done.' : ' for this task.') + roleMemory(f, 'en'),
       fix_review: (f) => `The \`${f.role}\` agent left ${f.findings} finding(s) at ${at(f.reviewDate)} in .chalc/review.md.`
         + (isSecurity(f) ? SECURITY_FIX.en : ''),
-      tick_task: (f) => `Gate green and review clean: tick "${f.task}" in tasks.md (${f.done + 1}/${f.total}).`
+      tick_task: (f) => `Gate green and review clean: first run the COMMAND (it stores what the task taught in the memory), then tick "${f.task}" in tasks.md (${f.done + 1}/${f.total}).`
         + (f.waitForApproval ? ' Then STOP and wait for my OK before moving on.' : ''),
-      work_task: (f) => `Next up: "${f.task}" (${f.done}/${f.total} done). Strict TDD: failing test, minimum code, refactor.`,
-      done: (f) => `All ${f.total} tasks are ticked. The feature is complete.`,
+      work_task: (f) => `Next up: "${f.task}" (${f.done}/${f.total} done). Strict TDD: failing test, minimum code, refactor.` + workMemory(f, 'en'),
+      done: (f) => `All ${f.total} tasks are ticked. The feature is complete: run the COMMAND to store in the memory what the closing taught.`,
       ask_human: (f) => `I cannot tell where this stands: ${list(f.problems)}. Tell me instead of me guessing.`
     }
   }

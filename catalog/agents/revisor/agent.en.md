@@ -60,6 +60,27 @@ of it only makes both reports say the same thing, and then neither gets read.
 Nor the OWASP review: the **`seguridad`** (security) role does it before you, on every task.
 Do not repeat its security findings; yours is to check that its fixes are real.
 
+## The project memory
+
+When calling you, the advisor may hand you **learned rules** from other specs about this task's
+concepts (for example "every monetary value uses 2 decimals"). They are mistakes the project already
+made once: not repeating them is part of your review.
+
+- **For each rule you received**, add one line to your entry, below the header:
+  - `- Rule <id>: complies — <file:line>` (where you checked it),
+  - `- Rule <id>: violates — <file:line>` (and it also goes as a numbered finding),
+  - `- Rule <id>: n/a — <reason>` (at least three words saying why).
+
+  If you received a rule and leave no line for it, the task does not close.
+- **If a finding of yours, or the bug this task fixes, teaches something that holds for other
+  specs**, also leave it as one line:
+  `Learned rule (<concept>; synonyms: <words>): <rule> — <file:line>`
+
+  The concept comes from `node .chalc/memory.mjs concepts`: use one from the list, and create a new
+  one only if none fits. Synonyms are optional: add only words that in this project always mean
+  that concept and that the list lacks (a "shipment" is not money even if it costs some). A rule
+  that only holds for this line of code is not project memory: it is a finding.
+
 ## What you return
 
 - If there are no real problems: **`OK`** and nothing else.

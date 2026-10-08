@@ -35,6 +35,11 @@ export const ACTIONS = [
 export function commandOf(action, { gatePath = GATE_DEFAULT, facts = {} } = {}) {
   if (action === 'run_gate') return `node ${gatePath}`;
 
+  // Al cerrar la tarea y al cerrar la feature, la memoria guarda lo que el ciclo enseñó (spec 015,
+  // R11): lo que deja el endurecedor solo existe al final. Vive junto al portón que la cierra, así que
+  // en el flujo full-stack apunta al mismo lado.
+  if (action === 'tick_task' || action === 'done') return `node ${gatePath.replace(/gate\.mjs$/, 'memory.mjs')} capture`;
+
   // El comando de la deriva MUESTRA la diferencia; nunca sobrescribe (spec 010, R16). Copiar es lo
   // correcto casi siempre, pero lo que se perdería —una nota que el consumidor hubiera añadido a su
   // copia— no deja rastro. Y quien tiene que adaptar código necesita saber QUÉ cambió, no solo

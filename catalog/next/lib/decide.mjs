@@ -12,7 +12,7 @@
 // Devuelve la acción y los HECHOS que la produjeron, que es lo que R10 necesita para que el motivo
 // cite un dato y no repita el nombre del estado.
 
-import { checklistProblems } from './checklist.mjs';
+import { checklistProblems, confirmationProblems } from './checklist.mjs';
 
 // Una corrida rápida omite la mutación a propósito, así que su verde no dice nada de la calidad de
 // las pruebas: para el advisor equivale a no tener evidencia (R14).
@@ -75,11 +75,19 @@ function unreadable(s) {
 // Las entradas vigentes de los roles que declaran checklist y no la sostienen (spec 014, R29). Una
 // checklist que no se sostiene no prueba que se revisó nada, y cerrar la tarea con ella sería pasar
 // por encima de la revisión: el control vuelve a una persona.
+//
+// Lo mismo con las reglas que la memoria le entregó (spec 015, R17): una regla entregada y no
+// confirmada es una regla que nadie verificó.
 function checklistIssues(s) {
   const facts = { mobile: !!s.platform?.mobile, scope: s.changed.files || [] };
-  return rolesOf(s).filter((role) => role.checklist).flatMap((role) => {
+  const delivered = s.memory?.entries || [];
+  return rolesOf(s).flatMap((role) => {
     const entry = entryOf(s, role);
-    const found = entry ? checklistProblems(entry, { kind: role.checklist, ...facts }) : [];
+    if (!entry) return [];
+    const found = [
+      ...(role.checklist ? checklistProblems(entry, { kind: role.checklist, ...facts }) : []),
+      ...confirmationProblems(entry, delivered)
+    ];
     return found.length ? [`${role.id}: ${found.join('; ')}`] : [];
   });
 }
@@ -153,7 +161,7 @@ const TABLE = [
   {
     action: 'work_task',
     when: hasPendingTask,
-    facts: (s) => ({ task: s.tasks.current, done: s.tasks.done, total: s.tasks.total })
+    facts: (s) => ({ task: s.tasks.current, done: s.tasks.done, total: s.tasks.total, memory: s.memory?.entries || [] })
   },
   // Sin tareas pendientes: los roles de feature, y solo entonces, `done`.
   {
@@ -179,7 +187,8 @@ const roleFacts = (s, pending) => ({
   cadence: pending.role.cadence,
   evidenceDate: s.gate.date,
   reviewDate: pending.entry?.date ?? null,
-  findings: pending.entry?.findings ?? 0
+  findings: pending.entry?.findings ?? 0,
+  memory: s.memory?.entries || []
 });
 
 // La acción siguiente. Devuelve { action, facts }.

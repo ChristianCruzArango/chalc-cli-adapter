@@ -22,6 +22,7 @@ import { allReviews, lastReview } from './review.mjs';
 import { contractDrift } from './contract.mjs';
 import { unreadMail } from './mail.mjs';
 import { parseGateState } from './state.mjs';
+import { readMemoryFacts } from './memory.mjs';
 import { tasksProgress, currentTask } from './tasks.mjs';
 
 const STATE_REL = '.chalc/gate.state.json';
@@ -142,6 +143,17 @@ function flowOf(gateConfig) {
   };
 }
 
+// Lo que se sabe de los otros lados del workspace (spec 010): si el contrato del dueño cambió y si hay
+// avisos sin leer. Fuera de un workspace, nada.
+const sidesFacts = async (problems, { root, sides, specDir, findSpec }) => ({
+  contract: await attempt(problems, 'contrato del lado dueño',
+    () => readContract(root, sides, specDir, findSpec),
+    { differs: false, lines: 0, ownerId: '', minePath: '', ownerPath: '' }),
+  mail: await attempt(problems, 'buzón',
+    () => (sides?.enabled && sides.mail ? unreadMail(join(root, sides.mail), sides.me) : { unread: 0, from: [] }),
+    { unread: 0, from: [] })
+});
+
 // Los hechos del repo en `root`. Las lecturas del portón se inyectan para poder probar el manejo de
 // fallos sin romper la instalación. Devuelve el snapshot que consume `decide`.
 export async function snapshot(root, {
@@ -169,14 +181,11 @@ export async function snapshot(root, {
     review: { ...lastReview(reviewText), entries: allReviews(reviewText) },
     changed: { files, newestMtime: await newestOf(root, files), source: scope.source, undetermined: scope.undetermined },
     flow,
-    contract: await attempt(problems, 'contrato del lado dueño',
-      () => readContract(root, sides, gateConfig.spec?.dir || 'specs', findSpec),
-      { differs: false, lines: 0, ownerId: '', minePath: '', ownerPath: '' }),
-    mail: await attempt(problems, 'buzón',
-      () => (sides?.enabled && sides.mail ? unreadMail(join(root, sides.mail), sides.me) : { unread: 0, from: [] }),
-      { unread: 0, from: [] }),
+    ...await sidesFacts(problems, { root, sides, specDir: gateConfig.spec?.dir || 'specs', findSpec }),
     git: { isRepo: !!currentRef, branch: currentRef },
     platform: { mobile: isMobileRepo(root) },
+    // Lo que la memoria del proyecto sabe de la tarea en curso (spec 015). Solo lectura.
+    memory: await readMemoryFacts(root, { specDir: gateConfig.spec?.dir || 'specs', task: tasks.current, findSpec }),
     // El idioma del SPEC, no el del CLI: el advisor vive dentro del repo del usuario y habla como
     // se escribió su spec. Solo afecta al motivo — la acción y el comando nunca se traducen.
     lang: gateConfig.language || 'en',

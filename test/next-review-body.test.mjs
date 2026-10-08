@@ -49,3 +49,49 @@ test('R29: a malformed heading is skipped, not returned as an empty entry', () =
   assert.equal(entries.length, 1);
   assert.equal(entries[0].role, 'seguridad');
 });
+
+test('R11: learned rules are read with or without a dash, and their synonyms trimmed', () => {
+  const entry = read([
+    'Regla aprendida (dinero): Redondear',
+    '- Learned rule (fechas; Synonyms:  vencimiento ,  , plazo ): Usar UTC',
+    '* Regla aprendida (archivos; sinonimos: adjunto): Limitar tamaño'
+  ].join('\n'));
+  assert.deepEqual(entry.learned.map((l) => [l.concept, l.synonyms, l.text]), [
+    ['dinero', [], 'Redondear'], ['fechas', ['vencimiento', 'plazo'], 'Usar UTC'], ['archivos', ['adjunto'], 'Limitar tamaño']
+  ]);
+});
+
+test('R17: confirmations are read in both languages and with any separator', () => {
+  const entry = read([
+    '- Regla a1b2c3d4: CUMPLE -- src/a.mjs:3',
+    '- Rule b1b2c3d4: violates - src/b.mjs:9',
+    '- Regla c1b2c3d4: no cumple — src/c.mjs:1',
+    '* Rule d1b2c3d4: n/a — the task shows no money',
+    '- Regla e1b2c3d4a: cumple — src/a.mjs:3'
+  ].join('\n'));
+  assert.deepEqual(entry.confirmations.a1b2c3d4, { id: 'a1b2c3d4', status: 'complies', refs: ['src/a.mjs:3'] });
+  assert.equal(entry.confirmations.b1b2c3d4.status, 'violates');
+  assert.equal(entry.confirmations.c1b2c3d4.status, 'violates');
+  assert.deepEqual(entry.confirmations.d1b2c3d4, { id: 'd1b2c3d4', status: 'na', reason: 'the task shows no money' });
+  assert.equal(entry.confirmations.e1b2c3d4, undefined, 'un id de nueve caracteres no es un id');
+});
+
+test('R11: a learned rule is read only at the start of a line, with flexible spacing', () => {
+  const entry = read([
+    'Regla aprendida(dinero):Redondear',
+    '   Learned rule  ( fechas ;synonyms:plazo ) :  Usar UTC  ',
+    'ver la Regla aprendida (archivos): no es una regla'
+  ].join('\n'));
+  assert.deepEqual(entry.learned.map((l) => [l.concept, l.synonyms, l.text]), [['dinero', [], 'Redondear'], ['fechas', ['plazo'], 'Usar UTC']]);
+});
+
+test('R17: a confirmation is read only at the start of a line, with flexible spacing, and keeps whole refs', () => {
+  const entry = read([
+    '-Regla  a1b2c3d4 :cumple—src/a.mjs:123',
+    '   *  Rule b1b2c3d4:   n/a —   la tarea no muestra montos   ',
+    'ver - Regla c1b2c3d4: cumple — src/c.mjs:1'
+  ].join('\n'));
+  assert.deepEqual(entry.confirmations.a1b2c3d4.refs, ['src/a.mjs:123']);
+  assert.equal(entry.confirmations.b1b2c3d4.reason, 'la tarea no muestra montos');
+  assert.equal(entry.confirmations.c1b2c3d4, undefined);
+});

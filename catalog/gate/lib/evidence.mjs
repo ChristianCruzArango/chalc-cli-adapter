@@ -201,6 +201,9 @@ export function renderState({ stages, meta, fast }) {
     // para medir la frescura contra los archivos de la tarea (R8), y porque una evidencia y un
     // estado que discreparan sobre qué se revisó no servirían ni el uno ni el otro.
     scope: scopeOf(meta),
+    // Lo suprimido con `chalc-allow`, en detalle: la memoria lo guarda como decisión aceptada al
+    // cerrar la tarea (spec 015, R13). El informe lo muestra; este campo lo lee una máquina.
+    suppressions: stages.flatMap((s) => s.allowed || []).map(({ file, line, rule, reason }) => ({ file, line, rule, reason })),
     stages: stages.map((s) => ({
       stage: s.stage,
       ok: !!s.ok,

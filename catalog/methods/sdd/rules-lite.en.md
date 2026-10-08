@@ -24,6 +24,7 @@ you have tests that **fail** (Red).
 - **Secure code:** BEFORE writing code that touches external input, authentication, sessions, permissions, secrets, storage, network, cryptography or logs, open the `secure-coding` skill (the section for your stack, which points you to the exact reference) and apply it. It is the exception to "skills on demand". The gate blocks the security signals visible on a line and the `seguridad` role reviews OWASP on every task; if it leaves findings, fix them starting with a test that demonstrates the vulnerability.
 
 ### How to work (stay focused)
+- **Project memory:** when writing a spec, fill `Concepts:` from `node .chalc/memory.mjs concepts` (a new one only if none fits): with them the advisor hands you, on each task, the rules the project already learned. For something specific, search with `node .chalc/memory.mjs search <words>` before exploring the repo.
 - **One task at a time:** before each task, state which `R#` it implements; when done, stop and wait for OK.
 - **Skills on demand:** open only the skill the active task needs (`.claude/skills` or `.chalc/skills`); don't preload them all.
 - **Bounded reading:** read the constitution, this spec/plan/tasks and the files the task touches; don't explore the whole repo.

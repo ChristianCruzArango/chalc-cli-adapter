@@ -60,6 +60,27 @@ Adelantarte solo consigue que los dos informes digan lo mismo y no se lea ningun
 Ni la revisión OWASP: la hace el rol **`seguridad`** antes que tú, en cada tarea. Sus hallazgos de
 seguridad no los repitas; lo tuyo es comprobar que sus correcciones son reales.
 
+## La memoria del proyecto
+
+Al llamarte, el advisor puede entregarte **reglas aprendidas** de otras specs sobre los conceptos de
+esta tarea (por ejemplo «todo valor monetario usa 2 decimales»). Son errores que el proyecto ya
+cometió una vez: que no se repitan es parte de tu revisión.
+
+- **Por cada regla que recibiste**, añade una línea a tu entrada, debajo del encabezado:
+  - `- Regla <id>: cumple — <archivo:línea>` (dónde lo comprobaste),
+  - `- Regla <id>: no cumple — <archivo:línea>` (y además va como hallazgo numerado),
+  - `- Regla <id>: no aplica — <motivo>` (al menos tres palabras que digan por qué).
+
+  Si recibiste una regla y no dejas su línea, la tarea no cierra.
+- **Si un hallazgo tuyo, o el bug que corrige esta tarea, enseña algo que vale para otras specs**,
+  déjalo también como una línea:
+  `Regla aprendida (<concepto>; sinónimos: <palabras>): <regla> — <archivo:línea>`
+
+  El concepto sale de `node .chalc/memory.mjs concepts`: usa uno de la lista, y crea uno nuevo solo
+  si ninguno encaja. Los sinónimos son opcionales: pon solo palabras que en este proyecto
+  siempre significan ese concepto y que la lista no tiene (un «envío» no es dinero aunque cueste).
+  Una regla que solo vale para esta línea de código no es memoria del proyecto: es un hallazgo.
+
 ## Qué devuelves
 
 - Si no hay problemas reales: **`OK`** y nada más.

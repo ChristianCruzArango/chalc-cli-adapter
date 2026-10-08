@@ -42,10 +42,38 @@ function parseEntry(heading, body = []) {
 const CHECK = /^\s*[-*]\s*(A\d{2}|MASVS-[A-Z]+)\b[^:\n]*:\s*(revisado|reviewed|no aplica|not applicable|n\/a)\s*(?:—|--|-)?\s*(.*)$/i;
 const REVIEWED = /^(?:revisado|reviewed)$/i;
 
-// Lo que dice el cuerpo de una entrada: su checklist y cuántos puntos numerados trae. Lo lee todo
-// rol; quién DEBE traer checklist lo decide su contrato, no este lector.
+// Una regla aprendida (spec 015, R11): `Regla aprendida (<concepto>[; sinónimos: a, b]): <regla>`. La
+// deja un rol cuando un hallazgo o un bug enseña algo que vale para otras specs; la memoria la
+// captura al cerrar la tarea.
+const LEARNED = /^\s*[-*]?\s*(?:regla aprendida|learned rule)\s*\(([^);]+)(?:;\s*(?:sin[oó]nimos|synonyms)\s*:\s*([^)]*))?\)\s*:\s*(.+)$/i;
+
+// La confirmación de una regla entregada (spec 015, R17): `- Regla <id>: cumple — archivo:línea`,
+// `no cumple — archivo:línea` o `no aplica — <motivo>`, en los dos idiomas del spec.
+const CONFIRMED = /^\s*[-*]\s*(?:regla|rule)\s+([0-9a-f]{8})\s*:\s*(no cumple|cumple|no aplica|complies|violates|n\/a)\s*(?:—|--|-)?\s*(.*)$/i;
+const NA = /^(?:no aplica|n\/a)$/i;
+
+const confirmationOf = (line) => {
+  const m = CONFIRMED.exec(line);
+  if (!m) return null;
+  const [, id, word, rest] = m;
+  return NA.test(word)
+    ? { id, status: 'na', reason: rest.trim() }
+    : { id, status: /^(?:cumple|complies)$/i.test(word) ? 'complies' : 'violates', refs: rest.match(/[\w./\\-]+:\d+/g) || [] };
+};
+
+const learnedOf = (line) => {
+  const m = LEARNED.exec(line);
+  if (!m) return null;
+  const synonyms = (m[2] || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return { concept: m[1].trim(), synonyms, text: m[3].trim() };
+};
+
+// Lo que dice el cuerpo de una entrada: su checklist, cuántos puntos numerados trae y las reglas que
+// enseñó. Lo lee todo rol; quién DEBE traer checklist lo decide su contrato, no este lector.
 function bodyFacts(body) {
   const checklist = {};
+  const learned = body.map(learnedOf).filter(Boolean);
+  const confirmations = Object.fromEntries(body.map(confirmationOf).filter(Boolean).map((c) => [c.id, c]));
   let numbered = 0;
   for (const line of body) {
     if (/^\s*\d+\.\s/.test(line)) numbered += 1;
@@ -56,7 +84,7 @@ function bodyFacts(body) {
       ? { status: 'reviewed', refs: rest.match(/[\w./\\-]+:\d+/g) || [] }
       : { status: 'na', reason: rest.trim() };
   }
-  return { checklist, numbered };
+  return { checklist, numbered, learned, confirmations };
 }
 
 // Cada encabezado `##` con las líneas que tiene debajo, hasta el siguiente.

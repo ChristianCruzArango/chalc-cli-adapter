@@ -76,9 +76,14 @@ test('R6 — los identificadores son estables: minúsculas y guion bajo, sin esp
 
 // ── R6: el comando, cuando lo hay ─────────────────────────────────────────────────────────────
 
-test('R6 — correr el portón es la única acción con comando literal', () => {
+// Se ejecutan en una terminal: correr el portón y capturar en la memoria lo que enseñó el trabajo, al
+// cerrar cada tarea y al cerrar la feature (spec 015, R11) —lo que deja el endurecedor solo existe al
+// final—. Todas las demás las hace el asistente, no la shell.
+test('R6 — solo correr el portón, cerrar la tarea y cerrar la feature traen comando literal', () => {
   assert.equal(commandOf('run_gate'), 'node .chalc/gate.mjs');
-  for (const action of ACTIONS.filter((a) => a !== 'run_gate')) {
+  assert.equal(commandOf('tick_task'), 'node .chalc/memory.mjs capture');
+  assert.equal(commandOf('done'), 'node .chalc/memory.mjs capture');
+  for (const action of ACTIONS.filter((a) => !['run_gate', 'tick_task', 'done'].includes(a))) {
     assert.equal(commandOf(action), '', `${action} no debería traer comando`);
   }
 });

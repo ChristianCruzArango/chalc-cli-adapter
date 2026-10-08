@@ -1,5 +1,7 @@
 # Spec: <feature name>
 
+Concepts: <from `node .chalc/memory.mjs concepts`, comma-separated; a new one only if none fits>
+
 > **Specify** phase — the WHAT and the WHY. No implementation details.
 > Mark anything uncertain with `[NEEDS CLARIFICATION: ...]` and resolve it before planning.
 

@@ -161,6 +161,42 @@ test('emitGate keeps the values the user edited in gate.json', async () => {
   assert.equal(cfg.mutation.threshold, 60);
 });
 
+// Spec 016 (R4): un portón de una versión vieja escribió `scopeFlag: ""` porque entonces no sabía
+// acotar. Ese vacío no es una decisión del usuario: si ganara, la mutación seguiría corriendo sin
+// acotar aunque el catálogo ya sepa hacerlo. El resto de lo escrito sigue mandando (R16).
+test('emitGate restores the catalog mutation scope that an old gate.json left empty', async () => {
+  const { proj, source } = await equipped({
+    mutation: {
+      tool: 'stryker', command: 'npx --no-install stryker run --concurrency 2', report: 'reports/mutation/mutation.json',
+      format: 'elements', probe: 'node_modules/.bin/stryker', scopeFlag: '', install: '', threshold: 80, required: true
+    }
+  });
+
+  await emitGate(proj, { sourceDir: source });
+
+  const cfg = JSON.parse(await readFile(join(proj, '.chalc', 'gate.json'), 'utf8'));
+  assert.equal(cfg.mutation.scopeFlag, '--mutate');
+  assert.equal(cfg.mutation.scopeSpan, 'colon');
+  assert.equal(cfg.mutation.command, 'npx --no-install stryker run --concurrency 2', 'lo escrito por el usuario sigue ganando');
+  assert.equal(cfg.mutation.install, '', 'un vacío fuera del alcance de mutación sigue siendo del usuario');
+});
+
+test('emitGate restores every empty mutation scope key, each one from the catalog', async () => {
+  const proj = await project({ 'A.sln': '', 'src/A/A.csproj': '<Project Sdk="Microsoft.NET.Sdk"></Project>' });
+  const source = await fakeCatalog();
+  const { config } = await emitGate(proj, { sourceDir: source });
+  const old = { ...config, mutation: { ...config.mutation, command: 'dotnet stryker -c 2', scopeFlag: '', scopeSpan: '', scopeJoin: '' } };
+  await writeFile(join(proj, '.chalc', 'gate.json'), JSON.stringify(old, null, 2), 'utf8');
+
+  await emitGate(proj, { sourceDir: source });
+
+  const cfg = JSON.parse(await readFile(join(proj, '.chalc', 'gate.json'), 'utf8'));
+  assert.equal(cfg.mutation.scopeFlag, '--mutate');
+  assert.equal(cfg.mutation.scopeSpan, 'braces');
+  assert.equal(cfg.mutation.scopeJoin, 'repeat');
+  assert.equal(cfg.mutation.command, 'dotnet stryker -c 2');
+});
+
 test('emitGate adds keys the previous config did not have', async () => {
   const { proj, source } = await equipped({});
   // Config de una versión anterior de chalc: sin límites de lint ni carpeta de specs.

@@ -368,6 +368,58 @@ test('runMutation runs the full command when the tool has no scope flag', async 
   assert.equal(run.calls[0].command, 'npx stryker run');
 });
 
+// ── spec 016: sin código de producción no se muta nada ────────────────────────────────────────
+//
+// Correr la herramienta sin acotar no significa «no midas nada»: significa «mide lo que diga la
+// configuración del repo». En un front eso fue una lista `mutate` de una HU anterior (104 mutantes
+// ajenos y NO PASA); en un backend, el proyecto entero durante más de una hora.
+
+test('runMutation does not run the tool when the task changed only tests and docs (spec 016, R1)', async () => {
+  const dir = await project();
+  const run = runner();
+
+  const r = await runMutation(
+    config({ scopeFlag: '--mutate' }),
+    {
+      root: dir,
+      changed: [
+        'src/app/crear/crear-convocatoria-form.contactos.spec.ts',
+        'tests/Tienda.Infrastructure.Tests/Common/ContadorDeGuardados.cs',
+        'specs/622222-contactos/spec.md',
+      ],
+      run
+    }
+  );
+
+  assert.equal(run.calls.length, 0, 'sin código de producción no hay nada que mutar');
+  assert.equal(r.ok, true);
+  assert.equal(r.skipped, true);
+  assert.equal(r.blocked, false);
+  assert.equal(r.reason, 'no-source');
+});
+
+test('runMutation does not fall back to the full command when the tool has no scope flag (spec 016, R1)', async () => {
+  const dir = await project();
+  const run = runner();
+
+  const r = await runMutation(config(), { root: dir, changed: ['src/precio.test.ts', 'README.md'], run });
+
+  assert.equal(run.calls.length, 0);
+  assert.equal(r.reason, 'no-source');
+});
+
+test('runMutation still runs when production code sits next to the tests (spec 016, R1)', async () => {
+  const dir = await project();
+  const run = runner({ writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed'])) });
+
+  await runMutation(
+    config({ scopeFlag: '--mutate' }),
+    { root: dir, changed: ['src/precio.spec.ts', 'src/precio.ts'], run }
+  );
+
+  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/precio.ts');
+});
+
 // ── acotado a los TRAMOS que la tarea escribió ────────────────────────────────────────────────
 //
 // Mutar el archivo entero no solo mete ruido en el veredicto: cuesta el tiempo de probar cada

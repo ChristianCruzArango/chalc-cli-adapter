@@ -28,7 +28,8 @@ export const FRAME = {
     status: {
       passed: 'pasó', failed: 'no pasa', blocked: 'bloqueada',
       skippedFast: 'omitida por --fast', skippedDependency: 'no ejecutada: los tests fallaron',
-      notApplicable: 'no aplica en este repo', skippedDisabled: 'desactivada en .chalc/gate.json'
+      notApplicable: 'no aplica en este repo', skippedDisabled: 'desactivada en .chalc/gate.json',
+      skippedNoSource: 'no aplica: la tarea no cambió código de producción'
     },
     mutation: {
       title: 'Mutación',
@@ -73,7 +74,8 @@ export const FRAME = {
     status: {
       passed: 'passed', failed: 'failed', blocked: 'blocked',
       skippedFast: 'skipped by --fast', skippedDependency: 'not run: the tests failed',
-      notApplicable: 'not applicable in this repo', skippedDisabled: 'disabled in .chalc/gate.json'
+      notApplicable: 'not applicable in this repo', skippedDisabled: 'disabled in .chalc/gate.json',
+      skippedNoSource: 'not applicable: the task changed no production code'
     },
     mutation: {
       title: 'Mutation',

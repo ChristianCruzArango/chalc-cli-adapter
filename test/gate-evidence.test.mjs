@@ -182,6 +182,20 @@ test('renderEvidence marks a stage the repo declared not applicable', async () =
   assert.match(md, /no aplica/);
 });
 
+// Spec 016 (R2, R3, R5): una tarea de solo pruebas no muta nada, y el informe lo dice con su propio
+// motivo —no con el de un repo que declaró la etapa no aplicable— en los dos idiomas.
+test('renderEvidence says the task changed no production code when mutation had nothing to mutate', async () => {
+  const stages = [
+    passed('tests', 'npm test', 900),
+    { stage: 'mutation', ok: true, blocked: false, skipped: true, reason: 'no-source', findings: [] }
+  ];
+
+  assert.match(render(stages, 'es'), /no aplica: la tarea no cambió código de producción/);
+  assert.match(render(stages, 'en'), /not applicable: the task changed no production code/);
+  assert.doesNotMatch(render(stages, 'es'), /no aplica en este repo/);
+  assert.equal(verdictOf(stages), 'pass');
+});
+
 // ── escritura ─────────────────────────────────────────────────────────────────────────────────
 
 test('writeEvidence leaves the report at .chalc/gate.md', async () => {

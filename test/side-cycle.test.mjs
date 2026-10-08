@@ -21,7 +21,7 @@ const ROLES = [{ id: 'revisor', order: 10, cadence: 'task', required: true }];
 // Un lado consumidor con su contrato al día y trabajo sin medir por delante.
 const snapshot = (over = {}) => ({
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — el lector', mtime: GATE - 1, ...over.tasks },
-  gate: { exists: true, date: GATE, verdict: 'pass', fast: false, branch: BRANCH, pending: [], ...over.gate },
+  gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: BRANCH, pending: [], ...over.gate },
   review: { entries: [{ role: 'revisor', date: GATE + 500, ok: true, findings: 0 }], ...over.review },
   changed: { files: ['src/pago.ts'], newestMtime: 3000, ...over.changed },
   flow: {
@@ -152,7 +152,8 @@ test('R16 — el comando de la deriva es un diff, no una copia', async () => {
   const { facts } = decideOn({ contract: { differs: true, lines: 4 } });
   const command = commandOf('sync_contract', { facts });
 
-  assert.match(command, /^diff /, `debería mostrar la diferencia: ${command}`);
+  // `git diff --no-index`: muestra la diferencia igual que `diff` y existe también en Windows (F-24).
+  assert.match(command, /^git diff --no-index -- /, `debería mostrar la diferencia: ${command}`);
   for (const destructivo of ['cp ', 'mv ', 'copy ', '>', 'rm ']) {
     assert.ok(!command.includes(destructivo), `el comando no puede contener "${destructivo}": ${command}`);
   }
@@ -162,7 +163,7 @@ test('R16 — el diff nombra las dos copias, la mía primero', async () => {
   const { commandOf } = await import('../catalog/next/lib/actions.mjs');
   const { facts } = decideOn({ contract: { differs: true, lines: 4 } });
 
-  assert.equal(commandOf('sync_contract', { facts }), 'diff specs/003-pago/contracts/api.md ../back/specs/003-pago/contracts/api.md');
+  assert.equal(commandOf('sync_contract', { facts }), 'git diff --no-index -- specs/003-pago/contracts/api.md ../back/specs/003-pago/contracts/api.md');
 });
 
 test('R16 — sin rutas no se inventa un comando', async () => {

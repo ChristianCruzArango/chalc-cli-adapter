@@ -356,3 +356,35 @@ test('un error al llamar al modelo emite un evento visible por onStep y NO conta
   // ...pero los steps del resultado quedan limpios: el modelo nunca ve estos eventos
   assert.equal(r.steps.length, 0);
 });
+
+// F-10 (auditoría): el anti-bucle no puede impedir lo legítimo.
+test('F-10: a failing command can be run again after a change in the same turn', async () => {
+  let runs = 0;
+  const tools = {
+    bash: { summary: 'x', run: async () => ({ command: 'npm test', code: ++runs === 1 ? 1 : 0, stdout: '' }) },
+    edit: { summary: 'x', run: async () => ({ path: 'a.ts', ok: true }) }
+  };
+  const turns = [
+    '{"action":{"tool":"bash","args":{"command":"npm test"}}}',
+    '{"action":{"tool":"edit","args":{"path":"a.ts","old":"x","new":"y"}}}',
+    '{"action":{"tool":"bash","args":{"command":"npm test"}}}',
+    '{"done":true,"summary":"ok"}'
+  ];
+  let i = 0;
+  const r = await runAgent({ chatImpl: async () => turns[i++], tools, renderPrompt });
+  assert.equal(runs, 2);
+  assert.equal(r.steps.some((s) => s.observation?.repeated), false);
+});
+
+test('F-10: a file is read again after it was edited, instead of returning the stale result', async () => {
+  let reads = 0;
+  const tools = {
+    read: { summary: 'x', run: async () => ({ path: 'a.ts', content: `v${++reads}` }) },
+    edit: { summary: 'x', run: async () => ({ path: 'a.ts', ok: true }) }
+  };
+  const read = '{"action":{"tool":"read","args":{"path":"a.ts"}}}';
+  const turns = [read, '{"action":{"tool":"edit","args":{"path":"a.ts","old":"v1","new":"v2"}}}', read, '{"done":true,"summary":"ok"}'];
+  let i = 0;
+  await runAgent({ chatImpl: async () => turns[i++], tools, renderPrompt });
+  assert.equal(reads, 2);
+});

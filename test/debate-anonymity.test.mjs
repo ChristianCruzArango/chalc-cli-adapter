@@ -14,11 +14,11 @@ const participants = {
   b: { id: 'b', stance: 'challenger', model: 'gpt-oss:20b', provider: 'ollama' }
 };
 
-const turn = (round, by, texto) => ({
+const turn = (round, by, text) => ({
   round, by, stance: by === 'a' ? 'proponent' : 'challenger',
-  postura: texto, acuerdos: [`acuerdo de ${by} en la ronda ${round}`], desacuerdos: [`objeción de ${by} en la ronda ${round}`],
-  resueltos: [], preguntas: [], declaraAcuerdo: false,
-  raw: `===POSTURA===\n${texto}`
+  position: text, agreements: [`acuerdo de ${by} en la ronda ${round}`], disagreements: [`objeción de ${by} en la ronda ${round}`],
+  settled: [], raisedQuestions: [], claimsAgreement: false,
+  raw: `===POSTURA===\n${text}`
 });
 
 const state = {
@@ -32,11 +32,11 @@ const state = {
     turn(2, 'b', 'ARGUMENTO NUEVO DE B')
   ],
   questions: [
-    { id: 'q1', texto: '¿qué volumen diario?', pedidaPor: ['a'], respuesta: '10k al día', respondida: true },
-    { id: 'q2', texto: '¿qué presupuesto?', pedidaPor: ['b'], respuesta: '', respondida: false }
+    { id: 'q1', text: '¿qué volumen diario?', askedBy: ['a'], answer: '10k al día', answered: true },
+    { id: 'q2', text: '¿qué presupuesto?', askedBy: ['b'], answer: '', answered: false }
   ],
-  desacuerdosAbiertos: [{ n: 3, texto: 'el coste de operación no está medido', by: 'b', round: 2 }],
-  desacuerdosResueltos: []
+  openDisagreements: [{ n: 3, text: 'el coste de operación no está medido', by: 'b', round: 2 }],
+  settledDisagreements: []
 };
 
 const todo = ({ system, user }) => `${system}\n${user}`;
@@ -45,9 +45,9 @@ test('el prompt de un participante no revela el modelo ni el proveedor del otro 
   const paraA = todo(await buildTurnPrompt({ participant: participants.a, state, lang: 'es' }));
   const paraB = todo(await buildTurnPrompt({ participant: participants.b, state, lang: 'es' }));
 
-  for (const texto of [paraA, paraB]) {
+  for (const text of [paraA, paraB]) {
     for (const filtrado of ['claude', 'opus', 'gpt-oss', 'openrouter', 'ollama', 'anthropic']) {
-      assert.equal(texto.toLowerCase().includes(filtrado), false, `se filtró "${filtrado}" al prompt`);
+      assert.equal(text.toLowerCase().includes(filtrado), false, `se filtró "${filtrado}" al prompt`);
     }
   }
 });

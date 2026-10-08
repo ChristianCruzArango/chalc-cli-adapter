@@ -97,7 +97,7 @@ const ROLES = [
 ];
 const snap = (log, { mobile = false } = {}) => ({
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — pagar', mtime: GATE - 1 },
-  gate: { exists: true, date: GATE, verdict: 'pass', fast: false, branch: 'b', pending: [] },
+  gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: 'b', pending: [] },
   review: { entries: allReviews(log) },
   changed: { files: SCOPE, newestMtime: GATE - 10 },
   flow: { approvals: { task: true, feature: true }, roles: ROLES },

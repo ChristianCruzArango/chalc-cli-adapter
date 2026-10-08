@@ -9,7 +9,7 @@
 // portón. Cada captura lee solo lo posterior a la anterior: capturar dos veces lo mismo sumaría una
 // «vez vista» que no ocurrió.
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { allReviews } from '../../next/lib/review.mjs';
 import { parseGateState } from '../../next/lib/state.mjs';
@@ -17,15 +17,14 @@ import { currentTask } from '../../next/lib/tasks.mjs';
 import { headCommit } from '../../gate/lib/changed.mjs';
 import { loadConfig } from '../../gate/lib/config.mjs';
 import { newestSpec } from '../../gate/lib/spec.mjs';
+import { STATE_REL as GATE_STATE_REL } from '../../gate/lib/evidence.mjs';
+import { textOf } from '../../gate/lib/data.mjs';
 import { compactIfNeeded, remember } from './store.mjs';
 import { conceptsIn, learnSynonym, loadConcepts, normalizePhrase } from './concepts.mjs';
 
 const STATE_REL = '.chalc/memory/state.json';
 const REF = /[\w./-]+\.\w+(?=:\d+|\b)/g;
 
-const textOf = async (path) => {
-  try { return await readFile(path, 'utf8'); } catch { return ''; }
-};
 
 // El id de un concepto escrito por un rol. Si el rol usó un sinónimo («money»), es el concepto al que
 // pertenece; si usó una palabra que nadie conocía, es un concepto nuevo.
@@ -71,7 +70,7 @@ async function ruleEntries(root, { since, origin, commit }) {
 
 // Las supresiones aceptadas por la corrida del portón, si es posterior a `since`.
 async function decisionEntries(root, { since, origin, commit }) {
-  const state = parseGateState(await textOf(join(root, '.chalc/gate.state.json')));
+  const state = parseGateState(await textOf(join(root, GATE_STATE_REL)));
   if (!state.exists || state.date <= since) return [];
   const concepts = await loadConcepts(root);
   return state.suppressions.map((s) => ({
@@ -84,7 +83,11 @@ async function decisionEntries(root, { since, origin, commit }) {
 // Captura lo nuevo desde la última vez. Devuelve cuántas reglas y decisiones guardó.
 export async function capture(root, { now = new Date() } = {}) {
   const statePath = join(root, STATE_REL);
-  const since = Date.parse(JSON.parse((await textOf(statePath)) || '{}').capturedUntil || 0) || 0;
+  // Un estado ilegible no tumba la captura: se trata como «nunca se capturó» y se vuelve a leer todo.
+  // Es estado de máquina (solo una marca de tiempo) y `remember` deduplica: perderlo no pierde nada.
+  let state = {};
+  try { state = JSON.parse((await textOf(statePath)) || '{}') || {}; } catch { state = {}; }
+  const since = Date.parse(state.capturedUntil || 0) || 0;
   const context = { since, origin: await originOf(root), commit: (await headCommit(root)).slice(0, 10) };
 
   const rules = await ruleEntries(root, context);

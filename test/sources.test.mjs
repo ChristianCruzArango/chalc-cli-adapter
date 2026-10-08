@@ -5,33 +5,27 @@ import { fetchAzureDevOps, fetchJira, fetchUrl } from '../lib/sources.mjs';
 
 const AZURE_URL = 'https://dev.azure.com/XM-Mercado/SICEP/_sprints/backlog/CREG/SICEP/CREG/2026/Sprint%205?workitem=599855';
 
-// Sustituye fetch global y devuelve las llamadas capturadas para poder revisar cabeceras/URL.
+// Transporte falso inyectado en los conectores; devuelve las llamadas para revisar cabeceras/URL.
 function stubFetch(handler) {
   const calls = [];
-  const original = globalThis.fetch;
-  globalThis.fetch = async (url, opts = {}) => { calls.push({ url: String(url), opts }); return handler(String(url), opts); };
-  return { calls, restore() { globalThis.fetch = original; } };
+  const fetchImpl = async (url, opts = {}) => { calls.push({ url: String(url), opts }); return handler(String(url), opts); };
+  return { calls, io: { fetchImpl }, restore() {} };
 }
 
 test('externalHttpUrl rejects unsafe protocols and local hosts', () => {
-  assert.throws(() => externalHttpUrl('file:///etc/passwd'), /Protocolo no permitido/);
-  assert.throws(() => externalHttpUrl('http://localhost:3000'), /Host local no permitido/);
-  assert.throws(() => externalHttpUrl('http://127.0.0.1:3000'), /privada\/local|local\/privada/);
-  assert.throws(() => externalHttpUrl('http://192.168.1.10'), /privada/);
+  assert.throws(() => externalHttpUrl('file:///etc/passwd'), /Protocolo no permitido|Protocol not allowed/);
+  assert.throws(() => externalHttpUrl('http://localhost:3000'), /Host local no permitido|Local host not allowed/);
+  assert.throws(() => externalHttpUrl('http://127.0.0.1:3000'), /privada\/local|local\/privada|[Pp]rivate/);
+  assert.throws(() => externalHttpUrl('http://192.168.1.10'), /privada|[Pp]rivate/);
 });
 
 test('fetchUrl rejects redirects to local hosts', async () => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response('', {
+  const fetchImpl = async () => new Response('', {
     status: 302,
     headers: { location: 'http://localhost/private' }
   });
 
-  try {
-    await assert.rejects(() => fetchUrl('https://example.com/doc'), /Host local no permitido/);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  await assert.rejects(() => fetchUrl('https://example.com/doc', { fetchImpl }), /Host local no permitido|Local host not allowed/);
 });
 
 // Azure DevOps no responde 401 cuando el PAT es inválido: devuelve 203 (o 200) con el HTML del
@@ -43,7 +37,7 @@ test('fetchAzureDevOps explains the sign-in page instead of crashing on JSON.par
   }));
 
   try {
-    await assert.rejects(() => fetchAzureDevOps({ url: AZURE_URL, pat: 'bad-pat' }), (err) => {
+    await assert.rejects(() => fetchAzureDevOps({ url: AZURE_URL, pat: 'bad-pat' }, s.io), (err) => {
       assert.match(err.message, /Azure DevOps/);
       assert.match(err.message, /HTML/);
       assert.doesNotMatch(err.message, /Unexpected token/);
@@ -58,7 +52,7 @@ test('fetchAzureDevOps reports rejected credentials on 401', async () => {
   const s = stubFetch(async () => new Response('{"message":"denied"}', { status: 401 }));
 
   try {
-    await assert.rejects(() => fetchAzureDevOps({ url: AZURE_URL, pat: 'expired' }), /Azure DevOps.*401|401.*Azure DevOps/s);
+    await assert.rejects(() => fetchAzureDevOps({ url: AZURE_URL, pat: 'expired' }, s.io), /Azure DevOps.*401|401.*Azure DevOps/s);
   } finally {
     s.restore();
   }
@@ -74,7 +68,7 @@ test('fetchAzureDevOps hits the work item API with a trimmed PAT and no fed-auth
   }), { status: 200, headers: { 'content-type': 'application/json' } }));
 
   try {
-    const out = await fetchAzureDevOps({ url: AZURE_URL, pat: '  secret-pat\n' });
+    const out = await fetchAzureDevOps({ url: AZURE_URL, pat: '  secret-pat\n' }, s.io);
     assert.match(s.calls[0].url, /dev\.azure\.com\/XM-Mercado\/_apis\/wit\/workitems\/599855/);
     const headers = s.calls[0].opts.headers;
     assert.equal(headers.authorization, 'Basic ' + Buffer.from(':secret-pat').toString('base64'));
@@ -92,7 +86,7 @@ test('fetchJira explains an html login page too', async () => {
 
   try {
     await assert.rejects(
-      () => fetchJira({ url: 'https://acme.atlassian.net/browse/ABC-12', email: 'a@b.c', token: 'x' }),
+      () => fetchJira({ url: 'https://acme.atlassian.net/browse/ABC-12', email: 'a@b.c', token: 'x' }, s.io),
       (err) => {
         assert.match(err.message, /Jira/);
         assert.match(err.message, /HTML/);
@@ -105,15 +99,10 @@ test('fetchJira explains an html login page too', async () => {
 });
 
 test('fetchUrl strips html responses and trims text', async () => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response('<p>Hello&nbsp;world</p>', {
+  const fetchImpl = async () => new Response('<p>Hello&nbsp;world</p>', {
     status: 200,
     headers: { 'content-type': 'text/html' }
   });
 
-  try {
-    assert.equal(await fetchUrl('https://example.com/doc'), 'Hello world');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  assert.equal(await fetchUrl('https://example.com/doc', { fetchImpl }), 'Hello world');
 });

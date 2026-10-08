@@ -47,8 +47,7 @@ export function blankOut(text, { lineComment = '//', block = true, template = tr
     if (block && text.startsWith('/*', i)) {
       const end = text.indexOf('*/', i + 2);
       const stop = end < 0 ? text.length : end + 2;
-      for (let j = i; j < stop; j++) blankComment(j);
-      i = stop;
+      while (i < stop) blankComment(i++);
       continue;
     }
     // comentario de línea
@@ -56,22 +55,67 @@ export function blankOut(text, { lineComment = '//', block = true, template = tr
       while (i < text.length && text[i] !== '\n') blankComment(i++);
       continue;
     }
+    // literal de expresión regular (`/^["']/`): sus comillas y llaves no son de verdad. Sin esto, una
+    // comilla dentro de la regex abría un «string» que se comía el resto de la línea y descuadraba el
+    // largo de las funciones. Solo donde una `/` no puede ser una división.
+    if (lineComment === '//' && text[i] === '/' && text[i + 1] !== '/' && text[i + 1] !== '*' && regexMayStart(text, i)) {
+      const end = regexEnd(text, i);
+      if (end > 0) {
+        for (let j = i + 1; j < end; j++) blankLiteral(j);
+        i = end + 1;
+        continue;
+      }
+    }
     // literal de texto
     const quote = text[i];
     if (quote === '"' || quote === "'" || (template && quote === '`')) {
-      blankLiteral(i++);
-      while (i < text.length) {
-        if (text[i] === '\\') { blankLiteral(i); blankLiteral(i + 1); i += 2; continue; }
-        if (text[i] === quote) { blankLiteral(i++); break; }
-        // Un literal de una línea sin cerrar no puede tragarse el resto del archivo.
-        if (text[i] === '\n' && quote !== '`') break;
-        blankLiteral(i++);
-      }
+      i = stringEnd(text, i, blankLiteral);
       continue;
     }
     i++;
   }
   return out.join('');
+}
+
+// Recorre el literal de texto que abre la comilla en `start`, pasando cada posición a `blank`, y
+// devuelve dónde sigue el texto. Un literal de una línea sin cerrar no puede tragarse el resto del
+// archivo: termina en el salto de línea.
+function stringEnd(text, start, blank) {
+  const quote = text[start];
+  let i = start;
+  blank(i++);
+  while (i < text.length) {
+    if (text[i] === '\\') { blank(i); blank(i + 1); i += 2; continue; }
+    if (text[i] === quote) { blank(i++); break; }
+    if (text[i] === '\n' && quote !== '`') break;
+    blank(i++);
+  }
+  return i;
+}
+
+// ¿Puede empezar aquí una regex? Si lo anterior es un operador, una apertura o una palabra como
+// `return`, una `/` no puede ser una división.
+const REGEX_AFTER_WORD = /\b(?:return|typeof|case|in|of|delete|void|throw|new|yield|await)$/;
+function regexMayStart(text, i) {
+  let j = i - 1;
+  while (j >= 0 && (text[j] === ' ' || text[j] === '\t')) j--;
+  if (j < 0 || text[j] === '\n') return true;
+  if ('(,=:[!&|?{};+-*%<>~^'.includes(text[j])) return true;
+  return REGEX_AFTER_WORD.test(text.slice(Math.max(0, j - 10), j + 1));
+}
+
+// Posición de la `/` que cierra la regex que abre en `i` (sin contar las de una clase `[...]`), o -1
+// si la línea acaba antes: entonces no era una regex.
+function regexEnd(text, i) {
+  let inClass = false;
+  for (let j = i + 1; j < text.length && text[j] !== '\n'; j++) {
+    const c = text[j];
+    if (c === '\\') { j++; continue; }
+    if (c === '[') inClass = true;
+    else if (c === ']') inClass = false;
+    else if (c === '/' && !inClass) return j;
+  }
+  return -1;
 }
 
 // Líneas del texto, sin la línea vacía final que deja el salto de cierre.
@@ -145,7 +189,6 @@ function count(inside) {
 
 // ── análisis ──────────────────────────────────────────────────────────────────────────────────
 
-const delta = (line) => [...line].reduce((d, c) => d + (c === '{' ? 1 : c === '}' ? -1 : 0), 0);
 
 // Recorre las líneas SANITIZADAS y devuelve { functions, deepest }.
 // - `functions`: { line, name, params, length } de cada función que se abre.
@@ -168,11 +211,16 @@ export function analyze(lines, { maxDepth = 3, ignore = [], requireBody = false 
       functions.push({ line: i + 1, name: header.name, params: signature.params, length: 0 });
     }
 
-    depth += delta(lines[i]);
-
+    // Carácter a carácter: una función de UNA línea con llaves (`function f() { return x; }`) abre y
+    // cierra en la misma línea, y mirando solo la profundidad al final de la línea nunca constaba como
+    // abierta — seguía «abierta» y se le sumaban las líneas siguientes (falso function-too-long).
     const frame = open[open.length - 1];
+    for (const c of lines[i]) {
+      if (c === '{') { depth += 1; if (frame && depth > frame.start) frame.opened = true; }
+      else if (c === '}') depth -= 1;
+    }
+
     if (frame) {
-      if (depth > frame.start) frame.opened = true;
       // Profundidad relativa al cuerpo: la llave de la propia función no cuenta como anidamiento.
       const relative = depth - frame.start - 1;
       if (relative > maxDepth && !frame.deep) {

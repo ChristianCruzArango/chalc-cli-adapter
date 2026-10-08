@@ -41,7 +41,7 @@ test('R5 — cada fila trae el comando y la ruta del reporte que el portón espe
 
   assert.ok(out.includes('mvn org.pitest:pitest-maven:mutationCoverage'), 'falta el comando de PIT');
   assert.ok(out.includes('target/pit-reports/**/mutations.xml'), 'falta el reporte de PIT');
-  assert.ok(out.includes('mutmut run && mutmut junitxml > reports/mutation/mutmut.xml'), 'falta el de mutmut');
+  assert.ok(out.includes('mutmut run; mutmut export-cicd-stats'), 'falta el de mutmut');
   assert.ok(out.includes('reports/mutation/mutation.json'), 'falta el de Stryker JS');
   assert.ok(out.includes('StrykerOutput/**/reports/mutation-report.json'), 'falta el de Stryker.NET');
 });

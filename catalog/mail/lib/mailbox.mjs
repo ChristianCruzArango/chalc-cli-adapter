@@ -12,6 +12,7 @@
 
 import { mkdir, readdir, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { textOf } from './text.mjs';
 
 // Un aviso es UNA línea. Lo que necesita más es una conversación con el usuario, no un archivo entre
 // dos terminales — y un buzón con párrafos deja de leerse en dos días.
@@ -28,24 +29,35 @@ const filenameFor = (now, from) => `${String(now).replace(/[:-]/g, '')}-from-${f
 // La validación es estricta y ocurre ANTES de crear nada (R7): un aviso a medias es peor que ninguno
 // —el otro lado lo lee, no entiende qué se le pide y deja de mirar el buzón— y una carpeta creada
 // para un destinatario inventado quedaría ahí para siempre.
-export async function send({ dir, from, to, message, peers = [], now }) {
+export async function send({ dir, from, to, message, peers = [], now, lang = 'en' }) {
   const valid = peers.map((p) => p.id);
+  const tx = textOf(lang);
 
-  if (!to) return fail('Falta el destinatario.');
-  if (to === from) return fail(`No puedes enviarte un aviso a ti mismo (${from}).`);
-  if (!valid.includes(to)) return fail(`El lado "${to}" no existe. Los lados de este workspace son: ${valid.join(', ')}.`);
+  if (!to) return fail(tx.noRecipient);
+  if (to === from) return fail(tx.toSelf(from));
+  if (!valid.includes(to)) return fail(tx.unknownSide(to, valid.join(', ')));
 
   const text = String(message ?? '').trim();
-  if (!text) return fail('El mensaje está vacío.');
-  if (/[\r\n]/.test(text)) return fail('El mensaje debe ser UNA línea. Para algo más largo, habla con el usuario.');
-  if (text.length > MAX) return fail(`El mensaje tiene ${text.length} caracteres y el máximo es ${MAX}.`);
+  if (!text) return fail(tx.emptyMessage);
+  if (/[\r\n]/.test(text)) return fail(tx.oneLine);
+  if (text.length > MAX) return fail(tx.tooLong(text.length, MAX));
 
   const inbox = join(dir, to, 'new');
   await mkdir(inbox, { recursive: true });
-  const path = join(inbox, filenameFor(now, from));
-  await writeFile(path, `from: ${from}\nto: ${to}\ndate: ${now}\n\n${text}\n`, 'utf8');
-
-  return { ok: true, error: '', path };
+  // `wx`: nunca se pisa un aviso. Dos en el mismo segundo del mismo lado tenían el mismo nombre y el
+  // segundo borraba al primero; ahora el segundo lleva `-2` (y así), que ordena detrás.
+  const body = `from: ${from}\nto: ${to}\ndate: ${now}\n\n${text}\n`;
+  const base = filenameFor(now, from).replace(/\.md$/, '');
+  for (let n = 1; n <= 100; n++) {
+    const path = join(inbox, `${base}${n === 1 ? '' : `-${n}`}.md`);
+    try {
+      await writeFile(path, body, { encoding: 'utf8', flag: 'wx' });
+      return { ok: true, error: '', path };
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+    }
+  }
+  return fail(tx.tooMany);
 }
 
 // Mueve a `read/` los avisos sin leer de `me`. Devuelve cuántos.

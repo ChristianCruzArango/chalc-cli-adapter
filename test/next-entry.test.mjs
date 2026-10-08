@@ -15,6 +15,9 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { advise, render } from '../catalog/next/next.mjs';
 import { recordTouched } from '../catalog/gate/lib/touched.mjs';
+import { scopeHash } from '../catalog/gate/lib/fingerprint.mjs';
+
+const anchored = async (root, state, files) => ({ scope: { files }, scopeHash: await scopeHash(root, files), ...state });
 
 const SPEC = 'specs/008-advisor';
 
@@ -31,7 +34,6 @@ async function repo({ tasks = '- [x] T1\n- [ ] T2 — en esto voy\n', config, st
 
   await writeFile(join(root, '.chalc', 'gate.json'), JSON.stringify(config ?? { spec: { dir: 'specs' }, pending: [], language: 'es' }));
   if (tasks !== null) await writeFile(join(root, SPEC, 'tasks.md'), tasks);
-  if (state) await writeFile(join(root, '.chalc', 'gate.state.json'), JSON.stringify(state));
   if (review) await writeFile(join(root, '.chalc', 'review.md'), review);
   // El fuente se envejece a un instante fijo para que la evidencia pueda ser posterior a él sin
   // depender de cuándo corra el test. Sin esto, cualquier repo "terminado" tendría trabajo sin medir.
@@ -40,6 +42,8 @@ async function repo({ tasks = '- [x] T1\n- [ ] T2 — en esto voy\n', config, st
   // Qué escribió esta tarea (spec 013, R10). Antes salía del árbol de fuentes entero, porque el
   // temporal no es un repo de git; R4b quitó ese respaldo y el fixture lo dice explícitamente.
   await recordTouched(root, ['src/pago.ts']);
+  // La evidencia lleva la huella del contenido revisado, como la escribe el portón (F-07).
+  if (state) await writeFile(join(root, '.chalc', 'gate.state.json'), JSON.stringify(await anchored(root, state, ['src/pago.ts'])));
   return root;
 }
 

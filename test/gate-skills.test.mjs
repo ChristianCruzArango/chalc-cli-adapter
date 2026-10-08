@@ -78,7 +78,7 @@ test('the mutation-testing skill teaches the mutmut command that produces a repo
   const { mutation } = await detectGateConfig(dir);
   const text = await skill('mutation-testing');
 
-  assert.ok(text.includes('mutmut junitxml'), 'mutmut results imprime por pantalla: el portón necesita el XML');
+  assert.ok(text.includes('mutmut export-cicd-stats'), 'mutmut results imprime por pantalla: el portón necesita el archivo');
   assert.ok(text.includes(mutation.report), `la skill debe apuntar al reporte "${mutation.report}"`);
 });
 
@@ -87,7 +87,7 @@ test('the python-testing skill agrees with the mutmut command of the gate', asyn
   const { mutation } = await detectGateConfig(dir);
   const text = await skill('python-testing');
 
-  assert.ok(text.includes('mutmut junitxml'));
+  assert.ok(text.includes('mutmut export-cicd-stats'));
   assert.ok(text.includes(mutation.report));
 });
 

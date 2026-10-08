@@ -9,7 +9,7 @@ import * as kit from '../lib/targetkit.mjs';
 
 export const label = 'GitHub Copilot';
 
-export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun , tools = null, roles = [] }) {
+export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun, tools = null, roles = [], force = false }) {
   const plan = [];
   for (const s of skills) plan.push(`skill     .chalc/skills/${s}`);
   for (const m of mcps) plan.push(`mcp       .vscode/mcp.json  ::  ${m.id}`);
@@ -27,10 +27,8 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   await kit.writeManagedBlock(join(projectPath, '.github', 'copilot-instructions.md'), block);
 
   if (mcps.length) {
-    await kit.mergeJson(join(projectPath, '.vscode', 'mcp.json'), (j) => {
-      j.servers = j.servers || {};
-      for (const m of mcps) j.servers[m.id] = { type: 'stdio', ...m.server };
-    });
+    const servers = mcps.map((m) => ({ ...m, server: { type: 'stdio', ...m.server } }));
+    await kit.mergeMcpServers(join(projectPath, '.vscode', 'mcp.json'), servers, { key: 'servers', force });
   }
 
   await kit.writeManifest(projectPath, 'copilot', stacks, skills, mcps, methods);

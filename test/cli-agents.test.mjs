@@ -49,3 +49,18 @@ test('renderAgents produce gráfico adaptativo con los tres roles', () => {
   assert.match(out, /edit cli\/index\.mjs/);
   assert.match(out, /trabajando/);
 });
+
+// M-07 — el historial no crece sin fin: una sesión larga abre un run por turno.
+test('el historial se acota sin perder el último run de cada rol ni uno en curso', () => {
+  const agents = createAgentRegistry();
+  const planner = agents.begin({ role: 'planner', task: 'planear' });
+  agents.finish(planner, { ok: true });
+  const reviewer = agents.begin({ role: 'reviewer', task: 'revisar' });   // queda en curso
+  for (let i = 0; i < 200; i++) agents.finish(agents.begin({ role: 'coder', task: `t${i}` }), { ok: true });
+  const snap = agents.snapshot();
+  assert.ok(snap.runs.length <= 50, `runs: ${snap.runs.length}`);
+  assert.equal(snap.agents.find((a) => a.role === 'planner').id, planner);
+  assert.equal(snap.agents.find((a) => a.role === 'reviewer').status, 'running');
+  assert.equal(agents.active('reviewer'), reviewer);
+  assert.equal(snap.agents.find((a) => a.role === 'coder').task, 't199');
+});

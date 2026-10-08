@@ -11,6 +11,7 @@ import { runAgent } from './loop.mjs';
 import { createRenderPrompt } from './harness.mjs';
 import { frame } from '../prompts/text.mjs';
 import { readOnlyTools } from './plan.mjs';
+import { MAX_CHILD_OUTPUT } from '../../lib/proc.mjs';
 
 // Tope del material a revisar: la sección "cambios" es requerida (entra SIEMPRE al prompt), así que se
 // acota aquí (~2k tokens) para no desbordar la ventana del modelo local.
@@ -19,7 +20,7 @@ const MAX_CHANGES = 8 * 1024;
 // git diff HEAD de las rutas tocadas. '' si no hay repo / git falla (se cae al contenido de archivos).
 function gitDiff(root, paths) {
   return new Promise((resolve) => {
-    execFile('git', ['diff', 'HEAD', '--', ...paths], { cwd: root, maxBuffer: 4 * 1024 * 1024, windowsHide: true },
+    execFile('git', ['diff', 'HEAD', '--', ...paths], { cwd: root, maxBuffer: MAX_CHILD_OUTPUT, windowsHide: true },
       (err, stdout) => resolve(err ? '' : String(stdout)));
   });
 }

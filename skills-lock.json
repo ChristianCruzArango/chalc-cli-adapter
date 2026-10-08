@@ -1,71 +1,146 @@
 {
   "version": 1,
+  "hashVersion": 2,
   "skills": {
     "angular-developer": {
       "source": "npx skills add https://github.com/angular/skills --skill angular-developer -y",
       "sourceType": "skillssh",
-      "contentSha256": "217040b5ae809f8d54d50090bca2323d147bae6a4eb38d1037fa21e874c2d8d9",
+      "contentSha256": "de5984f5da5d257d3a0158a0a09437db0d1bbd18bc4b910907caae6bc76d7a21",
       "installedAt": "2026-10-02T22:33:25.074Z"
     },
     "async-python-patterns": {
       "source": "npx skills add https://github.com/wshobson/agents --skill async-python-patterns -y",
       "sourceType": "skillssh",
-      "contentSha256": "c1849d3d64678422e0ed637dd8dd3d5acbecb91b044b3f7d6cfd642a188e94ce",
+      "contentSha256": "aef798965e440a4501f9cc2704f89f6d5d3327f4b07543b5ff1859d72b0eb957",
       "installedAt": "2026-09-29T19:32:01.144Z"
     },
     "code-security": {
       "source": "npx skills add https://github.com/semgrep/skills --skill code-security -y",
       "sourceType": "skillssh",
-      "contentSha256": "7bdb3678fa740f0877d35def2ea09ff3094a7f7033c9029dc9a7b2ebda1c64de",
+      "contentSha256": "dad7ce15629249464d389f7b846e467f9cdb87073c644def32f3c11d9d21b1ab",
       "installedAt": "2026-10-05T16:14:27.030Z"
     },
     "docker-expert": {
       "source": "npx skills add https://github.com/sickn33/antigravity-awesome-skills --skill docker-expert -y",
       "sourceType": "skillssh",
-      "contentSha256": "14840bcfb3fad72711975c3413416779ce5b9b14517fb5e326e248314e04f4d6",
+      "contentSha256": "6cfda494d696d4de7ece02888729a58eae14bd64cda8015c9153573efc25d8e5",
       "installedAt": "2026-09-29T19:32:20.242Z"
     },
     "frontend-design": {
       "source": "npx skills add https://github.com/anthropics/skills --skill frontend-design",
       "sourceType": "skillssh",
-      "contentSha256": "4eabc66183767153e404b39d1b839b1c37f2d82d86f0a0d7e880a579d8d62336",
+      "contentSha256": "e1481fcd7484d1bc55f2ca7170b788d7357821f5595d27e7132ec7df6841b0cf",
       "installedAt": "2026-08-21T18:20:56.030Z"
     },
     "python-code-style": {
       "source": "npx skills add https://github.com/wshobson/agents --skill python-code-style -y",
       "sourceType": "skillssh",
-      "contentSha256": "35ed0c437f33462187b0a89da8e5bfe9ac259dbc8731257c5445f1a5e1229acf",
+      "contentSha256": "ac7538b1ccb0e4b1cbcccfe883ff3d5e004e138af1b6830359a81a0400abc71c",
       "installedAt": "2026-09-29T19:31:45.648Z"
     },
     "python-design-patterns": {
       "source": "npx skills add https://github.com/wshobson/agents --skill python-design-patterns -y",
       "sourceType": "skillssh",
-      "contentSha256": "32d9905d574bb749b6dda97aa58706e639b8903b19c26e0212104484d3af662c",
+      "contentSha256": "bb31c26764cb2bf8f19955e1610e8102509cb1569e1575a413ffb3ada23a3c16",
       "installedAt": "2026-09-29T19:31:57.979Z"
     },
     "python-testing-patterns": {
       "source": "npx skills add https://github.com/wshobson/agents --skill python-testing-patterns -y",
       "sourceType": "skillssh",
-      "contentSha256": "df2784d5531ce830d99a4aa0dd8af0f82ce4cf2ba59c620dbd176ce17515caf7",
+      "contentSha256": "58967651b19d9f432287b2ba05b391fe744fa3b55b064d37ea1513b9c8ad1ad7",
       "installedAt": "2026-09-29T19:32:04.232Z"
     },
     "security-and-hardening": {
       "source": "npx skills add https://github.com/addyosmani/agent-skills --skill security-and-hardening -y",
       "sourceType": "skillssh",
-      "contentSha256": "9d64c9e2881d79fc8cdaeb2c0663e0570934ea3d3041ac6a895de9e42fd1ad55",
+      "contentSha256": "21713b2fe68eb6895a38b6d609e05a2cc91b0780fc3d0ef6305b61a7df7457e1",
       "installedAt": "2026-10-05T16:14:21.486Z"
     },
     "security-review": {
       "source": "npx skills add https://github.com/getsentry/skills --skill security-review -y",
       "sourceType": "skillssh",
-      "contentSha256": "11055500b40ff886045d2aea9e46bcd2b7c4d28e8ee0d64fb0e260f48717d111",
+      "contentSha256": "ddabdab5653ac0e32d81637fc40f0d650c2294cf938293a28cd9d6b9f5de5066",
       "installedAt": "2026-10-05T16:14:24.699Z"
     },
     "security-threat-model": {
       "source": "npx skills add https://github.com/openai/skills --skill security-threat-model -y",
       "sourceType": "skillssh",
-      "contentSha256": "a262f878637565892051aa945c88e8748e743896c20925b59c5c2d7d79e061a7",
+      "contentSha256": "6d66f27a8e4353f49264547acf4e541efd835f2e3a2d91f5a43e2104be5bd65e",
       "installedAt": "2026-10-05T16:14:29.788Z"
+    }
+  },
+  "builtins": {
+    "clean-code": {
+      "contentSha256": "edd9a7353a9a01ce11f4403483aa0170ddb45ae2b3a09880fb21db0319621d08"
+    },
+    "dart-best-practices": {
+      "contentSha256": "9eade1fe2927bf2837c15cad4c05fe6b7dccd23973e3b4741f66a15de9b1b771"
+    },
+    "dotnet-best-practices": {
+      "contentSha256": "f40a34554f2bd5e7b8688bd05e7dcd8cfea326f9c2f120d244ec8aa75408a62d"
+    },
+    "dotnet-testing": {
+      "contentSha256": "10014d20185c99366b8760462800245db6b4e9e1f619c7d796c4d8499dd655dc"
+    },
+    "flutter-architecture": {
+      "contentSha256": "cc8c739401c56fb7444822810a3ca9aeb57207d3959dd1ac242532842942fc97"
+    },
+    "flutter-async": {
+      "contentSha256": "834bc0427b885a1821cf9ebf28848c8e13625ceecb6c394d7647099c7c8a0953"
+    },
+    "flutter-navigation": {
+      "contentSha256": "94722be39a3638eff6024447982fef3db982a3f1a22a5e10b4e600d925bb45af"
+    },
+    "flutter-performance": {
+      "contentSha256": "4cad88089c6a44a9743430f2e1c16268643b34320047ed9b19afebf4416a1a3f"
+    },
+    "flutter-state-management": {
+      "contentSha256": "3605c68b589ae5098ed8eab0059fb20f40dbe1eedb865ac5382e94fdfc54b539"
+    },
+    "flutter-store-assets": {
+      "contentSha256": "1b59abc5768fa5a6aeb14b115fb36e71c742bce7db3975a23808160bfeb67773"
+    },
+    "flutter-testing": {
+      "contentSha256": "00f2b6d4eeef6e935510b063f4b62ee901de709d619121c722b9d8037c8e873e"
+    },
+    "flutter-widgets": {
+      "contentSha256": "383ffddac90400aebd351607c6f1e9750c29f73c86c85592dc9bc165d543f697"
+    },
+    "high-end-visual-design": {
+      "contentSha256": "6f3fc20b7717d42cafffc4b87e461e6284abac41f70bd8ea304cff2d07a3b356"
+    },
+    "interface-design": {
+      "contentSha256": "753a85f57b0ba8b3d0e1363196372ce199a93b75c1eb1351aebf95416d953ade"
+    },
+    "minimal-implementation": {
+      "contentSha256": "c3ac7163c7f17440d57fe51584f12ca3d672b0bc589c1d0ea2524dd1056d32b2"
+    },
+    "modular-architecture": {
+      "contentSha256": "a1f96468aeb3bef9ead47f51075282f3f86604bbd466f2f347f4bc0a577a4880"
+    },
+    "mutation-testing": {
+      "contentSha256": "9bbcac87138bb2d81ae9b3fd4f2105228bc2eb3935f27b49739d25bce58ca422"
+    },
+    "nestjs-best-practices": {
+      "contentSha256": "d9e7eb3819e92038b7a72298bb38d246bc7e57a6471c5089004bd9d639a1c3ac"
+    },
+    "python-best-practices": {
+      "contentSha256": "2317146d3716f432df1f008d772b949783668e828c88ca9577b137c1de3eb2e0"
+    },
+    "python-testing": {
+      "contentSha256": "091209a00b8b7cac5251369714a6323bde3165c10268a0b99459b98f6f6cbc30"
+    },
+    "responsive-design": {
+      "contentSha256": "c8c6530dd5c747aba4c32910452a81ad12267e0a72e6f620dc40164c5d4b2ed8"
+    },
+    "secure-coding": {
+      "contentSha256": "75e2d519b54cbfb6193e837c5eda11b6e5b7bfd6ac0f55b0e209a98951d91fc6"
+    },
+    "solid-principles": {
+      "contentSha256": "a0abe6b2906151a45171ca782aff9ec01ee570863a4bed8741db88117072cc58"
+    },
+    "tailwind-best-practices": {
+      "contentSha256": "40842c74262618bff36893bcbf336534ae72054229a78106805549f610e4d77b"
     }
   }
 }

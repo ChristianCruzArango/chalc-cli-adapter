@@ -35,9 +35,9 @@ const participants = {
   b: { id: 'b', stance: 'challenger', model: 'm-b', provider: 'p2' }
 };
 
-const turno = (desacuerdos = [], postura = 'argumento') => [
-  '===POSTURA===', postura,
-  '===DESACUERDOS===', ...desacuerdos.map((d) => `- ${d}`),
+const turno = (disagreements = [], position = 'argumento') => [
+  '===POSTURA===', position,
+  '===DESACUERDOS===', ...disagreements.map((d) => `- ${d}`),
   '===ESTADO===', 'acuerdo: no'
 ].join('\n');
 
@@ -53,34 +53,34 @@ test('las tesis del que abre el debate NO son desacuerdos: todavía no hay contr
   const { ask } = scripted([turno(TESIS_DEL_PROPONENTE), turno()]);
   const state = await runDebate({ ...base, rounds: 1, ask });
 
-  assert.equal(state.desacuerdosAbiertos.length, 0);
+  assert.equal(state.openDisagreements.length, 0);
   assert.equal(state.raisedTotal, 0);
-  assert.ok(state.turns[0].desacuerdos.length > 0);   // su argumento no se pierde: sigue en el turno
+  assert.ok(state.turns[0].disagreements.length > 0);   // su argumento no se pierde: sigue en el turno
 });
 
 test('a partir del segundo turno sí se abren: ahí ya hay postura ajena (R38)', async () => {
   const { ask } = scripted([turno(TESIS_DEL_PROPONENTE), turno(['la unidad económica no está probada'])]);
   const state = await runDebate({ ...base, rounds: 1, ask });
 
-  assert.equal(state.desacuerdosAbiertos.length, 1);
-  assert.equal(state.desacuerdosAbiertos[0].by, 'b');
+  assert.equal(state.openDisagreements.length, 1);
+  assert.equal(state.openDisagreements[0].by, 'b');
 });
 
 // ── T30 · el prefijo D<n>: (R39) ───────────────────────────────────────────────────────────────
 test('splitRef separa la referencia del texto, y no toca lo que no la lleva (R39)', () => {
-  assert.deepEqual(splitRef('D2: un lanzamiento amplio diluiría la oferta'), { ref: 2, texto: 'un lanzamiento amplio diluiría la oferta' });
-  assert.deepEqual(splitRef('D 12 . otra forma de escribirlo'), { ref: 12, texto: 'otra forma de escribirlo' });
-  assert.deepEqual(splitRef('la comisión no basta'), { ref: null, texto: 'la comisión no basta' });
-  assert.deepEqual(splitRef('D2C es un formato de datos'), { ref: null, texto: 'D2C es un formato de datos' });
+  assert.deepEqual(splitRef('D2: un lanzamiento amplio diluiría la oferta'), { ref: 2, text: 'un lanzamiento amplio diluiría la oferta' });
+  assert.deepEqual(splitRef('D 12 . otra forma de escribirlo'), { ref: 12, text: 'otra forma de escribirlo' });
+  assert.deepEqual(splitRef('la comisión no basta'), { ref: null, text: 'la comisión no basta' });
+  assert.deepEqual(splitRef('D2C es un formato de datos'), { ref: null, text: 'D2C es un formato de datos' });
 });
 
 test('el prefijo nunca llega al informe: se registra el texto limpio (R39)', async () => {
   const { ask } = scripted([turno(), turno(OBJECIONES_RONDA_1)]);
   const state = await runDebate({ ...base, rounds: 1, ask });
 
-  assert.equal(state.desacuerdosAbiertos.length, 3);
-  for (const d of state.desacuerdosAbiertos) assert.equal(/^D\s*\d+/.test(d.texto), false, `quedó el prefijo: ${d.texto}`);
-  assert.match(state.desacuerdosAbiertos[0].texto, /^Si la app no resuelve/);
+  assert.equal(state.openDisagreements.length, 3);
+  for (const d of state.openDisagreements) assert.equal(/^D\s*\d+/.test(d.text), false, `quedó el prefijo: ${d.text}`);
+  assert.match(state.openDisagreements[0].text, /^Si la app no resuelve/);
 });
 
 test('citar el PROPIO desacuerdo abierto es repetirse: no abre otro (R39)', async () => {
@@ -89,7 +89,7 @@ test('citar el PROPIO desacuerdo abierto es repetirse: no abre otro (R39)', asyn
   const { ask } = scripted([turno(), turno(OBJECIONES_RONDA_1), turno(LAS_MISMAS_RONDA_2), turno()]);
   const state = await runDebate({ ...base, rounds: 2, ask });
 
-  assert.equal(state.desacuerdosAbiertos.length, 3);
+  assert.equal(state.openDisagreements.length, 3);
 });
 
 test('citar el desacuerdo del RIVAL es rebatirlo: eso sí es una objeción nueva (R39)', async () => {
@@ -101,9 +101,9 @@ test('citar el desacuerdo del RIVAL es rebatirlo: eso sí es una objeción nueva
   ]);
   const state = await runDebate({ ...base, rounds: 2, ask });
 
-  assert.equal(state.desacuerdosAbiertos.length, 2);
-  assert.equal(state.desacuerdosAbiertos[1].by, 'a');
-  assert.equal(/^D\s*\d+/.test(state.desacuerdosAbiertos[1].texto), false);
+  assert.equal(state.openDisagreements.length, 2);
+  assert.equal(state.openDisagreements[1].by, 'a');
+  assert.equal(/^D\s*\d+/.test(state.openDisagreements[1].text), false);
 });
 
 // ── T31 · la reescritura sin número (R40) ──────────────────────────────────────────────────────

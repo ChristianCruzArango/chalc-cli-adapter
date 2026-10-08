@@ -10,11 +10,11 @@ test('buildAgentReplaySpec emits ONE test per requirement, grouping its verified
     { step: 4, action: { type: 'http' }, observation: { ok: true } }   // no-browser: se ignora
   ];
   const spec = buildAgentReplaySpec('001-home', 'http://localhost:4200', steps, { R1: 'La home saluda', R2: 'Redirige al home' });
-  assert.equal((spec.match(/\btest\('/g) || []).length, 2);                // un test por requisito (R1, R2)
+  assert.equal((spec.match(/\btest\("/g) || []).length, 2);                // un test por requisito (R1, R2)
   assert.match(spec, /test\.describe\.configure\(\{ mode: 'serial' \}\)/); // sesión compartida (mismo proceso)
   assert.match(spec, /test\.beforeAll/);
-  assert.match(spec, /test\('R1 — La home saluda', async \(\) =>/);        // sin fixture {page}: usa la compartida
-  assert.match(spec, /test\('R2 — Redirige al home'/);
+  assert.match(spec, /test\("R1 — La home saluda", async \(\) =>/);        // sin fixture {page}: usa la compartida
+  assert.match(spec, /test\("R2 — Redirige al home"/);
   assert.match(spec, /page\.goto\("http:\/\/localhost:4200\/"\)/);
   assert.match(spec, /getByRole\("button", \{ name: "Entrar" \}\)\.click\(\)/);   // ambos pasos de R1 en su test
   assert.match(buildAgentReplaySpec('x', 'http://x', []), /test\.fixme/);
@@ -116,7 +116,7 @@ test('httpExecutor reports deterministic ok based on the expected status', async
 
   const wrongType = await exec({ type: 'browser' });
   assert.equal(wrongType.ok, false);
-  assert.match(wrongType.error, /no soportada en api/);
+  assert.match(wrongType.error, /not supported on the api surface/);
 });
 
 test('httpExecutor redacts response bodies before returning QA observations', async () => {
@@ -138,8 +138,8 @@ test('httpExecutor preserves large evidence for CCR instead of truncating it', a
 
 test('httpExecutor blocks writes and routes outside the QA policy', async () => {
   const exec = httpExecutor('http://localhost:3000', { fetchImpl: async () => ({ status: 200, text: async () => '' }), allowedPaths: ['/public'] });
-  assert.match((await exec({ type: 'http', method: 'POST', path: '/public' })).error, /no autorizado/);
-  assert.match((await exec({ type: 'http', method: 'GET', path: '/private' })).error, /ruta no autorizada/);
+  assert.match((await exec({ type: 'http', method: 'POST', path: '/public' })).error, /not allowed by the QA policy/);
+  assert.match((await exec({ type: 'http', method: 'GET', path: '/private' })).error, /path not allowed/);
 });
 
 test('httpExecutor injects the QA session headers and lets per-action headers override', async () => {
@@ -265,4 +265,21 @@ test('runQaAgent stops on invalid JSON and on step exhaustion, never fabricating
   assert.match(exhausted.error, /agotaron los 3 pasos|Ran out of the 3 steps/);
   assert.equal(exhausted.steps.length, 3);
   assert.equal(exhausted.verdicts[0].status, 'BLOCKED');
+});
+
+// M-03 — el spec reproducible interpreta los pasos IGUAL que el agente que los verificó: sin
+// selector, `body`; el primer elemento que coincide (sin `.first()` el modo estricto fallaba con
+// varios); y un patrón de URL con retroceso exponencial, literal en los dos lados.
+test('the replay spec mirrors how the agent checked each step', () => {
+  const steps = [{ action: { type: 'browser', steps: [
+    { op: 'goto', url: 'login' },
+    { op: 'expectText', value: 'Bienvenido' },
+    { op: 'expectText', selector: '.msg', value: 'ok' },
+    { op: 'expectUrl', value: '(a+)+$' }
+  ] }, observation: { ok: true } }];
+  const spec = buildAgentReplaySpec('001-x', 'http://localhost:4200', steps, {});
+  assert.match(spec, /page\.goto\("http:\/\/localhost:4200\/login"\)/);
+  assert.match(spec, /page\.locator\("body"\)\.first\(\)\)\.toContainText\("Bienvenido"\)/);
+  assert.match(spec, /page\.locator\("\.msg"\)\.first\(\)\)\.toContainText\("ok"\)/);
+  assert.match(spec, /toHaveURL\(new RegExp\("\\\\\(a\\\\\+\\\\\)\\\\\+\\\\\$"\)\)/);
 });

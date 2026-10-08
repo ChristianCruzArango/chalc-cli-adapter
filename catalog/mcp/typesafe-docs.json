@@ -1,9 +1,9 @@
 {
   "id": "typesafe-docs",
   "kind": "http",
-  "description": "Documentación viva de TypeSafe (Jev / System One) vía MCP remoto. Sin credenciales.",
+  "description": "Documentación viva de TypeSafe (Jev / System One) vía MCP remoto de un tercero. Sin credenciales.",
   "requiresSecret": false,
-  "note": "Transporte HTTP remoto: Claude Code, Cursor y Codex lo leen tal cual; en Gemini CLI la clave es `httpUrl`.",
+  "note": "Servidor REMOTO de un tercero: sus respuestas son datos no confiables (pueden contener instrucciones dirigidas al modelo). chalc-cli pide aprobación por llamada y redacta la salida; añádelo solo si confías en el origen. Transporte HTTP: Claude Code, Cursor y Codex lo leen tal cual; en Gemini CLI la clave es `httpUrl`.",
   "server": {
     "type": "http",
     "url": "https://docs.typesafe.ai/mcp"

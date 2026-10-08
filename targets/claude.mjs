@@ -13,7 +13,7 @@ import * as kit from '../lib/targetkit.mjs';
 
 export const label = 'Claude Code';
 
-export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun , tools = null, roles = [] }) {
+function planOf({ skills, mcps, methods, roles }) {
   const plan = [];
   for (const s of skills) plan.push(`skill     .claude/skills/${s}`);
   for (const role of roles) plan.push(`agent     .claude/agents/${role.id}.md`);
@@ -22,6 +22,20 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   for (const me of methods) plan.push(`método    ${me.id}${me.mode && me.mode !== 'default' ? ` (${me.mode})` : ''}  (scaffold + reglas)`);
   plan.push('rules     CLAUDE.md  (bloque chalc)');
   plan.push('manifest  .chalc.json');
+  return plan;
+}
+
+// El bloque de CLAUDE.md que chalc gestiona: lo común a todo target (kit.blockSections) y, en medio,
+// las skills activas — Claude Code las carga solo de .claude/skills, así que basta con nombrarlas.
+// Los roles no van aquí: en Claude son subagentes propios (.claude/agents).
+function managedBlock({ projectPath, skills, mcps, methods, architecture, specLang }) {
+  const { head, tail } = kit.blockSections({ projectPath, skills, mcps, methods, architecture, specLang });
+  const active = skills.length ? ['', `### ${kit.blockText(specLang).skillsActive}`, ...skills.map((s) => `- \`${s}\``)] : [];
+  return [kit.START, '## ⚙️ Chalc', ...head, ...active, ...tail, kit.END].join('\n');
+}
+
+export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun, tools = null, roles = [], force = false }) {
+  const plan = planOf({ skills, mcps, methods, roles });
   if (dryRun) return { plan, written: false };
 
   // 1) Skills
@@ -29,10 +43,7 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
 
   // 2) MCP -> fusionar sin pisar otros servidores
   if (mcps.length) {
-    await kit.mergeJson(join(projectPath, '.mcp.json'), (j) => {
-      j.mcpServers = j.mcpServers || {};
-      for (const m of mcps) j.mcpServers[m.id] = m.server;
-    });
+    await kit.mergeMcpServers(join(projectPath, '.mcp.json'), mcps, { force });
   }
 
   // 3) Métodos -> copiar scaffold (specs/ del SDD, sin sobrescribir archivos del usuario)
@@ -47,16 +58,7 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   await kit.writeGateHookDoc(projectPath, CATALOG, { specLang });
 
   // 4) CLAUDE.md (bloque gestionado)
-  const lines = [kit.START, '## ⚙️ Chalc'];
-  const principles = kit.mandatoryPrinciplesBlock(skills);
-  if (principles) lines.push('', principles);
-  const archRef = kit.architectureBlock(projectPath, architecture?.name);
-  if (archRef) lines.push('', archRef);
-  if (skills.length) lines.push('', '### Skills activas', ...skills.map((s) => `- \`${s}\``));
-  if (mcps.length) lines.push('', '### Servidores MCP', ...mcps.map((m) => `- \`${m.id}\` — ${m.description || ''}`));
-  for (const me of methods) lines.push('', me.rulesText.trim());
-  lines.push(kit.END);
-  await kit.writeManagedBlock(join(projectPath, 'CLAUDE.md'), lines.join('\n'));
+  await kit.writeManagedBlock(join(projectPath, 'CLAUDE.md'), managedBlock({ projectPath, skills, mcps, methods, architecture, specLang }));
 
   // 5) Manifiesto
   await kit.writeManifest(projectPath, 'claude', stacks, skills, mcps, methods);

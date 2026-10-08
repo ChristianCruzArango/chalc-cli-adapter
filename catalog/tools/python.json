@@ -35,12 +35,12 @@
         "match": "pytest",
         "value": {
           "tool": "mutmut",
-          "command": "mutmut run && mutmut junitxml > reports/mutation/mutmut.xml",
-          "report": "reports/mutation/mutmut.xml",
-          "format": "junit",
-          "install": "uv add --dev mutmut",
+          "command": "mutmut run; mutmut export-cicd-stats",
+          "report": "mutants/mutmut-cicd-stats.json",
+          "format": "mutmut-stats",
+          "install": "uv add --dev 'mutmut>=3.2'",
           "scopeFlag": "",
-          "setup": "**mutmut prints results to the screen.** `mutmut results` is for humans; the gate needs the file,\nso the run always ends with the `junitxml` redirect into `{report}`."
+          "setup": "**mutmut 3 has no `junitxml`.** The run ends with `mutmut export-cicd-stats`, which writes the counts to `{report}`.\nThose counts carry no file or line, so the score covers everything mutmut mutated and a failing run shows one aggregated finding.\nmutmut 3 mutates a copy under `mutants/`, so stopping a run never leaves your sources mutated."
         }
       }
     ]

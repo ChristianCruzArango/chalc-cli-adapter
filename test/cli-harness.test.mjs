@@ -105,8 +105,9 @@ test('verifyCommand mapea el stack al chequeo de su toolchain (y null si no hay)
   assert.equal(verifyCommand([]), null);
 });
 
-test('runVerify sin comando para el stack se omite sin bloquear (skipped + ok)', async () => {
+// F-03: omitida NO es «ok» — no se verificó nada, y así queda en la evidencia.
+test('runVerify sin comando para el stack se omite sin bloquear (skipped, sin ok)', async () => {
   const { runVerify } = await import('../cli/engine/verify.mjs');
   const r = await runVerify({ projectPath: '.', stacks: ['desconocido'] });
-  assert.deepEqual(r, { skipped: true, ok: true });
+  assert.deepEqual(r, { skipped: true, ok: null });
 });

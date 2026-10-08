@@ -34,7 +34,18 @@ const parseLines = (text) => text.split('\n')
   .filter((entry) => entry && typeof entry.key === 'string' && entry.key);
 
 // La versión vigente de cada clave: la última línea que la nombra.
-const latest = (entries) => [...new Map(entries.map((e) => [e.key, e])).values()];
+// La versión vigente de cada clave. `seen` se SUMA: cada `remember` añade una línea con `inc: 1` en vez
+// de un total, porque dos procesos que leían el mismo total y escribían total+1 perdían una cuenta.
+// Una línea sin `inc` (las antiguas, o la que deja la compactación) trae el total absoluto.
+const latest = (entries) => {
+  const byKey = new Map();
+  for (const e of entries) {
+    const seen = typeof e.inc === 'number' ? (byKey.get(e.key)?.seen ?? 0) + e.inc : (e.seen ?? 0);
+    const { inc, ...rest } = e;
+    byKey.set(e.key, { ...byKey.get(e.key), ...rest, seen });
+  }
+  return [...byKey.values()];
+};
 
 // Las entradas vigentes y cuántas líneas tiene el archivo (lo que decide si conviene compactar).
 export async function readMemory(root) {
@@ -63,7 +74,9 @@ export async function remember(root, entry, { now = new Date() } = {}) {
   };
 
   await mkdir(dirname(pathOf(root)), { recursive: true });
-  await appendFile(pathOf(root), JSON.stringify(saved) + '\n', 'utf8');
+  // Se escribe el incremento, no el total (ver `latest`); lo devuelto lleva el total para quien llama.
+  const { seen, ...line } = saved;
+  await appendFile(pathOf(root), JSON.stringify({ ...line, inc: 1 }) + '\n', 'utf8');
   return saved;
 }
 
@@ -74,7 +87,8 @@ export async function compactIfNeeded(root) {
   const { entries, lines } = await readMemory(root);
   if (!lines || lines <= entries.length * 2) return false;
 
-  const tmp = `${pathOf(root)}.tmp`;
+  // Nombre único: con uno fijo, dos procesos compactando a la vez escribían el mismo temporal.
+  const tmp = `${pathOf(root)}.${process.pid}.${Date.now()}.tmp`;
   await writeFile(tmp, entries.map((e) => JSON.stringify(e)).join('\n') + '\n', 'utf8');
   await rename(tmp, pathOf(root));
   return true;

@@ -21,10 +21,15 @@ import { checklistProblems, confirmationProblems } from './checklist.mjs';
 // portón sería inservible en un repo que todavía no hizo `git init`.
 const branchMatches = (s) => !s.git.branch || s.gate.branch === s.git.branch;
 
+// La evidencia vale para el contenido que revisó (F-07): sin huella (un estado de una versión anterior,
+// o escrito a mano) o con una huella que ya no coincide, hay que volver a pasar el portón.
+const contentMatches = (s) => !!s.gate.scopeHash && s.gate.scopeHash === s.gate.currentScopeHash;
+
 const evidenceIsCurrent = (s) =>
   s.gate.exists &&
   !s.gate.fast &&
   branchMatches(s) &&
+  contentMatches(s) &&
   s.changed.newestMtime <= s.gate.date;
 
 // La bitácora fecha con precisión de SEGUNDO (así lo fija su contrato, porque la escribe un modelo
@@ -42,8 +47,19 @@ const rolesOf = (s) => (s.flow.roles || [])
 
 // Lo que un rol dejó en la bitácora DESPUÉS de la evidencia vigente. Una entrada firmada por otro no
 // cuenta (R8): darla por buena sería dar por revisado lo que nadie revisó.
+//
+// Además (F-07): una entrada fechada en el futuro no cuenta, y su commit tiene que ser el que evaluó
+// el portón o el actual — una entrada copiada de otra revisión no da nada por revisado. Sin git no
+// hay commits que comparar y esa comprobación no aplica.
+const FUTURE_SKEW_MS = 5 * 60 * 1000;
+const commitMatches = (s, entry) => {
+  const heads = [s.gate.head, s.git.head].filter(Boolean);
+  if (!heads.length) return true;
+  return entry.commit.length >= 7 && heads.some((h) => h.startsWith(entry.commit));
+};
 const entryOf = (s, role) => (s.review.entries || [])
   .filter((e) => e.role === role.id && sameSecond(e.date) >= sameSecond(s.gate.date))
+  .filter((e) => e.date <= (s.now ?? Date.now()) + FUTURE_SKEW_MS && commitMatches(s, e))
   .at(-1);
 
 // El primer rol de esta cadencia que falta por pasar, o el primero con hallazgos abiertos.

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadProject, readManifest, readMcpServers, inspectProject, projectTree } from '../cli/project.mjs';
@@ -82,11 +82,21 @@ test('loadProject: cursor no tiene archivo de reglas único (rulesFile null) y s
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('readManifest lanza ante .chalc.json corrupto (no lo traga en silencio)', async () => {
+test('readManifest ante .chalc.json corrupto: no lo traga en silencio — copia .invalid, avisa y sigue sin él', async () => {
   const dir = await makeProject({ '.chalc.json': '{ esto no es json' });
+  const warned = [];
+  const original = console.warn;
+  console.warn = (m) => warned.push(String(m));
   try {
-    await assert.rejects(() => readManifest(dir), /JSON inválido/);
-  } finally { await rm(dir, { recursive: true, force: true }); }
+    assert.equal(await readManifest(dir), null);
+    const copies = (await readdir(dir)).filter((f) => f.startsWith('.chalc.json.invalid-'));
+    assert.equal(copies.length, 1, 'el contenido ilegible queda respaldado');
+    assert.equal(await readFile(join(dir, copies[0]), 'utf8'), '{ esto no es json');
+    assert.equal(warned.length, 1, 'se avisa una vez');
+    assert.match(warned[0], /\.chalc\.json/);
+    assert.equal(await readManifest(dir), null);
+    assert.equal(warned.length, 1, 'el mismo archivo no se respalda dos veces en el mismo proceso');
+  } finally { console.warn = original; await rm(dir, { recursive: true, force: true }); }
 });
 
 test('projectTree lista la estructura REAL, ignora ruido y respeta los topes', async () => {

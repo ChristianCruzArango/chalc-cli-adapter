@@ -37,7 +37,7 @@ test('with every task ticked but no evidence, no feature role is called', () => 
 });
 
 test('with a passing evidence, the first role is called as before', () => {
-  const gate = { exists: true, date: 4000, verdict: 'pass', fast: false, branch: 'main', pending: [] };
+  const gate = { exists: true, date: 4000, verdict: 'pass', fast: false, branch: 'main', pending: [], scopeHash: 'h', currentScopeHash: 'h' };
   const result = decide({ ...snapshot({ gate }), changed: { files: ['src/a.js'], newestMtime: 3000 } });
   assert.deepEqual([result.action, result.facts.role], ['call_role', 'seguridad']);
 });

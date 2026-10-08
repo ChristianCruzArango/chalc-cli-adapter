@@ -12,44 +12,39 @@ import { readMemory, compactIfNeeded } from './lib/store.mjs';
 import { listConcepts, loadConcepts } from './lib/concepts.mjs';
 import { capture } from './lib/capture.mjs';
 import { search } from './lib/search.mjs';
-
-const USAGE = [
-  'Uso:',
-  '  node .chalc/memory.mjs search <palabras>   reglas y decisiones que responden (como mucho 8)',
-  '  node .chalc/memory.mjs get <id>            el detalle completo de una entrada',
-  '  node .chalc/memory.mjs concepts            los conceptos existentes, para escribir una spec',
-  '  node .chalc/memory.mjs capture             guarda lo aprendido al cerrar una tarea',
-  '  node .chalc/memory.mjs compact             deja solo la versión vigente de cada entrada'
-].join('\n');
+import { textOf } from './lib/text.mjs';
+import { loadConfig } from '../gate/lib/config.mjs';
 
 // Una entrada en una línea corta: lo justo para decidir si pedir su detalle.
 const lineOf = (e) => [e.id, e.kind, String(e.title).slice(0, 100), ...(e.files?.length ? [e.files[0]] : [])].join(' · ');
 
 const COMMANDS = {
-  async search(args, root) {
+  async search(args, root, now, tx) {
     const found = search((await readMemory(root)).entries, args.join(' '), await loadConcepts(root));
-    return { code: 0, out: found.length ? found.map(lineOf).join('\n') : 'Nada en la memoria sobre eso.' };
+    return { code: 0, out: found.length ? found.map(lineOf).join('\n') : tx.nothingFound };
   },
-  async get([id], root) {
+  async get([id], root, now, tx) {
     const entry = (await readMemory(root)).entries.find((e) => e.id === id);
-    return entry ? { code: 0, out: JSON.stringify(entry, null, 2) } : { code: 1, out: `No hay ninguna entrada con id ${id}.` };
+    return entry ? { code: 0, out: JSON.stringify(entry, null, 2) } : { code: 1, out: tx.noEntry(id) };
   },
   async concepts(args, root) {
     return { code: 0, out: listConcepts(await loadConcepts(root)).join('\n') };
   },
-  async capture(args, root, now) {
+  async capture(args, root, now, tx) {
     const { rules, decisions } = await capture(root, { now });
-    return { code: 0, out: `Memoria: ${rules} regla(s) y ${decisions} decisión(es) capturadas.` };
+    return { code: 0, out: tx.captured(rules, decisions) };
   },
-  async compact(args, root) {
-    return { code: 0, out: (await compactIfNeeded(root)) ? 'Memoria compactada.' : 'No hacía falta compactar.' };
+  async compact(args, root, now, tx) {
+    return { code: 0, out: (await compactIfNeeded(root)) ? tx.compacted : tx.notNeeded };
   }
 };
 
 export async function run(argv, root = process.cwd(), now = new Date()) {
   const [command, ...args] = argv;
   const handler = Object.hasOwn(COMMANDS, command ?? '') ? COMMANDS[command] : null;
-  return handler ? handler(args, root, now) : { code: 1, out: USAGE };
+  // Lo que dice va en el idioma del proyecto (gate.json), como el portón.
+  const tx = textOf((await loadConfig(root)).config.language);
+  return handler ? handler(args, root, now, tx) : { code: 1, out: tx.usage };
 }
 
 // Entrada de línea de comandos. Solo corre cuando se invoca el archivo, no al importarlo.

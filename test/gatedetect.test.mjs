@@ -87,7 +87,7 @@ test('detectGateConfig maps a .NET project to stryker-net', async () => {
   assert.match(cfg.mutation.install, /dotnet tool install/);
 });
 
-test('detectGateConfig maps a pytest project to mutmut with a junit report', async () => {
+test('detectGateConfig maps a pytest project to mutmut 3 with its cicd-stats report', async () => {
   const dir = await project({
     'pyproject.toml': '[project]\nname = "x"\n\n[dependency-groups]\ndev = ["pytest"]\n'
   });
@@ -96,7 +96,7 @@ test('detectGateConfig maps a pytest project to mutmut with a junit report', asy
 
   assert.equal(cfg.test.command, 'pytest');
   assert.equal(cfg.mutation.tool, 'mutmut');
-  assert.equal(cfg.mutation.format, 'junit');
+  assert.equal(cfg.mutation.format, 'mutmut-stats');
 });
 
 test('detectGateConfig maps a maven project to PIT', async () => {

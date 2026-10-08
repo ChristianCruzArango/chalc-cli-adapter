@@ -17,8 +17,8 @@ test('parseArgs supports repeated value flags', () => {
 });
 
 test('parseArgs rejects unknown flags and missing values', () => {
-  assert.throws(() => parseArgs(['--wat']), /Flag desconocida/);
-  assert.throws(() => parseArgs(['--target']), /necesita un valor/);
+  assert.throws(() => parseArgs(['--wat']), /Flag desconocida|Unknown flag/);
+  assert.throws(() => parseArgs(['--target']), /necesita un valor|needs a value/);
 });
 
 // spec 006 R11 — `npm run dashboard --console` sin `--`: npm se traga el flag y lo deja como

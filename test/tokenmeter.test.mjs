@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { normalizeUsage, recordUsage, tokenSummary, resetTokens } from '../lib/tokenmeter.mjs';
 
 test('normalizeUsage reads OpenAI-compatible and Anthropic usage shapes', () => {
-  assert.deepEqual(normalizeUsage({ prompt_tokens: 100, completion_tokens: 40, total_tokens: 140 }), { input: 100, output: 40, total: 140 });
-  assert.deepEqual(normalizeUsage({ input_tokens: 80, output_tokens: 20 }), { input: 80, output: 20, total: 100 });   // total derivado
-  assert.deepEqual(normalizeUsage(undefined), { input: 0, output: 0, total: 0 });   // sin usage
+  const none = { cacheRead: 0, cacheWrite: 0 };   // F-25: la caché también se mide
+  assert.deepEqual(normalizeUsage({ prompt_tokens: 100, completion_tokens: 40, total_tokens: 140 }), { input: 100, output: 40, total: 140, ...none });
+  assert.deepEqual(normalizeUsage({ input_tokens: 80, output_tokens: 20 }), { input: 80, output: 20, total: 100, ...none });   // total derivado
+  assert.deepEqual(normalizeUsage(undefined), { input: 0, output: 0, total: 0, ...none });   // sin usage
 });
 
 test('recordUsage accumulates across calls and resetTokens clears it', () => {

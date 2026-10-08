@@ -96,7 +96,7 @@ Notes:
 ## Cleanup (don't leave or commit artifacts)
 Mutation tools create temp sandboxes and reports.
 - **Remove the temp sandbox.** Stryker deletes `.stryker-tmp/` on its own when `cleanTempDir` is on
-  (default); if a crash leaves it behind, delete it. Same idea for `.mutmut-cache/`.
+  (default); if a crash leaves it behind, delete it. mutmut 3 works in `mutants/`: keep it out of git.
 - **Never delete the report before the gate reads it.** `reports/mutation/`, `StrykerOutput/` and
   `target/pit-reports/` are the evidence, not sandbox litter. Deleting them makes the gate block with
   "the tool left no report".

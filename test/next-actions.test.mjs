@@ -22,7 +22,7 @@ const BRANCH = 'feature/008-advisor';
 
 const snapshot = (over = {}) => ({
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — implementar el lector', mtime: GATE - 1, ...over.tasks },
-  gate: { exists: true, date: GATE, verdict: 'pass', fast: false, branch: BRANCH, pending: [], ...over.gate },
+  gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: BRANCH, pending: [], ...over.gate },
   review: { entries: [{ role: 'revisor', date: GATE + 500, ok: true, findings: 0 }], ...over.review },
   changed: { files: ['src/pago.ts'], newestMtime: 3000, ...over.changed },
   flow: {

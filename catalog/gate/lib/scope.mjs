@@ -4,18 +4,20 @@
 //
 // Este archivo lo emite chalc dentro de `.chalc/gate/lib/`. No edites aquí: ajusta `.chalc/gate.json`.
 //
-// La regla, en una frase: se revisa lo que la tarea modificó, nunca el proyecto. El diff no sabe de
-// tareas —ve un árbol con cambios y no distingue los de esta tarea de los que ya estaban a medias—,
-// así que cuando alguien anotó lo que escribió (R10), esa lista MANDA y el diff pasa a respaldo.
+// La regla, en una frase: se revisa lo que la tarea modificó, nunca el proyecto.
+//
+// El registro (R10) ya NO estrecha la revisión cuando hay diff. Antes lo hacía —lo no anotado quedaba
+// `excluded` y no contaba para el veredicto—, y eso era una vía para cerrar una tarea sin revisar lo
+// escrito por Bash, por un generador o anotando a mano un archivo limpio. Ahora se revisa SIEMPRE el
+// diff completo; el registro solo informa de qué cambios no estaban anotados (`unregistered`) y de qué
+// se escribió y luego se deshizo (`reverted`). Sin diff, el registro sigue siendo la única fuente.
 //
 // Puro a propósito: recibe listas, devuelve el alcance. Quien las obtiene —git, el registro— es
 // `taskScope`. Así la política se prueba rama por rama sin repos ni fixtures, que es lo que permite
 // que las decisiones peligrosas de aquí abajo estén todas cubiertas.
 //
-// La otra regla, transversal: NADA sale del alcance en silencio. Lo que el diff traía y el registro
-// dejó fuera va en `excluded`; lo que se escribió y luego se deshizo, en `reverted`. Un alcance
-// estrecho sin declarar se lee igual que «no había nada», que es la mentira que esta spec vino a
-// quitar.
+// La otra regla, transversal: NADA sale del alcance en silencio. `excluded` se conserva en el esquema
+// por compatibilidad y va siempre vacío.
 
 import { isUserSource } from './sources.mjs';
 
@@ -59,12 +61,13 @@ export function resolveScope({ registry = [], diff = null, diffSource = 'baselin
     return { files: written, source: 'registry', excluded: [], reverted: [], undetermined: false };
   }
 
-  // Lo escrito y luego deshecho tiene el contenido de la línea base: revisarlo devolvería deuda
-  // vieja con nombre de hallazgo nuevo.
+  // El diff completo se revisa; el registro solo informa. Lo escrito y luego deshecho tiene el
+  // contenido de la línea base y no está en el diff, así que no entra.
   return {
-    files: written.filter((f) => changed.includes(f)),
+    files: changed,
     source: 'registry',
-    excluded: without(changed, written),
+    excluded: [],
+    unregistered: without(changed, written),
     reverted: without(written, changed),
     // Que no quede nada que revisar porque todo se deshizo es un hecho SABIDO, no una duda: se
     // informa, no se bloquea.

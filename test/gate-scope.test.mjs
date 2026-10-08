@@ -11,18 +11,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveScope } from '../catalog/gate/lib/scope.mjs';
 
-// EL caso que abrió la spec: el árbol arrastra trabajo en curso de otra cosa. Antes eso tenía dos
-// desenlaces, los dos malos — revisarlo todo, o no revisar "porque el diff es casi todo trabajo
-// ajeno". Ahora tiene uno: se acota, se declara lo que se dejó fuera, y la revisión ocurre.
-test('the registry wins over the diff, and the noise is declared', () => {
+// F-07 (auditoría) — el registro ya no puede ESTRECHAR la revisión. Antes lo no anotado quedaba
+// `excluded` y fuera del veredicto: bastaba escribir por Bash, o anotar a mano un archivo limpio,
+// para cerrar una tarea sin revisar el resto. Ahora el diff completo se revisa siempre y el registro
+// solo informa de qué cambios no estaban anotados.
+test('the full diff is reviewed; the registry only reports what was not recorded', () => {
   const scope = resolveScope({
     registry: ['src/pago.service.ts', 'src/pago.model.ts'],
     diff: ['src/pago.service.ts', 'src/pago.model.ts', 'src/otra-tarea-a-medias.ts', 'src/experimento.ts']
   });
 
-  assert.deepEqual(scope.files, ['src/pago.model.ts', 'src/pago.service.ts']);
+  assert.deepEqual(scope.files, ['src/experimento.ts', 'src/otra-tarea-a-medias.ts', 'src/pago.model.ts', 'src/pago.service.ts']);
   assert.equal(scope.source, 'registry');
-  assert.deepEqual(scope.excluded, ['src/experimento.ts', 'src/otra-tarea-a-medias.ts']);
+  assert.deepEqual(scope.excluded, []);
+  assert.deepEqual(scope.unregistered, ['src/experimento.ts', 'src/otra-tarea-a-medias.ts']);
 });
 
 // Un archivo escrito y luego deshecho no es trabajo de esta tarea: su contenido es el de la línea
@@ -62,13 +64,14 @@ test('the registry is filtered to user source, like the diff is', () => {
   assert.deepEqual(scope.reverted, [], 'lo que no es fuente no cuenta como deshecho');
 });
 
-test('noise that is not user source is not declared as excluded either', () => {
+test('noise that is not user source is neither reviewed nor reported as unregistered', () => {
   const scope = resolveScope({
     registry: ['src/pago.service.ts'],
     diff: ['src/pago.service.ts', '.chalc/gate.md', 'src/otra-tarea.ts']
   });
 
-  assert.deepEqual(scope.excluded, ['src/otra-tarea.ts']);
+  assert.deepEqual(scope.files, ['src/otra-tarea.ts', 'src/pago.service.ts']);
+  assert.deepEqual(scope.unregistered, ['src/otra-tarea.ts']);
 });
 
 test('the scope is deduplicated, normalised and sorted', () => {

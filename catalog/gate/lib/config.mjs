@@ -8,6 +8,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { frameOf } from './i18n.mjs';
 
 export const CONFIG_REL = '.chalc/gate.json';
 
@@ -49,19 +50,30 @@ const merge = (defaults, given) => {
   return out;
 };
 
+// Los umbrales que chalc copia a cada gate.json al equipar (lib/gatedetect.mjs): los mismos que el
+// portón aplica si faltan, para que no existan dos versiones de "lo que viene por defecto".
+export const LINT_DEFAULTS = DEFAULTS.lint;
+export const MUTATION_THRESHOLD = DEFAULTS.mutation.threshold;
+
 // Lee la config del repo. Devuelve { config, error }: `error` con texto cuando no se pudo cargar,
 // para que el llamador lo convierta en bloqueo en vez de seguir a ciegas.
+// Sin gate.json no se sabe el idioma del proyecto: se toma el del entorno, para que el motivo del
+// bloqueo y el marco del informe hablen el mismo idioma.
+export const envLanguage = () => (/^es\b|^es[_-]/i.test(process.env.CHALC_LANG || process.env.LC_ALL || process.env.LANG || '') ? 'es' : 'en');
+
 export async function loadConfig(root) {
   let text;
   try {
     text = await readFile(join(root, CONFIG_REL), 'utf8');
   } catch {
-    return { config: merge(DEFAULTS, {}), error: `falta ${CONFIG_REL}: vuelve a equipar el repo con chalc` };
+    const language = envLanguage();
+    return { config: merge(DEFAULTS, { language }), error: frameOf(language).configMissing(CONFIG_REL) };
   }
 
   try {
     return { config: merge(DEFAULTS, JSON.parse(text)), error: '' };
   } catch (err) {
-    return { config: merge(DEFAULTS, {}), error: `${CONFIG_REL} no es JSON válido: ${err.message}` };
+    const language = envLanguage();
+    return { config: merge(DEFAULTS, { language }), error: frameOf(language).configInvalid(CONFIG_REL, err.message) };
   }
 }

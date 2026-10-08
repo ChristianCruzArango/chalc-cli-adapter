@@ -13,21 +13,27 @@
 // Un estado de una versión anterior de chalc puede no traer `fast`, y asumirlo `false` cerraría
 // tareas con corridas que jamás midieron mutación.
 
-const NONE = { exists: false, date: 0, verdict: 'unknown', fast: true, closesTask: false, branch: '', spec: '', role: '', failedStages: [], suppressions: [] };
+import { isPlainObject } from '../../gate/lib/data.mjs';
+
+const NONE = { exists: false, date: 0, verdict: 'unknown', fast: true, closesTask: false, branch: '', spec: '', role: '', failedStages: [], suppressions: [], head: '', scopeHash: '', scopeFiles: [], configChanges: [] };
+
+// Holgura para relojes desfasados. Una evidencia fechada más allá es inventada: con una fecha futura
+// valía para siempre, porque ningún cambio posterior parecía «más nuevo» que ella.
+export const FUTURE_SKEW_MS = 5 * 60 * 1000;
 
 const VERDICTS = new Set(['pass', 'fail', 'blocked']);
 
-const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
 // Hechos del portón a partir del texto de `.chalc/gate.state.json`. Ausente, corrupto o sin fecha
 // usable → no hay evidencia (que no es lo mismo que una evidencia que falla).
-export function parseGateState(text) {
+export function parseGateState(text, { now = Date.now() } = {}) {
   let raw;
   try { raw = JSON.parse(String(text ?? '')); } catch { return { ...NONE }; }
   if (!isPlainObject(raw)) return { ...NONE };
 
   const date = Date.parse(raw.date);
   if (!Number.isFinite(date)) return { ...NONE };
+  if (date > now + FUTURE_SKEW_MS) return { ...NONE, future: true };
 
   return {
     exists: true,
@@ -39,7 +45,11 @@ export function parseGateState(text) {
     spec: String(raw.spec ?? ''),
     role: String(raw.role ?? ''),
     failedStages: failedStagesOf(raw.stages),
-    suppressions: suppressionsOf(raw.suppressions)
+    suppressions: suppressionsOf(raw.suppressions),
+    head: String(raw.head ?? ''),
+    scopeHash: String(raw.scopeHash ?? ''),
+    scopeFiles: Array.isArray(raw.scope?.files) ? raw.scope.files.map(String) : [],
+    configChanges: Array.isArray(raw.configChanges) ? raw.configChanges.map(String) : []
   };
 }
 

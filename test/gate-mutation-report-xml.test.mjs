@@ -89,7 +89,7 @@ test('parseJUnit falls back to the testcase name when file and line are not attr
 });
 
 test('parseJUnit throws when the shape does not match a junit report', async () => {
-  assert.throws(() => parseJUnit('<html><body>todo bien, score 92%</body></html>'), /testsuite/i);
+  assert.throws(() => parseJUnit('<html><body>todo bien, score 92%</body></html>'), (e) => e.problem === 'junitNoSuite');
 });
 
 test('parseJUnit returns a null score when there is no valid testcase', async () => {

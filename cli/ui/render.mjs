@@ -4,23 +4,13 @@
 import { MCP_READONLY } from '../mcp/approval.mjs';
 import { t } from '../../lib/i18n.mjs';
 
-const COLOR = !!process.stdout.isTTY && !process.env.NO_COLOR;
-const sgr = (code) => (s) => (COLOR ? `\x1b[${code}m${s}\x1b[0m` : String(s));
+import { c, stripAnsi } from '../../lib/ansi.mjs';
 
-export const c = {
-  bold: sgr(1), dim: sgr(2), red: sgr(31), green: sgr(32),
-  yellow: sgr(33), blue: sgr(34), cyan: sgr(36), gray: sgr(90)
-};
-
-export function stripAnsi(s) {
-  // eslint-disable-next-line no-control-regex
-  return String(s).replace(/\x1b\[[0-9;]*m/g, '');
-}
+export { c, stripAnsi };
 const vlen = (s) => stripAnsi(s).length;              // ancho VISIBLE (ignora los códigos de color)
 const pad = (s, w) => s + ' '.repeat(Math.max(0, w - vlen(s)));
-const k = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n));
 
-function truncate(value, n = 160) {
+export function truncate(value, n = 160) {
   const s = typeof value === 'string' ? value : JSON.stringify(value);
   return s.length > n ? s.slice(0, n) + '…' : s;
 }
@@ -68,18 +58,6 @@ export function bigTitle(word = 'CHALC', { color = c.cyan } = {}) {
   return [0, 1, 2, 3, 4]
     .map((r) => color(chars.map((ch) => (GLYPHS[ch] ? GLYPHS[ch][r] : ch)).join(' ')))
     .join('\n');
-}
-
-// La "ventana de contexto": uso de la ventana del modelo (tokens de entrada / num_ctx) + pasos + CCR del último turno.
-export function contextBox({ model, provider, inputTokens = 0, outputTokens = 0, numCtx, steps = 0, ccr }) {
-  const win = numCtx ? `${k(inputTokens)}/${k(numCtx)}` : k(inputTokens);
-  const meta = [
-    `${c.dim(t('cliCtxContext'))} ${win} ${c.dim('tokens')}`,
-    `${c.dim(t('cliCtxOutput'))} ${k(outputTokens)}`,
-    `${c.dim(t('cliCtxSteps'))} ${steps}`,
-    ...(ccr?.entries ? [`${c.dim('CCR')} ${ccr.entries}`] : [])
-  ].join(c.dim('  ·  '));
-  return box([`${c.bold(model)} ${c.dim('· ' + provider)}`, meta], { color: c.cyan });
 }
 
 // Si un texto es un placeholder CCR ([CCR ref=… preview="…"]), extrae el preview legible; si no, tal cual.

@@ -41,6 +41,11 @@ into `.chalc/task.files`, and the gate clears it on its own when each task close
 }
 ```
 
+The record **informs, it does not narrow**: with git, the gate always reviews the full diff since the
+last closed task, and the record only flags which changes were not written down. This hook listens to
+`Write|Edit|MultiEdit|NotebookEdit`; what Bash writes (`sed -i`, `cat >`, generators) is not recorded,
+but it is still reviewed through the diff.
+
 **The gate still works without this hook**, but it falls back to measuring the diff since the last
 closed task. That fallback reviews more than it should, and in a flow where you commit at the end of
 the feature — not task by task — it reviews quite a lot more: the baseline is a commit, so with no

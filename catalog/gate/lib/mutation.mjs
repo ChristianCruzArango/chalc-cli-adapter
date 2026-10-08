@@ -9,19 +9,22 @@
 // distinto de cero, nunca en "aprobado". Un score solo vale si salió de un archivo que la herramienta
 // acaba de escribir sobre el código que se está revisando.
 
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseElements } from './report-elements.mjs';
 import { parseJUnit } from './report-junit.mjs';
 import { parsePit } from './report-pit.mjs';
-import { runCommand } from './run.mjs';
+import { parseMutmutStats } from './report-mutmut.mjs';
+import { runCommand, shellArg, UnsafeArgError } from './run.mjs';
 import { rangesOf, relativeTo, touchesChange } from './hunks.mjs';
 import { RULES } from './rules.mjs';
-import { isTestFile } from './sources.mjs';
+import { SOURCE_FILE, isTestFile } from './sources.mjs';
+import { mtimeOf, newestSource, resolveReport } from './report-find.mjs';
 import { caracteresDeLineas } from './textspan.mjs';
+import { manifestOf, projectDirOf } from './projects.mjs';
 
-const PARSERS = { elements: parseElements, junit: parseJUnit, pit: parsePit };
+const PARSERS = { elements: parseElements, junit: parseJUnit, pit: parsePit, 'mutmut-stats': parseMutmutStats };
 
 // Los formatos que el portón sabe leer DE VERDAD. Se exportan porque son la única respuesta honesta
 // a "¿puede el portón verificar este stack?" (spec 011, R7): antes esa lista estaba escrita a mano
@@ -33,44 +36,15 @@ export const FORMATS = Object.keys(PARSERS);
 // significan "no corriste nada", no "corrió y salió mal".
 const NOT_INSTALLED = new Set([127, 9009]);
 
-// Directorios que jamás contienen un reporte y sí millones de archivos.
-const SKIP_DIRS = new Set(['node_modules', '.git', '.chalc', 'dist', 'build', 'obj', 'bin', '.venv', 'venv']);
 
 // Lo único que una herramienta de mutación sabe mutar. El listado de cambios trae además specs,
 // documentación, colecciones de API y carpetas: colarlos en el flag de alcance no acota nada y sí
 // puede dejar la corrida sin un solo archivo válido. Los tests tampoco entran: un test mutado no lo
 // mata nadie, porque el test ES lo que mata mutantes.
-const MUTABLE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|dart|cs|java|kt|py)$/i;
+// Son las mismas extensiones que el resto del portón reconoce como fuente.
+const MUTABLE = SOURCE_FILE;
 
 const esCodigoMutable = (file) => MUTABLE.test(file) && !isTestFile(file);
-
-// Archivos que marcan la raíz de un proyecto dentro del repo.
-const MANIFEST = /\.(csproj|fsproj|vbproj)$|^(package\.json|pubspec\.yaml|pom\.xml|build\.gradle(\.kts)?|pyproject\.toml)$/i;
-
-// Proyecto al que pertenece el archivo: su directorio relativo al repo y el nombre de su manifiesto,
-// o `null` si no hay ninguno por encima del archivo.
-async function manifestOf(root, rel) {
-  const parts = rel.split('/').slice(0, -1);
-
-  // De lo más hondo a lo más somero: manda el proyecto más cercano al archivo.
-  for (let i = parts.length; i > 0; i--) {
-    const dir = parts.slice(0, i).join('/');
-    let entries;
-    try {
-      entries = await readdir(join(root, dir));
-    } catch {
-      continue;
-    }
-    const file = entries.find((e) => MANIFEST.test(e));
-    if (file) return { dir, file };
-  }
-  return null;
-}
-
-// Directorio del proyecto al que pertenece el archivo, relativo al repo, o '' si es la raíz.
-async function projectDirOf(root, rel) {
-  return (await manifestOf(root, rel))?.dir ?? '';
-}
 
 // Spec 018 (R1, R2): el manifiesto del ÚNICO proyecto al que pertenece el código de producción
 // cambiado, o '' si es más de uno o ninguno. Stryker.NET solo admite un `--project`, y sin él corre
@@ -151,85 +125,26 @@ async function scopeOf(root, changed, { lines = null, span = '' } = {}) {
   return acotados.join(' ').length > MAX_SCOPE_CHARS ? enteros : acotados;
 }
 
-const mtimeOf = async (abs) => (await stat(abs)).mtimeMs;
+// ── atribución ────────────────────────────────────────────────────────────────────────────────
 
-// ── resolución del reporte ────────────────────────────────────────────────────────────────────
-// La ruta del reporte puede ser un glob: Stryker.NET escribe en un directorio con marca de tiempo
-// por corrida y PIT hace lo mismo. Entre varias coincidencias gana la MÁS RECIENTE — quedarse con la
-// primera del listado sería leer el reporte de una corrida anterior, justo lo que R4 persigue.
-
-const RE_SPECIALS = /[.+^${}()|[\]\\]/g;
-
-// Marcas intermedias: los comodines se apartan ANTES de traducir `*` suelto, para que una traducción
-// no se coma a la otra. Se eligen cadenas que no pueden aparecer en una ruta ni en el regex parcial.
-const ANY_DIRS = ' dirs ';
-const ANY_TEXT = ' text ';
-
-// Glob → regex sobre rutas relativas con '/'. Solo `**` y `*`; no hay más en las rutas del catálogo.
-function globToRegExp(pattern) {
-  const source = pattern
-    .replace(RE_SPECIALS, '\\$&')
-    .replace(/\*\*\//g, ANY_DIRS)      // `**/` cruza cero o más directorios
-    .replace(/\*\*/g, ANY_TEXT)
-    .replace(/\*/g, '[^/]*')           // `*` suelto no cruza directorios
-    .split(ANY_DIRS).join('(?:.*/)?')
-    .split(ANY_TEXT).join('.*');
-  return new RegExp(`^${source}$`);
+// El archivo del alcance al que corresponde la ruta de un mutante, o null si no es de la tarea. Las
+// herramientas no hablan el idioma de git: Stryker.NET da rutas absolutas, y PIT da la del paquete
+// (`com/acme/X.java`) mientras git da `src/main/java/com/acme/X.java` — se casa por sufijo.
+function taskFileOf(root, changed, file) {
+  const rel = relativeTo(root, file);
+  return changed.find((c) => c === rel || c.endsWith(`/${rel}`)) ?? null;
 }
 
-// Los segmentos fijos antes del primer comodín: se camina desde ahí y no desde la raíz del repo.
-function staticPrefix(pattern) {
-  const segments = pattern.split('/');
-  const first = segments.findIndex((s) => s.includes('*'));
-  return first < 0 ? segments.slice(0, -1).join('/') : segments.slice(0, first).join('/');
-}
-
-// Archivos bajo `rel`, en rutas relativas a la raíz del repo.
-async function walk(root, rel) {
-  const out = [];
-  let entries;
-  try { entries = await readdir(join(root, rel), { withFileTypes: true }); } catch { return out; }
-  for (const entry of entries) {
-    const child = rel ? `${rel}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) {
-      if (!SKIP_DIRS.has(entry.name)) out.push(...await walk(root, child));
-    } else out.push(child);
-  }
-  return out;
-}
-
-// Ruta absoluta del reporte más reciente que encaja con `pattern`, o null si no hay ninguno.
-async function resolveReport(root, pattern) {
-  if (!pattern) return null;
-  if (!pattern.includes('*')) {
-    const abs = join(root, pattern);
-    try { await stat(abs); return abs; } catch { return null; }
-  }
-
-  const re = globToRegExp(pattern);
-  const matches = (await walk(root, staticPrefix(pattern))).filter((rel) => re.test(rel));
-  let newest = null;
-  for (const rel of matches) {
-    const abs = join(root, rel);
-    const ms = await mtimeOf(abs);
-    if (!newest || ms > newest.ms) newest = { abs, ms };
-  }
-  return newest ? newest.abs : null;
-}
-
-// ── frescura ──────────────────────────────────────────────────────────────────────────────────
-
-// El fuente más nuevo de los que entraron en la corrida. null si no se pasó ninguno: sin fuentes no
-// hay con qué comparar y la comprobación no aplica.
-async function newestSource(root, changed) {
-  let newest = null;
-  for (const rel of changed) {
-    try {
-      const ms = await mtimeOf(join(root, rel));
-      if (!newest || ms > newest.ms) newest = { rel, ms };
-    } catch { /* borrado en la tarea: ya no es fuente de la corrida */ }
-  }
-  return newest;
+// ¿Cuenta este mutante para la tarea? Solo si vive en un archivo del alcance y, cuando se saben las
+// líneas escritas, en una de ellas. Antes, un archivo sin mapa de líneas aceptaba TODO: con PIT o
+// mutmut corriendo sin acotar, el score era el del proyecto entero.
+function withinTask(root, changed, lines) {
+  if (!changed.length) return null;
+  return (file, line) => {
+    const own = taskFileOf(root, changed, file);
+    if (!own) return false;
+    return lines && lines.size ? touchesChange(lines, own, line) : true;
+  };
 }
 
 // ── etapa ─────────────────────────────────────────────────────────────────────────────────────
@@ -238,107 +153,124 @@ async function newestSource(root, changed) {
 // lleva lo que hace falta para redactarlo en cualquier idioma (marco bilingüe en `i18n.mjs`).
 const finding = (rule, data = {}) => ({ file: '', line: 0, rule, data });
 
-// Corre la etapa. `run` va inyectado para poder probar las decisiones sin instalar herramientas ni
-// esperar minutos. `changed` son rutas relativas a `root`, ya filtradas a fuentes por el llamador.
-// Devuelve { stage, ok, blocked, reason, command, code, ms, score, survivors, findings }.
-export async function runMutation(config, { root, changed = [], lines = null, run = runCommand } = {}) {
-  const cfg = (config && config.mutation) || {};
-  const threshold = typeof cfg.threshold === 'number' ? cfg.threshold : 80;
+// La forma común del resultado de la etapa y la de un bloqueo.
+const BASE = {
+  stage: 'mutation', ok: false, blocked: false, reason: '',
+  command: '', code: null, ms: 0, score: null, survivors: [], findings: []
+};
+const blocked = (reason, data, over = {}) =>
+  ({ ...BASE, ...over, ok: false, blocked: true, reason, findings: [finding(reason, data)] });
+const notInstalled = (cfg, over) => blocked(RULES.notInstalled, { tool: cfg.tool || cfg.command, install: cfg.install || '' }, over);
 
-  const base = {
-    stage: 'mutation', ok: false, blocked: false, reason: '',
-    command: '', code: null, ms: 0, score: null, survivors: [], findings: []
-  };
-  const block = (reason, data, over = {}) =>
-    ({ ...base, ...over, ok: false, blocked: true, reason, findings: [finding(reason, data)] });
-
+// Lo que se decide ANTES de ejecutar nada: el resultado de la etapa si ya está decidida, o null.
+function precheck(cfg, root) {
   // Excepción declarada (R21): un stack sin herramienta que el portón sepa verificar —Dart/Flutter no
   // tiene ninguna estándar— puede declararse no aplicable en la config. Solo vale DONDE NO HAY PARSER:
   // es una salida para lo imposible, no un interruptor para apagar la mutación donde sí se puede medir.
-  if (!PARSERS[cfg.format] && cfg.required === false) {
-    return { ...base, ok: true, skipped: true, reason: 'not-required' };
-  }
-
-  if (!cfg.command) return block(RULES.noTool, {});
-
+  if (!PARSERS[cfg.format] && cfg.required === false) return { ...BASE, ok: true, skipped: true, reason: 'not-required' };
+  if (!cfg.command) return blocked(RULES.noTool, {});
   // La herramienta, ANTES de ejecutar nada. `npx` descarga lo que no encuentra, así que lanzar el
   // comando a ciegas se traería un paquete de internet a mitad del portón (violando el "no instalar
   // nada") y encima daría un código de salida indistinguible de un fallo normal.
-  if (cfg.probe && !existsSync(join(root, cfg.probe))) {
-    return block(RULES.notInstalled, { tool: cfg.tool || cfg.command, install: cfg.install || '' });
-  }
+  if (cfg.probe && !existsSync(join(root, cfg.probe))) return notInstalled(cfg);
+  return null;
+}
 
+// El comando acotado a lo cambiado: { command } o { result } con el bloqueo.
+//
+// Acotar solo si la herramienta lo admite en UNA invocación. `scopeFlag` vacío = comando tal cual:
+// pegarle un flag a un comando compuesto lo rompería en silencio. `scopeJoin: 'repeat'` para las herramientas que no admiten lista:
+// Stryker.NET lee una cadena con comas como UN solo globo, que no casa con nada.
+async function scopedCommand(cfg, { root, changed, lines, platform }) {
+  const scope = cfg.scopeFlag && changed.length ? await scopeOf(root, changed, { lines, span: cfg.scopeSpan }) : [];
+  if (!scope.length) return { command: cfg.command };
+  // Las rutas salen de git: son DATOS y van escapadas, nunca pegadas al comando tal cual.
+  try {
+    const scoped = cfg.scopeJoin === 'repeat'
+      ? scope.map((g) => `${cfg.scopeFlag} ${shellArg(g, platform)}`).join(' ')
+      : `${cfg.scopeFlag} ${shellArg(scope.join(','), platform)}`;
+    // Spec 018: con un solo proyecto tocado, Stryker.NET corre solo ese (`projectFlag`).
+    const proyecto = cfg.projectFlag ? await proyectoUnicoDe(root, changed) : '';
+    const conProyecto = proyecto ? ` ${cfg.projectFlag} ${shellArg(proyecto, platform)}` : '';
+    return { command: `${cfg.command} ${scoped}${conProyecto}` };
+  } catch (err) {
+    if (!(err instanceof UnsafeArgError)) throw err;
+    return { result: blocked(RULES.unsafePath, { path: err.message }) };
+  }
+}
+
+// Corre la herramienta y localiza su reporte: { ran, reportPath } o { result } con el bloqueo.
+//
+// El reporte tiene que salir de ESTA corrida. Comparar solo contra los fuentes dejaba aceptar el de
+// una corrida anterior cuando la herramienta abortaba sin escribir. Se anota cuál había antes: si
+// después es el mismo archivo y no se reescribió, no lo produjo esta corrida.
+async function runAndLocate(cfg, command, { root, changed, run }) {
+  const previous = await resolveReport(root, cfg.report);
+  const previousMs = previous ? await mtimeOf(previous) : null;
+  const { code, ms } = await run(command, { cwd: root });
+  const ran = { command, code, ms };
+  if (NOT_INSTALLED.has(code)) return { result: notInstalled(cfg, ran) };
+
+  const reportPath = await resolveReport(root, cfg.report);
+  // Un código ≠ 0 sin reporte suele ser la herramienta abortando: se pasa al mensaje, porque es la
+  // pista de por qué no hay archivo que leer.
+  if (!reportPath) return { result: blocked(RULES.noReport, { report: cfg.report, code: code === 0 ? 0 : code }, ran) };
+
+  const source = await newestSource(root, changed);
+  const reportMs = await mtimeOf(reportPath);
+  const untouched = reportPath === previous && reportMs <= previousMs;
+  if ((source && reportMs < source.ms) || untouched) {
+    return { result: blocked(RULES.staleReport, { source: source ? source.rel : cfg.report, command: cfg.command }, ran) };
+  }
+  return { ran, reportPath };
+}
+
+// Lee el reporte NATIVO: { report } o { result } con el bloqueo. El alcance por LÍNEA: un mutante que
+// vive en código que la tarea no escribió no dice nada sobre las pruebas que se escribieron hoy.
+async function readReport(cfg, reportPath, ran, { root, changed, lines }) {
+  const parse = PARSERS[cfg.format];
+  if (!parse) return { result: blocked(RULES.badReport, { format: cfg.format }, ran) };
+  try {
+    const report = parse(await readFile(reportPath, 'utf8'), { within: withinTask(root, changed, lines) });
+    return report.score === null ? { result: blocked(RULES.noMutants, {}, ran) } : { report };
+  } catch (err) {
+    // Un problema conocido del reporte viaja como código y el informe lo redacta en el idioma del
+    // proyecto; cualquier otro error, con su mensaje tal cual.
+    return { result: blocked(RULES.badReport, err?.problem ? { problem: err.problem } : { detail: err.message }, ran) };
+  }
+}
+
+// Hubo medición: el veredicto lo da el score, no un bloqueo.
+function verdict(report, ran, threshold) {
+  const ok = report.score >= threshold;
+  const findings = ok ? [] : report.survivors.length
+    ? report.survivors.map((s) => ({ file: s.file, line: s.line, rule: RULES.mutantSurvived, data: { status: s.status, mutator: s.mutator, score: report.score, threshold } }))
+    // Reporte agregado (mutmut 3): sin ubicaciones, un hallazgo con la cuenta de supervivientes.
+    : [{ file: '', line: 0, rule: RULES.mutantSurvived, data: { status: `${report.survived + report.noCoverage} Survived`, mutator: '', score: report.score, threshold } }];
+  // `threshold` va en el resultado: el informe muestra contra qué se midió.
+  return { ...BASE, ...ran, ok, score: report.score, threshold, killed: report.killed + report.timeout, survivors: report.survivors, findings };
+}
+
+// Corre la etapa. `run` va inyectado para poder probar las decisiones sin instalar herramientas ni
+// esperar minutos. `changed` son rutas relativas a `root`, ya filtradas a fuentes por el llamador.
+// Devuelve { stage, ok, blocked, reason, command, code, ms, score, survivors, findings }.
+export async function runMutation(config, { root, changed = [], lines = null, run = runCommand, platform = process.platform } = {}) {
+  const cfg = (config && config.mutation) || {};
+  const threshold = typeof cfg.threshold === 'number' ? cfg.threshold : 80;
+  const ctx = { root, changed, lines, run, platform };
+
+  const early = precheck(cfg, root);
+  if (early) return early;
   // Spec 016 (R1): una tarea con archivos pero sin código de producción —solo pruebas, documentos o
   // configuración— no tiene nada que mutar. Correr la herramienta sin acotar no significa «no midas
   // nada»: significa «mide lo que diga la configuración del repo», que puede ser el proyecto entero o
   // una lista de otra HU. Con el alcance vacío manda la spec 013 (R13), así que solo aplica con
   // `changed` lleno.
-  if (changed.length && !changed.some(esCodigoMutable)) {
-    return { ...base, ok: true, skipped: true, reason: 'no-source' };
-  }
-
-  // Acotar la corrida a lo cambiado solo si la herramienta lo admite en UNA invocación. `scopeFlag`
-  // vacío = comando tal cual: pegarle un flag a un comando compuesto lo rompería en silencio.
-  // `scopeJoin: 'repeat'` para las herramientas que no admiten lista: Stryker.NET lee una cadena con
-  // comas como UN solo globo, que no casa con nada y deja la corrida sin mutantes.
-  const scope = cfg.scopeFlag && changed.length
-    ? await scopeOf(root, changed, { lines, span: cfg.scopeSpan })
-    : [];
-  const scoped = cfg.scopeJoin === 'repeat'
-    ? scope.map((g) => `${cfg.scopeFlag} ${g}`).join(' ')
-    : `${cfg.scopeFlag} ${scope.join(',')}`;
-  const proyecto = cfg.projectFlag && scope.length ? await proyectoUnicoDe(root, changed) : '';
-  const conProyecto = proyecto ? ` ${cfg.projectFlag} ${proyecto}` : '';
-  const command = scope.length ? `${cfg.command} ${scoped}${conProyecto}` : cfg.command;
-  const { code, ms } = await run(command, { cwd: root });
-  const ran = { command, code, ms };
-
-  if (NOT_INSTALLED.has(code)) {
-    return block(RULES.notInstalled, { tool: cfg.tool || cfg.command, install: cfg.install || '' }, ran);
-  }
-
-  const reportPath = await resolveReport(root, cfg.report);
-  if (!reportPath) {
-    // Un código ≠ 0 sin reporte suele ser la herramienta abortando: se pasa al mensaje, porque es la
-    // pista de por qué no hay archivo que leer.
-    return block(RULES.noReport, { report: cfg.report, code: code === 0 ? 0 : code }, ran);
-  }
-
-  const source = await newestSource(root, changed);
-  if (source && await mtimeOf(reportPath) < source.ms) {
-    return block(RULES.staleReport, { source: source.rel, command: cfg.command }, ran);
-  }
-
-  const parse = PARSERS[cfg.format];
-  if (!parse) return block(RULES.badReport, { detail: `formato de reporte desconocido: "${cfg.format}"` }, ran);
-
-  let report;
-  try {
-    // El alcance por LÍNEA: un mutante que vive en código que la tarea no escribió no dice nada
-    // sobre las pruebas que se escribieron hoy.
-    const within = lines && lines.size ? (file, line) => touchesChange(lines, relativeTo(root, file), line) : null;
-    report = parse(await readFile(reportPath, 'utf8'), { within });
-  } catch (err) {
-    return block(RULES.badReport, { detail: err.message }, ran);
-  }
-
-  if (report.score === null) return block(RULES.noMutants, {}, ran);
-
-  // A partir de aquí hubo medición: el veredicto lo da el score, no un bloqueo.
-  const ok = report.score >= threshold;
-  return {
-    ...base,
-    ...ran,
-    ok,
-    score: report.score,
-    threshold,                                     // el informe muestra contra qué se midió
-    killed: report.killed + report.timeout,
-    survivors: report.survivors,
-    findings: ok ? [] : report.survivors.map((s) => ({
-      file: s.file,
-      line: s.line,
-      rule: RULES.mutantSurvived,
-      data: { status: s.status, mutator: s.mutator, score: report.score, threshold }
-    }))
-  };
+  if (changed.length && !changed.some(esCodigoMutable)) return { ...BASE, ok: true, skipped: true, reason: 'no-source' };
+  const built = await scopedCommand(cfg, ctx);
+  if (built.result) return built.result;
+  const located = await runAndLocate(cfg, built.command, ctx);
+  if (located.result) return located.result;
+  const read = await readReport(cfg, located.reportPath, located.ran, ctx);
+  return read.result || verdict(read.report, located.ran, threshold);
 }

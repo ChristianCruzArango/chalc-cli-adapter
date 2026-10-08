@@ -28,3 +28,9 @@ prueba/
 # logs / temporales
 *.log
 tmp/
+
+# salidas locales de documentos (PDFs, textos convertidos): no son del proyecto
+output/
+
+# Informe de revisión técnica: solo local, no se versiona
+INFORME_REVISION_TECNICA.md

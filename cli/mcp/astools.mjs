@@ -7,6 +7,8 @@ import { createStdioClient } from './client.mjs';
 import { createHttpClient } from './httpclient.mjs';
 import { frame } from '../prompts/text.mjs';
 import { redactSensitiveText } from '../../lib/redact.mjs';
+import { mcpServerRisks } from './approval.mjs';
+import { MCP_CONNECT_TIMEOUT_MS } from './clientinfo.mjs';
 
 // Conecta los servidores del proyecto (config { id: {command,args,env} }). Falla por-servidor sin tumbar la
 // sesión: si uno no arranca (o tarda más que timeoutMs), se avisa y se sigue con los demás.
@@ -14,7 +16,7 @@ import { redactSensitiveText } from '../../lib/redact.mjs';
 // approveServer(id, cfg): el .mcp.json viene DEL PROYECTO — abrir un repo ajeno no debe ejecutar sus comandos
 // sin que el usuario los vea y apruebe. Si devuelve false, ese servidor se omite.
 // cwd: directorio de trabajo por defecto para los servers (el del proyecto); la config propia puede sobreescribirlo.
-export async function connectMcpServers(servers = {}, { connect, onConnect, onWarn, approveServer, cwd, timeoutMs = 12000, allowPrivateHttp = false } = {}) {
+export async function connectMcpServers(servers = {}, { connect, onConnect, onWarn, approveServer, cwd, timeoutMs = MCP_CONNECT_TIMEOUT_MS, allowPrivateHttp = false } = {}) {
   // Transporte por config: { url } → servidor REMOTO (Streamable HTTP); { command } → proceso local (stdio).
   // allowPrivateHttp llega solo desde la configuración local del usuario; un .mcp.json nunca puede habilitarlo.
   const make = connect || ((cfg) => (cfg.url
@@ -22,6 +24,12 @@ export async function connectMcpServers(servers = {}, { connect, onConnect, onWa
     : createStdioClient({ timeoutMs, cwd, ...cfg })));
   const connections = [];
   for (const [id, cfg] of Object.entries(servers)) {
+    // Antes de preguntar: lo que inyecta código en el proceso no se ofrece ni a aprobación.
+    const { blocked } = mcpServerRisks(cfg, { projectPath: cwd });
+    if (blocked.length) {
+      if (onWarn) onWarn(id, `bloqueado: ${blocked.join('; ')}`);
+      continue;
+    }
     if (approveServer && !(await approveServer(id, cfg))) {
       if (onWarn) onWarn(id, 'omitido: el usuario no aprobó ejecutar este servidor');
       continue;
@@ -59,57 +67,62 @@ const ARG_ERROR = /invalid|validation|expected|required|argument/i;
 // corta — el modelo local no necesita el volcado, necesita la pista de usar describe.
 const compactError = (t) => String(t).replace(/\s+/g, ' ').trim().slice(0, 280);
 
+// Una tool MCP como herramienta del agente. Los args van en el ÍNDICE (con * los obligatorios): sin
+// esto, el modelo local llama a ciegas, el server le devuelve un error de validación y se pierde un
+// paso (o entra en bucle).
+function agentTool({ id, client, tool: t, name, approve, f }) {
+  const props = Object.keys(t.inputSchema?.properties || {});
+  const req = new Set(t.inputSchema?.required || []);
+  const argsNote = props.length ? ` · args: ${props.slice(0, 6).map((p) => (req.has(p) ? `${p}*` : p)).join(', ')}` : '';
+  return {
+    argHints: props,   // para que el loop desambigüe nombres truncados por las claves de args
+    summary: `[MCP ${id}] ${t.description || t.name}${argsNote}`,
+    run: async (args) => {
+      if (!(await approve({ tool: name, args }))) return { error: 'MCP action not approved by the user' };
+      let out;
+      try {
+        out = unwrapMcpResult(await client.callTool(t.name, args));
+      } catch (e) {
+        out = { error: redactSensitiveText(e?.message || String(e)) };   // JSON-RPC error (p. ej. -32602 args inválidos)
+      }
+      if (out.error) {
+        out.error = compactError(out.error);
+        // Pista accionable: sin ella, el modelo repite la misma llamada mala hasta el cortacircuito.
+        if (ARG_ERROR.test(out.error)) out.hint = f.mcpArgsHint(name);
+      }
+      return out;
+    }
+  };
+}
+
+// La meta-tool `describe`: el esquema completo de una tool MCP, a demanda.
+function describeTool(schemas, language) {
+  return {
+    summary: frame(language).describeSummary,
+    run: async ({ tool } = {}) => {
+      if (tool in schemas) return { tool, schema: schemas[tool] };
+      // Nombre incompleto (p. ej. solo "mcp__angular-cli"): listar las tools reales de ese prefijo
+      // es más útil que un error seco — el modelo elige y repite describe con el nombre completo.
+      const cands = tool ? Object.keys(schemas).filter((n) => n.startsWith(String(tool))) : [];
+      if (cands.length) return { tool, error: `incomplete name: ${tool}`, tools: cands };
+      return { error: `no schema for: ${tool}` };
+    }
+  };
+}
+
 // Herramientas del agente a partir de las conexiones. Incluye la meta-tool `describe` si hay alguna tool MCP.
 export function mcpToolsForAgent(connections = [], { approve = async () => true, language } = {}) {
   const tools = {};
   const schemas = {};
   const f = frame(language);
-
   for (const { id, client, tools: list } of connections) {
     for (const t of list || []) {
       const name = `mcp__${id}__${t.name}`;
       schemas[name] = t.inputSchema || {};
-      // Los args van en el ÍNDICE (con * los obligatorios): sin esto, el modelo local llama a ciegas,
-      // el server le devuelve un error de validación y se pierde un paso (o entra en bucle).
-      const props = Object.keys(t.inputSchema?.properties || {});
-      const req = new Set(t.inputSchema?.required || []);
-      const argsNote = props.length ? ` · args: ${props.slice(0, 6).map((p) => (req.has(p) ? `${p}*` : p)).join(', ')}` : '';
-      tools[name] = {
-        argHints: props,   // para que el loop desambigüe nombres truncados por las claves de args
-        summary: `[MCP ${id}] ${t.description || t.name}${argsNote}`,
-        run: async (args) => {
-          if (!(await approve({ tool: name, args }))) return { error: 'MCP action not approved by the user' };
-          let out;
-          try {
-            out = unwrapMcpResult(await client.callTool(t.name, args));
-          } catch (e) {
-            out = { error: redactSensitiveText(e?.message || String(e)) };   // JSON-RPC error (p. ej. -32602 args inválidos)
-          }
-          if (out.error) {
-            out.error = compactError(out.error);
-            // Pista accionable: sin ella, el modelo repite la misma llamada mala hasta el cortacircuito.
-            if (ARG_ERROR.test(out.error)) out.hint = f.mcpArgsHint(name);
-          }
-          return out;
-        }
-      };
+      tools[name] = agentTool({ id, client, tool: t, name, approve, f });
     }
   }
-
-  if (Object.keys(schemas).length) {
-    tools.describe = {
-      summary: frame(language).describeSummary,
-      run: async ({ tool } = {}) => {
-        if (tool in schemas) return { tool, schema: schemas[tool] };
-        // Nombre incompleto (p. ej. solo "mcp__angular-cli"): listar las tools reales de ese prefijo
-        // es más útil que un error seco — el modelo elige y repite describe con el nombre completo.
-        const cands = tool ? Object.keys(schemas).filter((n) => n.startsWith(String(tool))) : [];
-        if (cands.length) return { tool, error: `incomplete name: ${tool}`, tools: cands };
-        return { error: `no schema for: ${tool}` };
-      }
-    };
-  }
-
+  if (Object.keys(schemas).length) tools.describe = describeTool(schemas, language);
   return tools;
 }
 

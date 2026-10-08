@@ -95,7 +95,7 @@ npm start -- /ruta/al/proyecto     # equipa otro proyecto
 npm run inspect -- /ruta/al/proyecto
 npm run doctor
 npm run configure
-npm run init -- angular mi-app --description "dashboard administrativo con roles y permisos"
+npm run init-project -- angular mi-app --description "dashboard administrativo con roles y permisos"
 npm run spec
 ```
 
@@ -462,6 +462,12 @@ Agregar un lenguaje = crear `rules/<lang>.json` con su `detect`. Soporta:
 
 ## Configurar catálogo (rules, skills y MCP)
 
+**Dónde se guarda lo que añades.** Con chalc instalado como paquete (`npm i -g`), las reglas, skills y
+MCP que creas o instalas van a `~/.chalc/` (o a `CHALC_HOME`) y se **superponen** al catálogo del
+paquete: con el mismo id, gana lo tuyo. Así no se escribe dentro del paquete (EACCES en instalaciones
+globales) ni se pierde en el siguiente `npm update`. Si ejecutas chalc desde un checkout de git del
+propio chalc, sigue escribiendo en `catalog/` y `rules/`, que es como se vendoriza una skill nueva.
+
 La forma recomendada de mantener Chalc es interactiva:
 
 ```bash
@@ -673,8 +679,8 @@ El alcance tiene ahora tres fuentes, de más específica a menos:
 
 | Fuente | Qué es | Cuándo se usa |
 |---|---|---|
-| `registry` | `.chalc/task.files`, las rutas escritas durante esta tarea | siempre que exista |
-| `baseline` | cambios desde el commit sellado al cerrar la última tarea (`.chalc/task.json`) | sin registro |
+| `registry` | `.chalc/task.files`, las rutas escritas durante esta tarea | sin diff con el que contrastar; con diff, solo informa |
+| `baseline` | cambios desde el commit sellado al cerrar la última tarea (`.chalc/task.json`) | siempre que haya git |
 | `branch` | cambios desde la base de la rama | sin línea base tampoco |
 
 **Y nunca el proyecto entero.** Sin git y sin registro el alcance no se puede determinar, y la
@@ -690,12 +696,23 @@ dejó fuera**:
 
 - Fuente: registro de rutas escritas (.chalc/task.files)
 - Desde: `a1b2c3d4e5`
-- Archivos revisados: `src/pago.service.ts`, `src/pago.model.ts`
-- Fuera del alcance (del árbol, pero no de esta tarea): `src/otra-tarea-a-medias.ts`
+- Archivos revisados: `src/otra-tarea-a-medias.ts`, `src/pago.model.ts`, `src/pago.service.ts`
+- Revisados aunque no estaban en el registro (el diff completo siempre cuenta): `src/otra-tarea-a-medias.ts`
 ```
 
-Esa última línea es la mitad que faltaba: un alcance de un archivo en un árbol con veinte cambios se
-lee como "solo cambió uno" si nadie dice que los otros diecinueve no eran tuyos.
+El registro **no puede estrechar la revisión**: con diff disponible se revisa el diff completo y el
+registro solo dice qué cambios no estaban anotados. Antes lo no anotado quedaba fuera, y eso permitía
+cerrar una tarea con código escrito por Bash, por un generador o anotando a mano un archivo limpio.
+
+#### Lo que el portón garantiza y lo que no
+
+El portón está pensado para un agente que **colabora**, no para uno adversarial. Sube el listón —la
+evidencia queda atada al commit evaluado y a una huella del contenido revisado; una fecha futura no
+vale; una entrada de `review.md` solo cuenta para el commit evaluado o el actual; si `gate.json` se
+relaja respecto al cierre de la tarea anterior, el informe lo dice arriba—, pero **no es inviolable**:
+quien puede escribir en el repo puede editar `gate.json`, recalcular la huella o escribir el estado a
+mano, porque no existe un secreto local que un agente con shell no pueda leer. Para garantías frente a
+un agente hostil, ejecuta el portón en CI sobre el commit, fuera del alcance del agente.
 
 El portón sella la línea base y vacía el registro **cuando una corrida cierra tarea** — nunca en una
 que falló o fue `--fast`, que movería la referencia al medio de la tarea en curso. Y `chalc` llena el
@@ -842,6 +859,13 @@ De ahí salen los permisos que el target concede y la prosa que el rol lee, así
 desincronizarse. Y hay una verificación dura: **un rol que no declara nada en `writes` no puede
 recibir una herramienta de escritura**, y `Edit` no se concede nunca — escribir la bitácora propia y
 modificar código ajeno no son el mismo permiso.
+
+**Límite honesto:** los roles necesitan `Bash` (para `git diff` y `git rev-parse`) y `Write` (para su
+bitácora), y Claude Code no permite acotar esas herramientas a una ruta dentro de un subagente. Que un
+rol solo escriba en `.chalc/review.md` es, por tanto, una **convención** que su prompt le impone, no un
+permiso que el asistente haga cumplir. Lo que sí está garantizado es el efecto: si un rol toca código,
+la huella de la evidencia del portón deja de coincidir y el advisor pide volver a pasar el portón antes
+de cerrar la tarea.
 
 Hoy hay tres roles, y no se pisan:
 
@@ -1381,7 +1405,7 @@ falta la herramienta, el portón imprime el comando exacto y se detiene.
 - **CLI bilingüe (es/en)**: toda la salida al usuario pasa por `lib/i18n.mjs` y sale en el idioma elegido.
 - **Fijar el idioma una sola vez**: `chalc lang es` o `chalc lang en` lo guarda en `~/.chalc/config.json`
   y se aplica a todos tus proyectos. `chalc lang` sin argumento abre el menú interactivo.
-- **Precedencia del idioma**: `--lang` > `CHALC_LANG` > config guardada (`chalc lang`) > `LANG`/`LC_*` del SO > `en`.
+- **Precedencia del idioma de la interfaz**: `CHALC_LANG` > config guardada (`chalc lang`) > `LANG`/`LC_*` del SO > `en`. La flag `--lang` no cambia la interfaz: en `spec-ia` y `feature` es el idioma de la spec.
 - **Idioma del spec**: `chalc spec-ia --lang es|en|pt|…` (o el menú) — independiente del idioma del CLI.
 - El método SDD (constitución, plantillas, reglas, gráfico explicativo) está en **es y en**.
 
@@ -1410,7 +1434,14 @@ npm test
 
 La suite cubre parser de argumentos, detección de stacks con fixtures versionados en `test/fixtures/`,
 bloqueos de seguridad (`target` inseguro, instalación externa sin `--allow-exec`, URLs locales) y
-`doctor`. Para CI, el mínimo recomendado es:
+`doctor`. Para medir la cobertura (requiere Node 22.8 o superior):
+
+```bash
+npm run test:coverage
+```
+
+Falla si las líneas bajan del 85 %, las ramas del 80 % o las funciones del 60 %; el CI la corre en
+un job propio con Node 22. Para CI, el mínimo recomendado es:
 
 ```bash
 npm test

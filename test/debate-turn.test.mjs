@@ -43,12 +43,12 @@ test('el bloque de formato de los prompts nombra EXACTAMENTE las secciones que e
 // ── T4 · parseTurn ─────────────────────────────────────────────────────────────────────────────
 test('parseTurn extrae postura, listas y estado de un turno completo (R10)', () => {
   const t = parseTurn(TURNO_COMPLETO, meta);
-  assert.match(t.postura, /cola de eventos/);
-  assert.deepEqual(t.acuerdos, ['El esquema de reintentos hace falta.']);
-  assert.equal(t.desacuerdos.length, 2);
-  assert.match(t.desacuerdos[0], /coste de operación/);
-  assert.equal(t.preguntas.length, 1);
-  assert.equal(t.declaraAcuerdo, false);
+  assert.match(t.position, /cola de eventos/);
+  assert.deepEqual(t.agreements, ['El esquema de reintentos hace falta.']);
+  assert.equal(t.disagreements.length, 2);
+  assert.match(t.disagreements[0], /coste de operación/);
+  assert.equal(t.raisedQuestions.length, 1);
+  assert.equal(t.claimsAgreement, false);
   assert.equal(t.round, 1);
   assert.equal(t.by, 'a');
   assert.equal(t.raw, TURNO_COMPLETO);   // el transcript necesita el original íntegro
@@ -56,64 +56,64 @@ test('parseTurn extrae postura, listas y estado de un turno completo (R10)', () 
 
 test('parseTurn acepta viñetas con -, * y numeradas, y descarta las líneas vacías', () => {
   const t = parseTurn('===DESACUERDOS===\n- uno\n* dos\n1. tres\n\n   \n', meta);
-  assert.deepEqual(t.desacuerdos, ['uno', 'dos', 'tres']);
+  assert.deepEqual(t.disagreements, ['uno', 'dos', 'tres']);
 });
 
 test('parseTurn sin viñetas toma cada línea como un ítem', () => {
   const t = parseTurn('===PREGUNTAS_USUARIO===\n¿cuántos usuarios?\n¿qué presupuesto?', meta);
-  assert.deepEqual(t.preguntas, ['¿cuántos usuarios?', '¿qué presupuesto?']);
+  assert.deepEqual(t.raisedQuestions, ['¿cuántos usuarios?', '¿qué presupuesto?']);
 });
 
 test('parseTurn reconoce el acuerdo escrito de varias formas y no lo confunde con "no" (R10)', () => {
   const si = ['acuerdo: si', 'acuerdo: sí', 'Acuerdo:  SÍ', 'acuerdo: yes'];
-  for (const linea of si) assert.equal(parseTurn(`===ESTADO===\n${linea}`, meta).declaraAcuerdo, true, linea);
+  for (const linea of si) assert.equal(parseTurn(`===ESTADO===\n${linea}`, meta).claimsAgreement, true, linea);
   const no = ['acuerdo: no', 'acuerdo: todavía no', 'acuerdo:no', ''];
-  for (const linea of no) assert.equal(parseTurn(`===ESTADO===\n${linea}`, meta).declaraAcuerdo, false, linea);
+  for (const linea of no) assert.equal(parseTurn(`===ESTADO===\n${linea}`, meta).claimsAgreement, false, linea);
 });
 
 test('parseTurn con respuesta truncada conserva lo recibido y NO declara acuerdo (R10)', () => {
   const t = parseTurn('===POSTURA===\nmi argumento entero\n===DESACUER', meta);
-  assert.equal(t.postura, 'mi argumento entero');
-  assert.deepEqual(t.desacuerdos, []);
-  assert.equal(t.declaraAcuerdo, false);   // un turno ilegible jamás cierra un debate
+  assert.equal(t.position, 'mi argumento entero');
+  assert.deepEqual(t.disagreements, []);
+  assert.equal(t.claimsAgreement, false);   // un turno ilegible jamás cierra un debate
 });
 
 test('parseTurn con basura, vacío o null no lanza: devuelve un turno vacío', () => {
   for (const raw of ['', null, undefined, 'me parece bien todo']) {
     const t = parseTurn(raw, meta);
-    assert.equal(t.declaraAcuerdo, false);
-    assert.deepEqual(t.desacuerdos, []);
+    assert.equal(t.claimsAgreement, false);
+    assert.deepEqual(t.disagreements, []);
   }
 });
 
 // ── T5 · el acuerdo hay que ganárselo ──────────────────────────────────────────────────────────
 // Los desacuerdos abiertos llevan SU número: el mismo que el motor le enseñó al modelo en el prompt.
 // Sin número explícito, dos módulos tendrían que numerar igual por su cuenta para entenderse.
-const abiertos = [{ n: 1, texto: 'el coste de operación no está medido' }, { n: 2, texto: 'no hay plan de reproceso' }];
+const stillOpen = [{ n: 1, text: 'el coste de operación no está medido' }, { n: 2, text: 'no hay plan de reproceso' }];
 
 test('sin declarar acuerdo no hay acuerdo, por muy resueltos que cite (R12)', () => {
   const t = parseTurn('===RESUELTOS===\n- D1: quedó claro con el número de ayer\n===ESTADO===\nacuerdo: no', meta);
-  assert.equal(isJustifiedAgreement(t, abiertos), false);
+  assert.equal(isJustifiedAgreement(t, stillOpen), false);
 });
 
 test('acuerdo declarado SIN resueltos = complacencia: no cuenta (R12)', () => {
   const t = parseTurn('===POSTURA===\nMe convence.\n===ESTADO===\nacuerdo: si', meta);
-  assert.equal(isJustifiedAgreement(t, abiertos), false);
+  assert.equal(isJustifiedAgreement(t, stillOpen), false);
 });
 
 test('acuerdo que cita un desacuerdo que NO está abierto no cuenta (R12)', () => {
   const t = parseTurn('===RESUELTOS===\n- D7: aquello se resolvió porque cambiamos el diseño entero\n===ESTADO===\nacuerdo: si', meta);
-  assert.equal(isJustifiedAgreement(t, abiertos), false);
+  assert.equal(isJustifiedAgreement(t, stillOpen), false);
 });
 
 test('acuerdo que cita un desacuerdo abierto pero sin porqué no cuenta (R12)', () => {
   const t = parseTurn('===RESUELTOS===\n- D1: ok\n===ESTADO===\nacuerdo: si', meta);
-  assert.equal(isJustifiedAgreement(t, abiertos), false);
+  assert.equal(isJustifiedAgreement(t, stillOpen), false);
 });
 
 test('acuerdo que cita un desacuerdo abierto y explica por qué SÍ cuenta (R12)', () => {
   const t = parseTurn('===RESUELTOS===\n- D2: el reproceso queda cubierto por la cola de mensajes muertos que acordamos\n===ESTADO===\nacuerdo: si', meta);
-  assert.equal(isJustifiedAgreement(t, abiertos), true);
+  assert.equal(isJustifiedAgreement(t, stillOpen), true);
 });
 
 test('sin nada en disputa, el acuerdo no necesita justificarse (R12)', () => {

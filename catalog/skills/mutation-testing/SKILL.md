@@ -54,7 +54,7 @@ Two Angular apps can use Karma, Jest or Vitest; do not guess. Always, in this or
 | JS / TS | `npm i -D @stryker-mutator/core @stryker-mutator/{runner}` | `npx --no-install stryker run` | `reports/mutation/mutation.json` |
 | .NET / C# | `dotnet new tool-manifest && dotnet tool install dotnet-stryker` | `dotnet stryker` | `StrykerOutput/**/reports/mutation-report.json` |
 | Dart / Flutter | — | — | **no parser yet** |
-| Python | `uv add --dev mutmut` | `mutmut run && mutmut junitxml > reports/mutation/mutmut.xml` | `reports/mutation/mutmut.xml` |
+| Python | `uv add --dev 'mutmut>=3.2'` | `mutmut run; mutmut export-cicd-stats` | `mutants/mutmut-cicd-stats.json` |
 | Java / Kotlin (Maven) | — | `mvn org.pitest:pitest-maven:mutationCoverage` | `target/pit-reports/**/mutations.xml` |
 | Rust | — | — | **no parser yet** |
 | PHP | — | — | **no parser yet** |
@@ -73,8 +73,9 @@ progress. Add the `json` reporter to `stryker.conf.json` (and commit it):
 }
 ```
 
-- **mutmut prints results to the screen.** `mutmut results` is for humans; the gate needs the file,
-so the run always ends with the `junitxml` redirect into `reports/mutation/mutmut.xml`.
+- **mutmut 3 has no `junitxml`.** The run ends with `mutmut export-cicd-stats`, which writes the counts to `mutants/mutmut-cicd-stats.json`.
+Those counts carry no file or line, so the score covers everything mutmut mutated and a failing run shows one aggregated finding.
+mutmut 3 mutates a copy under `mutants/`, so stopping a run never leaves your sources mutated.
 
 Note the `--no-install` in the JS command: plain `npx stryker run` **downloads** whatever it cannot
 find — and the bare `stryker` package on npm is an abandoned 2019 release, not `@stryker-mutator/core`.
@@ -93,7 +94,7 @@ Two honest ways out — pick one **with the user**, never on your own:
 
 1. **Configure a tool the gate can read.** Point `mutation.command`, `mutation.report` and
    `mutation.format` in `.chalc/gate.json` at a tool that writes one of the supported formats
-   (`elements`, `junit`, `pit`).
+   (`elements`, `junit`, `pit`, `mutmut-stats`).
 2. **Declare the stage not applicable**: set `"required": false` inside `mutation` in
    `.chalc/gate.json`. The stage is then reported as *not applicable* instead of blocking, and the
    reason is recorded in `.chalc/gate.md` on every run. This only works where the gate has **no
@@ -135,7 +136,7 @@ Notes:
 ## Cleanup (don't leave or commit artifacts)
 Mutation tools create temp sandboxes and reports.
 - **Remove the temp sandbox.** Stryker deletes `.stryker-tmp/` on its own when `cleanTempDir` is on
-  (default); if a crash leaves it behind, delete it. Same idea for `.mutmut-cache/`.
+  (default); if a crash leaves it behind, delete it. mutmut 3 works in `mutants/`: keep it out of git.
 - **Never delete the report before the gate reads it.** `reports/mutation/`, `StrykerOutput/` and
   `target/pit-reports/` are the evidence, not sandbox litter. Deleting them makes the gate block with
   "the tool left no report".

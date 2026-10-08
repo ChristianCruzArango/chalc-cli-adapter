@@ -12,7 +12,7 @@
 // Puro a propósito: recibe el texto de un diff, devuelve posiciones. Quien llama a git es `changed.mjs`.
 
 // Cabecera de archivo destino: `+++ b/src/precio.ts`.
-const FILE = /^\+{3} (?:b\/)?(.+)$/;
+const FILE = /^\+{3} (.+)$/;
 
 // Cabecera de bloque: `@@ -10,3 +11,4 @@`. El primer par es el del archivo VIEJO y el segundo el
 // del NUEVO. Para saber qué se revisa basta el segundo; el primero hace falta para reconstruir el
@@ -22,7 +22,28 @@ const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 // Cuántas líneas declara un lado de la cabecera. Sin conteo explícito, el bloque es de una línea.
 const sizeOf = (count) => (count === undefined ? 1 : Number(count));
 
+// Ruta de una cabecera de diff. Git cita entre comillas, con escapes de C, las rutas con caracteres
+// especiales (tabulador, comilla, barra invertida…): `+++ "b/mi\tarchivo.ts"`. Se deshace la cita
+// para que la ruta coincida con la del listado de cambios.
+const C_ESCAPES = { n: '\n', t: '\t', r: '\r', '"': '"', '\\': '\\', a: '\x07', b: '\b', f: '\f', v: '\v' };
+function unquote(path) {
+  const text = String(path ?? '').trim();
+  if (!(text.startsWith('"') && text.endsWith('"'))) return text;
+  const bytes = [];
+  const body = text.slice(1, -1);
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] !== '\\') { bytes.push(...Buffer.from(body[i], 'utf8')); continue; }
+    const next = body[++i];
+    if (/[0-7]/.test(next)) { bytes.push(parseInt(body.slice(i, i + 3), 8)); i += 2; continue; }
+    bytes.push(...Buffer.from(C_ESCAPES[next] ?? next, 'utf8'));
+  }
+  return Buffer.from(bytes).toString('utf8');
+}
+
 const normalise = (path) => String(path ?? '').replace(/\\/g, '/').trim();
+
+// La ruta destino de una cabecera `+++ b/ruta`, sin la cita ni el prefijo `b/` del diff.
+const headerPath = (raw) => normalise(unquote(raw).replace(/^b\//, ''));
 
 // Líneas nuevas por archivo, a partir de un diff unificado con `-U0`.
 // Devuelve Map<archivo, Set<línea>>.
@@ -33,7 +54,7 @@ export function parseHunks(diffText) {
   for (const raw of String(diffText ?? '').split(/\r?\n/)) {
     const file = FILE.exec(raw);
     if (file) {
-      current = normalise(file[1]);
+      current = headerPath(file[1]);
       if (current === '/dev/null') { current = null; continue; }
       if (!byFile.has(current)) byFile.set(current, new Set());
       continue;
@@ -64,7 +85,7 @@ export function removedByFile(diffText) {
   for (const raw of String(diffText ?? '').split(/\r?\n/)) {
     const file = FILE.exec(raw);
     if (file) {
-      current = normalise(file[1]);
+      current = headerPath(file[1]);
       if (current === '/dev/null') { current = null; continue; }
       if (!byFile.has(current)) byFile.set(current, 0);
       continue;

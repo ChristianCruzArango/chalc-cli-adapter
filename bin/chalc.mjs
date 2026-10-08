@@ -25,7 +25,8 @@
 import { t } from '../lib/i18n.mjs';
 import { tokenSummary } from '../lib/tokenmeter.mjs';
 import { flushTokenLog, setTokenLogCommand } from '../lib/tokenlog.mjs';
-import { c, projectPath, verb } from '../lib/commands/context.mjs';
+import { argError, c, dryRun, flags, projectPath, verb } from '../lib/commands/context.mjs';
+import { CommandExit } from '../lib/commands/exit.mjs';
 import { runConfigLang } from '../lib/commands/lang.mjs';
 import { runInit, runVerify } from '../lib/commands/init.mjs';
 import { runInstall, runConfigure } from '../lib/commands/configure.mjs';
@@ -51,6 +52,7 @@ const exitWith = (code) => { process.exitCode = code; };
 
 // Red de seguridad: nunca mostrar stack traces. Ctrl+C (AbortError) sale limpio.
 const onAbortOrError = (e) => {
+  if (e instanceof CommandExit) return exitWith(e.exitCode);
   if (e && (e.code === 'ABORT_ERR' || e.name === 'AbortError')) { process.stdout.write('\n'); return exitWith(130); }
   console.error(c.red('✗ ' + (e && e.message ? e.message : e)));
   exitWith(1);
@@ -88,12 +90,31 @@ const COMMANDS = {
   apply: runApply
 };
 
+// Los comandos con simulación real. Los demás aceptaban `--dry-run` (es un flag global) y lo
+// ignoraban: `feature --dry-run` hacía git fetch, equipaba repos, gastaba tokens y creaba ramas.
+// Mejor rechazarlo ANTES de hacer nada que prometer una simulación que no existe. Los de solo
+// lectura (inspect, doctor, tokens) no escriben, así que el flag no cambia nada en ellos.
+const DRY_RUN_COMMANDS = new Set(['apply', 'init', 'specgen', 'debate', 'inspect', 'doctor', 'tokens']);
+
 // El histórico de consumo lleva el verbo del comando y se persiste SIEMPRE al terminar (éxito o
 // error tras pagar tokens), con el projectPath del contexto como fallback — los verbos que
 // resuelven su proyecto por dentro (spec-ia, feature, init) fijan la ruta real con setTokenLogProject.
 setTokenLogCommand(verb);
 
-(COMMANDS[verb] ?? COMMANDS.apply)()
+// `--help`/`-h`, o una flag que no existe: la ayuda, sin trazas de Node (2 = uso incorrecto).
+const showUsage = (code) => async () => {
+  if (argError) console.error(c.red('✗ ' + argError.message));
+  (code ? console.error : console.log)(t('usage'));
+  exitWith(code);
+};
+
+const run = argError ? showUsage(2)
+  : flags.help ? showUsage(0)
+  : dryRun && !DRY_RUN_COMMANDS.has(verb)
+  ? async () => { console.error(c.red('✗ ' + t('dryRunUnsupported', verb))); exitWith(2); }
+  : (COMMANDS[verb] ?? COMMANDS.apply);
+
+run()
   .then(async () => {
     printTokenUsage();
     await flushTokenLog(projectPath);
@@ -101,6 +122,9 @@ setTokenLogCommand(verb);
   .catch(async (err) => {
     printTokenUsage();
     await flushTokenLog(projectPath);
+    // Un comando que termina con un código (CommandExit) ya dijo lo que tenía que decir.
+    if (err instanceof CommandExit) return exitWith(err.exitCode);
+    if (err && (err.code === 'ABORT_ERR' || err.name === 'AbortError')) { process.stdout.write('\n'); return exitWith(130); }
     const message = err instanceof Error ? err.message : String(err?.message ?? err);
     console.error(c.red('✗ ' + message));
     exitWith(1);

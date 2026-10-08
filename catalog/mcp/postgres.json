@@ -1,12 +1,14 @@
 {
   "id": "postgres",
   "kind": "node-local",
-  "description": "Servidor MCP de PostgreSQL (custom Hallc). Requiere un archivo .env con credenciales, por eso es opcional.",
+  "description": "Servidor MCP de PostgreSQL propio del proyecto: chalc NO lo incluye ni lo compila. Opcional; necesita credenciales en un .env.",
   "requiresSecret": true,
-  "note": "Edita el DB_ENV_FILE con la ruta a tu .env de base de datos antes de usarlo.",
+  "note": "Antes de activarlo, coloca tu servidor compilado en .chalc/mcp/postgres/dist/index.js y ajusta DB_ENV_FILE a la ruta de tu .env de base de datos. Sin ese archivo el servidor no arranca.",
   "server": {
     "command": "node",
-    "args": ["${PROJECT}/.chalc/mcp/postgres/dist/index.js"],
+    "args": [
+      "${PROJECT}/.chalc/mcp/postgres/dist/index.js"
+    ],
     "env": {
       "DB_ENV_FILE": "${PROJECT}/.env.local"
     }

@@ -12,6 +12,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync
 import { join, dirname } from 'node:path';
 import { planItems, stepTask, stepIsSpecWork } from './plan.mjs';
 import { folderSlug } from '../../lib/specfolder.mjs';
+import { resolveInRoot } from '../tools/fs.mjs';
 
 // Ruta relativa (para mensajes al usuario) y absoluta del checklist dentro del proyecto.
 export const PLAN_REL = '.chalc/plan.md';
@@ -76,9 +77,12 @@ export function specInfo(projectPath) {
   const plan = projectPath && planPath(projectPath);
   if (!plan || !existsSync(plan)) return none;
   const rel = (readFileSync(plan, 'utf8').match(/^> Spec:\s*(\S+)/m) || [])[1];
-  if (!rel) return none;
+  // `plan.md` puede venir con el repo o haberlo escrito el agente: el enlace es un dato no confiable.
+  // Solo un Markdown DENTRO del proyecto (sin `..`, sin rutas absolutas, sin enlaces hacia fuera); si no,
+  // `> Spec: ../../.ssh/id_rsa` metería ese archivo en el prompt que va al proveedor.
+  if (!rel || !/\.md$/i.test(rel)) return none;
   try {
-    const text = readFileSync(join(projectPath, rel), 'utf8').trim();
+    const text = readFileSync(resolveInRoot(projectPath, rel), 'utf8').trim();
     return text ? { rel, text } : none;
   } catch { return none; }
 }
@@ -89,44 +93,37 @@ export function loadSpec(projectPath) {
   return specInfo(projectPath).text;
 }
 
-const stamp = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
+// Fecha y hora al minuto (UTC) con que se firman el plan, el spec y la bitácora de revisión.
+export const stamp = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
 
-// Escribe el plan aprobado como documento de órdenes de trabajo. Un plan por proyecto: aprobar uno
-// nuevo reemplaza al anterior (el usuario ya decidió ejecutar ESTE). Devuelve la ruta, o null sin ítems.
-// opts.leader: etiqueta del modelo que planeó (para que el documento diga QUIÉN dio las órdenes).
-// opts.spec: el SPEC que el líder redactó junto al plan — se persiste donde diga specTarget (la
-// carpeta specs/ del proyecto, o .chalc de fallback), el plan lo ENLAZA (`> Spec:`), y cada orden
-// embebe SU sección. Un plan nuevo reemplaza el enlace; el fallback .chalc/spec.md huérfano se borra
-// (los archivos bajo specs/ del proyecto son entregables del usuario: JAMÁS se borran).
-export function savePlan(projectPath, goal, plan, opts = {}) {
-  const items = planItems(plan);
-  if (!projectPath || !items.length) return null;
-  const file = planPath(projectPath);
-  mkdirSync(dirname(file), { recursive: true });
-  const spec = String(opts.spec || '').trim();
-  let specRel = '';
-  if (spec) {
-    const target = specTarget(projectPath, String(goal).trim());
-    mkdirSync(dirname(target.file), { recursive: true });
-    writeFileSync(target.file, [
-      SPEC_STAMP,
-      `# Spec: ${String(goal).trim()}`,
-      '',
-      `> Redactado por el líder: ${opts.leader || '(modelo base)'} · ${stamp()}`,
-      `> El desarrollador recibe SOLO la sección de su tarea en cada turno. Él nunca escribe este documento.`,
-      '',
-      spec,
-      ''
-    ].join('\n'), 'utf8');
-    specRel = target.rel;
-    if (target.rel !== SPEC_REL) rmSync(specPath(projectPath), { force: true });   // sin residuos del fallback
-  } else {
+// Persiste el SPEC del líder donde diga specTarget y devuelve su ruta relativa ('' sin spec).
+function writeSpec(projectPath, goal, spec, leader) {
+  if (!spec) {
     rmSync(specPath(projectPath), { force: true });   // SOLO nuestro fallback; specs/ del proyecto no se toca
+    return '';
   }
-  const lines = [
-    `# Plan: ${String(goal).trim()}`,
+  const target = specTarget(projectPath, goal);
+  mkdirSync(dirname(target.file), { recursive: true });
+  writeFileSync(target.file, [
+    SPEC_STAMP,
+    `# Spec: ${goal}`,
     '',
-    `> Líder: ${opts.leader || '(modelo base)'} · ${stamp()}`,
+    `> Redactado por el líder: ${leader || '(modelo base)'} · ${stamp()}`,
+    `> El desarrollador recibe SOLO la sección de su tarea en cada turno. Él nunca escribe este documento.`,
+    '',
+    spec,
+    ''
+  ].join('\n'), 'utf8');
+  if (target.rel !== SPEC_REL) rmSync(specPath(projectPath), { force: true });   // sin residuos del fallback
+  return target.rel;
+}
+
+// El documento del plan: checklist y la orden literal de cada tarea.
+function planDocument(goal, items, { spec, specRel, leader }) {
+  return [
+    `# Plan: ${goal}`,
+    '',
+    `> Líder: ${leader || '(modelo base)'} · ${stamp()}`,
     `> Estado: 0/${items.length} completadas`,
     ...(specRel ? [`> Spec: ${specRel} — redactado por el líder; cada tarea viaja con su sección`] : []),
     '',
@@ -145,14 +142,30 @@ export function savePlan(projectPath, goal, plan, opts = {}) {
     ...items.flatMap((it, i) => [
       `### Tarea ${i + 1}${stepIsSpecWork(it) ? ' — la redacta el agente LÍDER (documento de especificación)' : ' — la ejecuta el agente DESARROLLADOR'}`,
       '',
-      ...stepTask(String(goal).trim(), items, i, spec).split('\n').map((l) => '    ' + l),
+      ...stepTask(goal, items, i, spec).split('\n').map((l) => '    ' + l),
       ''
     ]),
     '_El harness marca [x] cada tarea SOLO cuando sus candados confirman el cambio real;_',
     '_el modelo nunca marca su propio trabajo. Retomable con `/plan` (sin argumento)._',
     ''
-  ];
-  writeFileSync(file, lines.join('\n'), 'utf8');
+  ].join('\n');
+}
+
+// Escribe el plan aprobado como documento de órdenes de trabajo. Un plan por proyecto: aprobar uno
+// nuevo reemplaza al anterior (el usuario ya decidió ejecutar ESTE). Devuelve la ruta, o null sin ítems.
+// opts.leader: etiqueta del modelo que planeó (para que el documento diga QUIÉN dio las órdenes).
+// opts.spec: el SPEC que el líder redactó junto al plan — se persiste donde diga specTarget (la
+// carpeta specs/ del proyecto, o .chalc de fallback), el plan lo ENLAZA (`> Spec:`), y cada orden
+// embebe SU sección. Un plan nuevo reemplaza el enlace; el fallback .chalc/spec.md huérfano se borra
+// (los archivos bajo specs/ del proyecto son entregables del usuario: JAMÁS se borran).
+export function savePlan(projectPath, goal, plan, opts = {}) {
+  const items = planItems(plan);
+  if (!projectPath || !items.length) return null;
+  const file = planPath(projectPath);
+  mkdirSync(dirname(file), { recursive: true });
+  const spec = String(opts.spec || '').trim();
+  const specRel = writeSpec(projectPath, String(goal).trim(), spec, opts.leader);
+  writeFileSync(file, planDocument(String(goal).trim(), items, { spec, specRel, leader: opts.leader }), 'utf8');
   return file;
 }
 

@@ -19,6 +19,7 @@ export const RULES = Object.freeze({
   staleReport: 'stale-report',
   badReport: 'bad-report',
   noMutants: 'no-mutants',
+  unsafePath: 'unsafe-path',
   mutantSurvived: 'mutant-survived',
 
   // una cosa por archivo y smells medibles

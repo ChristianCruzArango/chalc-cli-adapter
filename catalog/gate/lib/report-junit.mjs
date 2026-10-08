@@ -7,6 +7,7 @@
 
 import { elements } from './xml.mjs';
 import { summarize } from './mutants.mjs';
+import { ReportError } from './report-error.mjs';
 
 // `ruta:línea:` al inicio del nombre del caso, para las versiones de mutmut que no ponen los
 // atributos file/line. Codicioso a propósito: así una ruta con `C:\…` no se parte por el primer `:`.
@@ -35,7 +36,7 @@ function locationOf(attrs) {
 // Parsea el texto del reporte. Misma salida que `parseElements` y `parsePit`.
 export function parseJUnit(text, opts = {}) {
   if (!/<testsuite\b/.test(text)) {
-    throw new Error('mutation report: falta <testsuite>, el archivo no es un reporte junit');
+    throw new ReportError('junitNoSuite');
   }
 
   const mutants = [];

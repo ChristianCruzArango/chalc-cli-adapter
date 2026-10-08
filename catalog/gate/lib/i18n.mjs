@@ -45,6 +45,7 @@ export const FRAME = {
       title: 'Alcance de la tarea',
       source: 'Fuente', from: 'Desde', files: 'Archivos revisados',
       excluded: 'Fuera del alcance (del árbol, pero no de esta tarea)',
+      unregistered: 'Revisados aunque no estaban en el registro (el diff completo siempre cuenta)',
       reverted: 'Escrito y deshecho durante la tarea',
       stale: 'El registro de rutas escritas era de la tarea anterior: se descartó.',
       none: 'No se pudo determinar qué archivos cambió esta tarea.',
@@ -56,7 +57,19 @@ export const FRAME = {
         given: 'lista de archivos indicada al portón'
       }
     },
-    fast: 'Corrida rápida (`--fast`): la mutación no se ejecutó, así que **no cierra la tarea**.'
+    fast: 'Corrida rápida (`--fast`): la mutación no se ejecutó, así que **no cierra la tarea**.',
+    configChanged: '`.chalc/gate.json` cambió desde el cierre de la tarea anterior en claves que deciden el veredicto',
+    configMissing: (rel) => `falta ${rel}: vuelve a equipar el repo con chalc`,
+    configInvalid: (rel, why) => `${rel} no es JSON válido: ${why}`,
+    invalidKept: (file, why, copy) => `${file} no es JSON válido (${why}); se guardó una copia en ${copy} y se sigue sin él.`,
+    reportProblems: {
+      notJson: 'el archivo no es JSON válido',
+      elementsNoFiles: 'falta la sección "files" del esquema mutation-testing-elements',
+      junitNoSuite: 'falta <testsuite>, el archivo no es un reporte junit',
+      mutmutNoCounts: 'faltan "killed"/"survived", el archivo no es un export-cicd-stats de mutmut',
+      mutmutInterrupted: 'la corrida de mutmut se interrumpió',
+      pitNoMutations: 'falta <mutations>, el archivo no es un reporte de PIT'
+    }
   },
   en: {
     title: 'Quality gate',
@@ -88,6 +101,7 @@ export const FRAME = {
       title: 'Task scope',
       source: 'Source', from: 'Since', files: 'Files reviewed',
       excluded: 'Out of scope (in the tree, but not from this task)',
+      unregistered: 'Reviewed although they were not in the record (the full diff always counts)',
       reverted: 'Written and undone during the task',
       stale: 'The record of written paths belonged to the previous task: it was discarded.',
       none: 'There was no way to tell which files this task changed.',
@@ -99,7 +113,19 @@ export const FRAME = {
         given: 'file list given to the gate'
       }
     },
-    fast: 'Fast run (`--fast`): mutation did not run, so this **does not close the task**.'
+    fast: 'Fast run (`--fast`): mutation did not run, so this **does not close the task**.',
+    configChanged: '`.chalc/gate.json` changed since the previous task was closed, in keys that decide the verdict',
+    configMissing: (rel) => `${rel} is missing: equip the repo with chalc again`,
+    configInvalid: (rel, why) => `${rel} is not valid JSON: ${why}`,
+    invalidKept: (file, why, copy) => `${file} is not valid JSON (${why}); a copy was kept at ${copy} and it is ignored.`,
+    reportProblems: {
+      notJson: 'the file is not valid JSON',
+      elementsNoFiles: 'the "files" section of the mutation-testing-elements schema is missing',
+      junitNoSuite: '<testsuite> is missing, the file is not a junit report',
+      mutmutNoCounts: '"killed"/"survived" are missing, the file is not a mutmut export-cicd-stats',
+      mutmutInterrupted: 'the mutmut run was interrupted',
+      pitNoMutations: '<mutations> is missing, the file is not a PIT report'
+    }
   }
 };
 
@@ -121,8 +147,9 @@ export const MESSAGES = {
     [RULES.notInstalled]: (d) => `la herramienta de mutación no está instalada (${d.tool}); ${d.install ? `instálala con: ${d.install}` : 'instálala antes de cerrar la tarea'}`,
     [RULES.noReport]: (d) => `la herramienta no dejó su reporte en "${d.report}"${d.code ? ` (el comando salió con código ${d.code})` : ''}`,
     [RULES.staleReport]: (d) => `el reporte de mutación es anterior a "${d.source}": mide otra versión del código, vuelve a correr ${d.command}`,
-    [RULES.badReport]: (d) => `no se pudo leer el reporte de mutación: ${d.detail}`,
+    [RULES.badReport]: (d) => `no se pudo leer el reporte de mutación: ${d.format ? `formato de reporte desconocido: "${d.format}"` : d.problem ? FRAME.es.reportProblems[d.problem] : d.detail}`,
     [RULES.noMutants]: () => 'el reporte no tiene ni un mutante válido: no hay score que evaluar',
+    [RULES.unsafePath]: (d) => `la ruta ${JSON.stringify(d.path)} no se puede pasar con seguridad al shell de este sistema: renómbrala para poder medir la mutación`,
     [RULES.mutantSurvived]: (d) => `mutante no detectado (${d.status}${d.mutator ? `, ${d.mutator}` : ''}); score ${d.score}% < ${d.threshold}%`,
 
     [RULES.onePerFile]: (d) => `"${d.name}" es la declaración pública nº ${d.position} del archivo; va en su propio archivo junto a "${d.first}"`,
@@ -163,8 +190,9 @@ export const MESSAGES = {
     [RULES.notInstalled]: (d) => `the mutation tool is not installed (${d.tool}); ${d.install ? `install it with: ${d.install}` : 'install it before closing the task'}`,
     [RULES.noReport]: (d) => `the tool left no report at "${d.report}"${d.code ? ` (the command exited with code ${d.code})` : ''}`,
     [RULES.staleReport]: (d) => `the mutation report is older than "${d.source}": it measures a different version of the code, run ${d.command} again`,
-    [RULES.badReport]: (d) => `the mutation report could not be read: ${d.detail}`,
+    [RULES.badReport]: (d) => `the mutation report could not be read: ${d.format ? `unknown report format: "${d.format}"` : d.problem ? FRAME.en.reportProblems[d.problem] : d.detail}`,
     [RULES.noMutants]: () => 'the report has not a single valid mutant: there is no score to judge',
+    [RULES.unsafePath]: (d) => `the path ${JSON.stringify(d.path)} cannot be passed safely to this system's shell: rename it so mutation can be measured`,
     [RULES.mutantSurvived]: (d) => `mutant not detected (${d.status}${d.mutator ? `, ${d.mutator}` : ''}); score ${d.score}% < ${d.threshold}%`,
 
     [RULES.onePerFile]: (d) => `"${d.name}" is public declaration nº ${d.position} in this file; it belongs in its own file next to "${d.first}"`,

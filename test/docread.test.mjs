@@ -4,73 +4,13 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deflateRawSync } from 'node:zlib';
 
 import { readDocument, _internals } from '../lib/docread.mjs';
 import { t } from '../lib/i18n.mjs';
+import { makeZip } from './helpers/zip.mjs';
 
 const dir = mkdtempSync(join(tmpdir(), 'chalc-docread-'));
 test.after(() => rmSync(dir, { recursive: true, force: true }));
-
-const CRC_TABLE = (() => {
-  const t = new Int32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c;
-  }
-  return t;
-})();
-
-function crc32(buf) {
-  let c = -1;
-  for (const b of buf) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
-  return (c ^ -1) >>> 0;
-}
-
-/** Arma un ZIP mínimo (deflate) con las entradas dadas: { nombre: contenido }. */
-function makeZip(files) {
-  const locals = [];
-  const central = [];
-  let offset = 0;
-  for (const [name, content] of Object.entries(files)) {
-    const nameBuf = Buffer.from(name, 'utf8');
-    const data = Buffer.from(content, 'utf8');
-    const comp = deflateRawSync(data);
-    const crc = crc32(data);
-    const local = Buffer.alloc(30);
-    local.writeUInt32LE(0x04034b50, 0);
-    local.writeUInt16LE(20, 4);
-    local.writeUInt16LE(8, 8); // deflate
-    local.writeUInt32LE(crc, 14);
-    local.writeUInt32LE(comp.length, 18);
-    local.writeUInt32LE(data.length, 22);
-    local.writeUInt16LE(nameBuf.length, 26);
-    locals.push(local, nameBuf, comp);
-
-    const cd = Buffer.alloc(46);
-    cd.writeUInt32LE(0x02014b50, 0);
-    cd.writeUInt16LE(20, 4);
-    cd.writeUInt16LE(20, 6);
-    cd.writeUInt16LE(8, 10);
-    cd.writeUInt32LE(crc, 16);
-    cd.writeUInt32LE(comp.length, 20);
-    cd.writeUInt32LE(data.length, 24);
-    cd.writeUInt16LE(nameBuf.length, 28);
-    cd.writeUInt32LE(offset, 42);
-    central.push(cd, nameBuf);
-    offset += local.length + nameBuf.length + comp.length;
-  }
-  const localBuf = Buffer.concat(locals);
-  const centralBuf = Buffer.concat(central);
-  const eocd = Buffer.alloc(22);
-  eocd.writeUInt32LE(0x06054b50, 0);
-  eocd.writeUInt16LE(Object.keys(files).length, 8);
-  eocd.writeUInt16LE(Object.keys(files).length, 10);
-  eocd.writeUInt32LE(centralBuf.length, 12);
-  eocd.writeUInt32LE(localBuf.length, 16);
-  return Buffer.concat([localBuf, centralBuf, eocd]);
-}
 
 const DOCX_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
@@ -102,15 +42,30 @@ test('.docx con notas al pie incluye su texto', async () => {
   assert.match(text, /Nota al pie relevante/);
 });
 
-test('.docx corrupto da un mensaje accionable, no un ENOENT de textutil', async () => {
+// F-02 — la política no depende de lo que tenga instalado la máquina: el respaldo (LibreOffice) se
+// inyecta y se prueban las dos configuraciones. Un archivo que ni siquiera es un contenedor de
+// Office se rechaza SIEMPRE; uno que sí lo es pero está dañado se rescata si hay conversor.
+const conLibreOffice = { convert: async () => 'texto rescatado' };
+const sinLibreOffice = { convert: async () => null };
+
+test('.docx que no es un documento da un mensaje accionable, con o sin LibreOffice', async () => {
   const file = join(dir, 'roto.docx');
   writeFileSync(file, Buffer.from('esto no es un zip'));
-  await assert.rejects(() => readDocument(file), (e) => {
-    assert.match(e.message, /roto\.docx/);
-    assert.equal(e.message, t('docReadFailWord', 'roto.docx', t('docNotZip')));   // mensaje traducido, no un ENOENT
-    assert.doesNotMatch(e.message, /textutil|macOS|ENOENT/);
-    return true;
-  });
+  for (const tools of [conLibreOffice, sinLibreOffice]) {
+    await assert.rejects(() => readDocument(file, tools), (e) => {
+      assert.match(e.message, /roto\.docx/);
+      assert.equal(e.message, t('docReadFailWord', 'roto.docx', t('docNotZip')));   // mensaje traducido, no un ENOENT
+      assert.doesNotMatch(e.message, /textutil|macOS|ENOENT/);
+      return true;
+    });
+  }
+});
+
+test('.docx dañado pero con estructura de Office: se rescata con LibreOffice y, sin él, se explica', async () => {
+  const file = join(dir, 'danado.docx');
+  writeFileSync(file, makeZip({ 'otra/cosa.xml': '<x/>' }));   // ZIP válido sin word/document.xml
+  assert.equal(await readDocument(file, conLibreOffice), 'texto rescatado');
+  await assert.rejects(() => readDocument(file, sinLibreOffice), (e) => e.message === t('docReadFailWord', 'danado.docx', t('docNoDocumentXml')));
 });
 
 test('lee un .odt', async () => {

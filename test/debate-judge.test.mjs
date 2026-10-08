@@ -13,16 +13,16 @@ import { judge } from '../lib/debate/judge.mjs';
 const state = {
   idea: 'una cola de eventos para el checkout',
   turns: [
-    { round: 1, by: 'a', postura: 'la cola desacopla el pico', raw: '===POSTURA===\nla cola desacopla el pico', acuerdos: [], desacuerdos: [], resueltos: [], preguntas: [] },
-    { round: 1, by: 'b', postura: 'el coste operativo no está medido', raw: '===POSTURA===\nel coste operativo no está medido', acuerdos: [], desacuerdos: ['el coste no está medido'], resueltos: [], preguntas: [] }
+    { round: 1, by: 'a', position: 'la cola desacopla el pico', raw: '===POSTURA===\nla cola desacopla el pico', agreements: [], disagreements: [], settled: [], raisedQuestions: [] },
+    { round: 1, by: 'b', position: 'el coste operativo no está medido', raw: '===POSTURA===\nel coste operativo no está medido', agreements: [], disagreements: ['el coste no está medido'], settled: [], raisedQuestions: [] }
   ],
-  desacuerdosAbiertos: [{ n: 1, texto: 'el coste de operación no está medido', by: 'b', round: 1 }],
-  desacuerdosResueltos: [],
+  openDisagreements: [{ n: 1, text: 'el coste de operación no está medido', by: 'b', round: 1 }],
+  settledDisagreements: [],
   questions: []
 };
 
-const dictamen = (posicion, porque = 'porque el argumento se apoya en datos y el otro no') =>
-  `===VEREDICTO===\n${posicion}\n===PORQUE===\n${porque}`;
+const dictamen = (posicion, why = 'porque el argumento se apoya en datos y el otro no') =>
+  `===VEREDICTO===\n${posicion}\n===PORQUE===\n${why}`;
 
 test('veredicto estable en los dos órdenes: hay ganador (R22)', async () => {
   // Pasada 1 → A es la Postura 1 y gana. Pasada 2 (invertida) → A es la Postura 2 y vuelve a ganar.
@@ -31,8 +31,8 @@ test('veredicto estable en los dos órdenes: hay ganador (R22)', async () => {
   const r = await judge({ state, ask, lang: 'es' });
 
   assert.equal(calls.length, 2);                 // siempre dos: es el precio de no tener sesgo de posición
-  assert.equal(r.ganador, 'a');
-  assert.equal(r.empate, false);
+  assert.equal(r.winner, 'a');
+  assert.equal(r.tie, false);
 });
 
 test('veredicto que cambia al invertir el orden: empate, no ganador (R22)', async () => {
@@ -40,23 +40,23 @@ test('veredicto que cambia al invertir el orden: empate, no ganador (R22)', asyn
   const ask = async () => dictamen('1');
   const r = await judge({ state, ask, lang: 'es' });
 
-  assert.equal(r.empate, true);
-  assert.equal(r.ganador, '');
-  assert.equal(r.pasadas.length, 2);             // las dos quedan registradas para poder auditarlo
+  assert.equal(r.tie, true);
+  assert.equal(r.winner, '');
+  assert.equal(r.past.length, 2);             // las dos quedan registradas para poder auditarlo
 });
 
 test('el juez que declara empate explícitamente se respeta (R22)', async () => {
   const ask = async () => dictamen('empate', 'las dos posturas se sostienen con la información disponible');
   const r = await judge({ state, ask, lang: 'es' });
 
-  assert.equal(r.empate, true);
-  assert.equal(r.ganador, '');
+  assert.equal(r.tie, true);
+  assert.equal(r.winner, '');
 });
 
 test('un veredicto ilegible no inventa ganador: empate (R22)', async () => {
   const ask = async () => 'no me ha quedado claro';
   const r = await judge({ state, ask, lang: 'es' });
-  assert.equal(r.empate, true);
+  assert.equal(r.tie, true);
 });
 
 test('el juez ve las posturas anónimas y en el orden que le toca (R22, R9)', async () => {
@@ -64,10 +64,10 @@ test('el juez ve las posturas anónimas y en el orden que le toca (R22, R9)', as
   const ask = async (req) => { vistos.push(req.user); return dictamen('1'); };
   await judge({ state, ask, lang: 'es' });
 
-  const [primera, segunda] = vistos;
+  const [first, second] = vistos;
   // Postura 1 y Postura 2 se intercambian entre pasadas…
-  assert.ok(primera.indexOf('la cola desacopla el pico') < primera.indexOf('el coste operativo no está medido'));
-  assert.ok(segunda.indexOf('el coste operativo no está medido') < segunda.indexOf('la cola desacopla el pico'));
+  assert.ok(first.indexOf('la cola desacopla el pico') < first.indexOf('el coste operativo no está medido'));
+  assert.ok(second.indexOf('el coste operativo no está medido') < second.indexOf('la cola desacopla el pico'));
   // …y en ninguna aparece quién es quién
   for (const v of vistos) {
     assert.equal(/proponent|challenger|participante a|participante b/i.test(v), false);
@@ -77,7 +77,7 @@ test('el juez ve las posturas anónimas y en el orden que le toca (R22, R9)', as
 test('sin desacuerdos abiertos no hay nada que dictaminar y no se gasta ninguna llamada (R22)', async () => {
   let llamadas = 0;
   const ask = async () => { llamadas += 1; return dictamen('1'); };
-  const r = await judge({ state: { ...state, desacuerdosAbiertos: [] }, ask, lang: 'es' });
+  const r = await judge({ state: { ...state, openDisagreements: [] }, ask, lang: 'es' });
 
   assert.equal(llamadas, 0);
   assert.equal(r, null);

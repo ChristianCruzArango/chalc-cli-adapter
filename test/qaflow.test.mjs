@@ -73,7 +73,7 @@ test('writeQaAgentArtifacts escribe results, repair-plan y replay spec web', asy
     assert.doesNotMatch(repair, /R1.*PASS/);
 
     const replay = await readFile(artifacts.replaySpecPath, 'utf8');
-    assert.match(replay, /test\('R1 — Login visible'/);
+    assert.match(replay, /test\("R1 — Login visible"/);
     assert.match(replay, /page\.goto\("http:\/\/localhost:3000\/"\)/);
   } finally {
     await rm(root, { recursive: true, force: true });

@@ -18,6 +18,7 @@ import { blankOut } from './source.mjs';
 import { sourceFiles } from './sources.mjs';
 import { touchesChange } from './hunks.mjs';
 import { RULES } from './rules.mjs';
+import { LINT_DEFAULTS } from './config.mjs';
 
 // Líneas que se repiten por la GRAMÁTICA del lenguaje y no por copia. En TypeScript, cinco imports
 // seguidos de un `}` aparecen idénticos en medio repo: contarlas produciría cientos de hallazgos
@@ -121,7 +122,8 @@ export function findDuplication(files, { minLines = 6 } = {}) {
 // rige el resto del linter: un repo con historia tiene duplicación vieja a montones, y volcarla
 // entera enterraría el trabajo de hoy.
 export async function lintDuplication(root, changed, config = {}, changedLines = null) {
-  const { enabled = true, minLines = 6, maxFiles = 4000 } = config;
+  const D = LINT_DEFAULTS.duplication;   // los defaults del portón, una sola fuente
+  const { enabled = D.enabled, minLines = D.minLines, maxFiles = D.maxFiles } = config;
   if (!enabled) return [];
 
   const { files, capped } = await sourceFiles(root, { max: maxFiles });

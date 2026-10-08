@@ -21,9 +21,10 @@ test('wtArgs opens one window with one PANE per workspace, all visible at once',
 test('openAllScript for win32 writes an open-all.ps1 that calls wt with panes', () => {
   const s = openAllScript(WS, 'win32');
   assert.equal(s.name, 'open-all.ps1');
-  assert.match(s.content, /wt nt --title "005-login" -d "D:\\features\\005-login" cmd/);
-  assert.match(s.content, /`; sp --title "006-reportes"/);   // panel, no pestaña
-  assert.match(s.content, /-d "D:\\features\\006-reportes" cmd/);   // shell cmd en cada panel
+  // Comillas SIMPLES: PowerShell no expande `$()` ni la comilla invertida dentro de ellas (S-26).
+  assert.match(s.content, /wt nt --title '005-login' -d 'D:\\features\\005-login' cmd/);
+  assert.match(s.content, /`; sp --title '006-reportes'/);   // panel, no pestaña
+  assert.match(s.content, /-d 'D:\\features\\006-reportes' cmd/);   // shell cmd en cada panel
   assert.match(s.content, /`;/);   // separador escapado para PowerShell
 });
 

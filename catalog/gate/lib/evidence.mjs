@@ -5,9 +5,11 @@
 // Este archivo lo emite chalc dentro de `.chalc/gate/lib/`. No edites aquí: ajusta `.chalc/gate.json`.
 //
 // Este archivo es lo que hace verificable al portón. Un asistente puede decir "corrí las pruebas y
-// el score fue 92"; lo que no puede es fabricar un informe con la fecha, la rama, los comandos, sus
-// códigos de salida reales y la lista de sobrevivientes — y que además coincida con lo que el
-// usuario ve al correr el portón él mismo.
+// el score fue 92"; el informe lleva la fecha, la rama, los comandos, sus códigos de salida reales y
+// la lista de sobrevivientes, y cualquiera puede contrastarlo corriendo el portón él mismo. No es
+// infalsificable: quien escribe en el repo puede escribir este archivo. Lo que lo ancla es la huella
+// del estado (`fingerprint.mjs`), que el advisor recalcula; frente a un agente adversarial, el
+// portón tiene que correr en CI (README, «Lo que el portón garantiza y lo que no»).
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -82,7 +84,7 @@ function mutationSection(stages, frame) {
 // El alcance normalizado. Un repo equipado con una versión anterior de chalc puede llegar sin él, y
 // perder el informe entero por una sección nueva sería peor que no tener la sección.
 const scopeOf = (meta) => ({
-  files: [], source: 'none', from: '', excluded: [], reverted: [], staleRegistry: false, ...(meta.scope || {})
+  files: [], source: 'none', from: '', excluded: [], unregistered: [], reverted: [], staleRegistry: false, ...(meta.scope || {})
 });
 
 // Sección de alcance (spec 013, R7): qué se revisó, de dónde salió esa lista, desde qué referencia y
@@ -102,6 +104,7 @@ function scopeSection(meta, frame) {
   if (scope.from) lines.push(`- ${block.from}: \`${scope.from}\``);
   lines.push(scope.files.length ? `- ${block.files}: ${list(scope.files)}` : `- ${block.none}`);
   if (scope.excluded.length) lines.push(`- ${block.excluded}: ${list(scope.excluded)}`);
+  if (scope.unregistered.length) lines.push(`- ${block.unregistered}: ${list(scope.unregistered)}`);
   if (scope.reverted.length) lines.push(`- ${block.reverted}: ${list(scope.reverted)}`);
   if (scope.staleRegistry) lines.push(`- ${block.stale}`);
 
@@ -154,6 +157,9 @@ export function renderEvidence({ stages, meta, lang = 'en' }) {
   // corrida no cierra la tarea (R11).
   if (stages.some((s) => s.skipped && s.reason === 'fast')) lines.push(frame.fast, '');
 
+  // Un portón relajado aprueba sin medir: si gate.json cambió desde el último cierre, se dice arriba.
+  if (meta.configChanges?.length) lines.push(`> ⚠ ${frame.configChanged}: ${meta.configChanges.map((k) => `\`${k}\``).join(', ')}`, '');
+
   // El alcance va justo detrás del veredicto, antes que las etapas: "APROBADO" no significa nada
   // hasta saber sobre qué. Es la primera pregunta que hay que poder responder al abrir el informe.
   lines.push(...scopeSection(meta, frame));
@@ -202,6 +208,11 @@ export function renderState({ stages, meta, fast }) {
     // para medir la frescura contra los archivos de la tarea (R8), y porque una evidencia y un
     // estado que discreparan sobre qué se revisó no servirían ni el uno ni el otro.
     scope: scopeOf(meta),
+    // Ancla de la evidencia (F-07): el commit evaluado y la huella del contenido revisado.
+    head: meta.head || '',
+    scopeHash: meta.scopeHash || '',
+    // Claves de gate.json relajadas o cambiadas desde el último cierre: no bloquean, pero se ven.
+    configChanges: meta.configChanges || [],
     // Lo suprimido con `chalc-allow`, en detalle: la memoria lo guarda como decisión aceptada al
     // cerrar la tarea (spec 015, R13). El informe lo muestra; este campo lo lee una máquina.
     suppressions: stages.flatMap((s) => s.allowed || []).map(({ file, line, rule, reason }) => ({ file, line, rule, reason })),

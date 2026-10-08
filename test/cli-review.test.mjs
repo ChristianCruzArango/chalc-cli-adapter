@@ -77,7 +77,7 @@ test('flujo por sesión: coder escribe → review ve los cambios con rol revisor
     const chatImpl = async ({ system }) => { systems.push(system); return turns[Math.min(i++, turns.length - 1)]; };
     const session = await createSession({ projectPath: dir, chatImpl, language: 'es' });
 
-    const result = await session.ask('crea hola.md');
+    const result = await session.ask('crea hola.md', { approve: async () => true });
     const paths = touchedPaths(result);
     assert.deepEqual(paths, ['hola.md']);
 
@@ -106,7 +106,7 @@ test('el revisor recibe el CONTRATO: spec aprobado + plan de ejecución (con [x]
     ];
     let i = 0;
     const session = await createSession({ projectPath: dir, chatImpl: async ({ system }) => { systems.push(system); return turns[Math.min(i++, turns.length - 1)]; }, language: 'es' });
-    const result = await session.ask('crea hola.md');
+    const result = await session.ask('crea hola.md', { approve: async () => true });
     await session.review('crear hola', { paths: touchedPaths(result) });
     await session.close();
     const sys = systems[systems.length - 1];
@@ -119,7 +119,10 @@ test('el revisor recibe el CONTRATO: spec aprobado + plan de ejecución (con [x]
 });
 
 // ---- reviewfile: bitácora persistida del ciclo revisor→junior→verificación (.chalc/review.md) ----
-import { startReview, logRound, logFixOrder, logFixResult, logVerify, loadReview, reviewPath } from '../cli/engine/reviewfile.mjs';
+import { startReview, logRound, logFixOrder, logFixResult, logVerify, reviewPath } from '../cli/engine/reviewfile.mjs';
+import { existsSync as existsSync2, readFileSync as readFileSync2 } from 'node:fs';
+// La bitácora tal como queda en disco (null si no se abrió).
+const loadReview = (dir) => existsSync2(reviewPath(dir)) ? readFileSync2(reviewPath(dir), 'utf8') : null;
 import { mkdtemp as mkdtemp2 } from 'node:fs/promises';
 import { tmpdir as tmpdir2 } from 'node:os';
 import { join as join2 } from 'node:path';

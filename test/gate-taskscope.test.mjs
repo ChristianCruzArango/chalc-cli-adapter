@@ -84,7 +84,8 @@ test('with no baseline the scope falls back to the branch, and says so', async (
 // EL caso de la spec, extremo a extremo: el árbol arrastra trabajo de otra cosa y el registro dice
 // qué es mío. Antes esto se resolvía revisándolo todo o no revisando; ahora el alcance sale limpio y
 // el ruido queda declarado.
-test('the registry keeps somebody else work in progress out of the scope', async () => {
+// F-07: lo que está en el diff se revisa aunque no esté anotado; el registro solo lo señala.
+test('changes outside the registry are still reviewed and reported as unregistered', async () => {
   const dir = await repo();
   await write(dir, 'src/base.ts', 'export const a = 1;\n');
   const base = await commit(dir, 'tarea 1');
@@ -96,9 +97,9 @@ test('the registry keeps somebody else work in progress out of the scope', async
 
   const scope = await taskScope(dir);
 
-  assert.deepEqual(scope.files, ['src/lo-mio.ts']);
+  assert.deepEqual(scope.files, ['src/lo-mio.ts', 'src/trabajo-ajeno-a-medias.ts']);
   assert.equal(scope.source, 'registry');
-  assert.deepEqual(scope.excluded, ['src/trabajo-ajeno-a-medias.ts']);
+  assert.deepEqual(scope.unregistered, ['src/trabajo-ajeno-a-medias.ts']);
 });
 
 // Un proyecto sin git pero con harness: el registro basta. Es la prueba de que R10 no depende de git.

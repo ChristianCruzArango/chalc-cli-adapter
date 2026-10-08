@@ -7,8 +7,9 @@ import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { gitStatus } from '../lib/gitprep.mjs';
+import { readJsonOrKeep } from '../lib/userdata.mjs';
 
-// Dónde deja cada target su contenido. VERIFICADO contra targets/*.mjs (claude/cursor/copilot/gemini).
+// Dónde deja cada target su contenido. VERIFICADO contra targets/*.mjs (claude/cursor/copilot/gemini/codex).
 // skillsDir: carpeta con <id>/SKILL.md ; mcpFile: JSON con MCP ; mcpKey: clave del objeto de servidores
 // (varía: "mcpServers" | "servers") ; rulesFile: doc de instrucciones del asistente, o null si el target
 // no usa un archivo único (cursor dispersa reglas en .cursor/rules/*.mdc → se apoya en constitución/arquitectura).
@@ -17,21 +18,54 @@ const TARGET_LAYOUT = {
   claude:  { skillsDir: ['.claude', 'skills'], mcpFile: ['.mcp.json'],                mcpKey: 'mcpServers', rulesFile: ['CLAUDE.md'] },
   cursor:  { skillsDir: ['.chalc', 'skills'],  mcpFile: ['.cursor', 'mcp.json'],      mcpKey: 'mcpServers', rulesFile: null },
   copilot: { skillsDir: ['.chalc', 'skills'],  mcpFile: ['.vscode', 'mcp.json'],      mcpKey: 'servers',    rulesFile: ['.github', 'copilot-instructions.md'] },
-  gemini:  { skillsDir: ['.chalc', 'skills'],  mcpFile: ['.gemini', 'settings.json'], mcpKey: 'mcpServers', rulesFile: ['GEMINI.md'] }
+  gemini:  { skillsDir: ['.chalc', 'skills'],  mcpFile: ['.gemini', 'settings.json'], mcpKey: 'mcpServers', rulesFile: ['GEMINI.md'] },
+  // Codex guarda los MCP en TOML (`[mcp_servers.<id>]`), no en JSON.
+  codex:   { skillsDir: ['.chalc', 'skills'],  mcpFile: ['.codex', 'config.toml'],    mcpKey: 'mcp_servers', rulesFile: ['AGENTS.md'], mcpFormat: 'toml' }
 };
+
+// Lee las tablas `[mcp_servers.<id>]` (y sus subtablas, p. ej. `.env`) de un config.toml de Codex.
+// Es el subconjunto que escribe `tomlMcpServers` (lib/targetkit.mjs): claves simples o citadas y
+// valores que son strings básicos, números, booleanos o arrays — todos válidos como JSON. Lo que el
+// usuario tenga fuera de ese subconjunto (strings literales, tablas ajenas) se ignora sin fallar.
+const TOML_TABLE = /^\[\s*mcp_servers\.("(?:[^"\\]|\\.)*"|[A-Za-z0-9_-]+)(?:\.("(?:[^"\\]|\\.)*"|[A-Za-z0-9_-]+))?\s*\]\s*$/;
+const TOML_PAIR = /^("(?:[^"\\]|\\.)*"|[A-Za-z0-9_-]+)\s*=\s*(.+)$/;
+const tomlKeyText = (k) => (k.startsWith('"') ? JSON.parse(k) : k);
+
+export function parseTomlMcpServers(text) {
+  const servers = {};
+  let target = null;
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    if (line.startsWith('[')) {
+      const m = TOML_TABLE.exec(line);
+      if (!m) { target = null; continue; }
+      const id = tomlKeyText(m[1]);
+      servers[id] = servers[id] || {};
+      target = m[2] ? (servers[id][tomlKeyText(m[2])] = servers[id][tomlKeyText(m[2])] || {}) : servers[id];
+      continue;
+    }
+    const pair = target && TOML_PAIR.exec(line);
+    if (!pair) continue;
+    let value;
+    try { value = JSON.parse(pair[2]); } catch {
+      const literal = /^'([^']*)'$/.exec(pair[2]);
+      if (!literal) continue;
+      value = literal[1];
+    }
+    target[tomlKeyText(pair[1])] = value;
+  }
+  return servers;
+}
 
 const CONSTITUTION = ['specs', 'constitution.md'];
 const ARCHITECTURE = ['docs', 'architecture.md'];
 
-// Lee y parsea el manifiesto. Devuelve null si el proyecto no está equipado (no hay .chalc.json).
+// Lee y parsea el manifiesto. Devuelve null si el proyecto no está equipado (no hay .chalc.json) o
+// si el manifiesto es ilegible: en ese caso se respalda y se avisa (lib/userdata.mjs) y el proyecto
+// se trata como sin equipar — volver a equipar lo regenera sin perder la copia.
 export async function readManifest(projectPath) {
-  const file = join(projectPath, '.chalc.json');
-  if (!existsSync(file)) return null;
-  try {
-    return JSON.parse(await readFile(file, 'utf8'));
-  } catch {
-    throw new Error(`.chalc.json existe pero es JSON inválido: ${file}`);
-  }
+  return readJsonOrKeep(join(projectPath, '.chalc.json'), null);
 }
 
 // Resuelve el contexto del proyecto equipado. No lee el CONTENIDO de skills/MCP todavía (eso lo hacen
@@ -60,6 +94,7 @@ export async function loadProject(projectPath) {
       skillsDir: at(layout.skillsDir),
       mcpFile: resolveOptional(layout.mcpFile),
       mcpKey: layout.mcpKey,
+      mcpFormat: layout.mcpFormat || 'json',
       rulesFile: resolveOptional(layout.rulesFile),
       constitution: resolveOptional(CONSTITUTION),
       architecture: resolveOptional(ARCHITECTURE)
@@ -98,12 +133,14 @@ function resolveMcpServerSecrets(server, env, allowedEnv) {
 
 // Lee la config de servidores MCP equipados: { id: serverConfig }. Best-effort: {} si no hay archivo o es inválido.
 // La clave del objeto varía por target (mcpServers / servers), por eso se pasa mcpKey.
-export async function readMcpServers({ mcpFile, mcpKey } = {}, env = process.env, { allowedEnv = [] } = {}) {
+export async function readMcpServers({ mcpFile, mcpKey, mcpFormat = 'json' } = {}, env = process.env, { allowedEnv = [] } = {}) {
   if (!mcpFile || !existsSync(mcpFile)) return {};
   try {
-    const json = JSON.parse(await readFile(mcpFile, 'utf8'));
+    const text = await readFile(mcpFile, 'utf8');
     const allowed = new Set(allowedEnv);
-    const servers = json[mcpKey] || json.mcpServers || json.servers || {};
+    // Un .mcp.json ilegible se respalda y se avisa, como el resto de archivos que chalc escribe.
+    const json = mcpFormat === 'toml' ? null : await readJsonOrKeep(mcpFile, {});
+    const servers = json ? (json[mcpKey] || json.mcpServers || json.servers || {}) : parseTomlMcpServers(text);
     return Object.fromEntries(Object.entries(servers).map(([id, server]) => [id, resolveMcpServerSecrets(server, env, allowed)]));
   } catch {
     return {};

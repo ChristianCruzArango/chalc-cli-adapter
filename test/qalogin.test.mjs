@@ -57,7 +57,7 @@ test('login endpoint se resume sin query/credenciales y se limita al origen de l
   assert.deepEqual(loginEndpointPreview({ url: 'http://user:pass@localhost:5002/login?token=secret', method: 'post' }), { method: 'POST', url: 'http://localhost:5002/login' });
   assert.equal(validateLoginEndpoint('http://localhost:5002/login', { baseUrl: 'http://localhost:5002/app' }).origin, 'http://localhost:5002');
   assert.equal(validateLoginEndpoint('http://localhost:5002/login', { baseUrl: 'http://127.0.0.1:4200' }).hostname, 'localhost');
-  assert.throws(() => validateLoginEndpoint('https://evil.test/login', { baseUrl: 'http://localhost:5002' }), /debe pertenecer/);
+  assert.throws(() => validateLoginEndpoint('https://evil.test/login', { baseUrl: 'http://localhost:5002' }), /debe pertenecer|must belong/);
 });
 
 test('R4: performLogin hace la petición y devuelve el token', async () => {

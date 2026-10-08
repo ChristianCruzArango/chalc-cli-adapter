@@ -5,13 +5,13 @@
 // Lo escribe SOLO el orquestador con datos observados (veredictos, comandos, resultados) — nunca
 // a pedido del modelo. Un run nuevo con revisión reemplaza la bitácora anterior.
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
+import { existsSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { stamp } from './planfile.mjs';
 
 export const REVIEW_REL = '.chalc/review.md';
 export const reviewPath = (projectPath) => join(projectPath, '.chalc', 'review.md');
 
-const stamp = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
 const indent = (text) => String(text || '').trim().split('\n').map((l) => '    ' + l).join('\n');
 
 // Abre la bitácora de UNA revisión (reemplaza la anterior). opts.reviewer: etiqueta del modelo revisor.
@@ -51,15 +51,10 @@ export function logFixResult(projectPath, { done, summary, error } = {}) {
 }
 
 // Portón de verificación: el comando real del stack y su veredicto (con cola de salida si falló).
-export function logVerify(projectPath, round, { ok, command, output, timedOut } = {}) {
+export function logVerify(projectPath, round, { ok, command, output, timedOut, skipped, reason } = {}) {
+  // Una verificación omitida se anota COMO omitida: dejarla como «OK» haría creer que hubo evidencia.
+  if (skipped) return append(projectPath, [`## Verificación — OMITIDA (${reason || 'sin comando para este stack'})${command ? ` (\`${command}\`)` : ''}`, '']);
   const lines = [`## Verificación ronda ${round} — ${ok ? 'OK ✔' : `FALLÓ${timedOut ? ' (timeout)' : ''}`} (\`${command}\`)`, ''];
   if (!ok && output) lines.push(indent(String(output).split('\n').slice(-12).join('\n')), '');
   return append(projectPath, lines);
-}
-
-// Lectura simple (para tests y para saber si hay bitácora previa).
-export function loadReview(projectPath) {
-  const file = projectPath && reviewPath(projectPath);
-  if (!file || !existsSync(file)) return null;
-  return readFileSync(file, 'utf8');
 }

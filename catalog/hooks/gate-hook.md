@@ -41,6 +41,11 @@ más fiable es que quien escribe lo apunte: este hook anota cada archivo que Cla
 }
 ```
 
+El registro **informa, no estrecha**: con git, el portón revisa siempre el diff completo desde la
+última tarea cerrada, y el registro solo señala qué cambios no se anotaron. Este hook escucha
+`Write|Edit|MultiEdit|NotebookEdit`; lo escrito por Bash (`sed -i`, `cat >`, generadores) no se anota,
+pero entra igual en la revisión por el diff.
+
 **Sin este hook el portón sigue funcionando**, pero cae al respaldo: mide el diff desde la última
 tarea cerrada. Ese respaldo revisa de más, y en un flujo donde se commitea al final de la feature
 —no tarea a tarea— revisa bastante de más: la línea base es un commit, así que sin commits en medio

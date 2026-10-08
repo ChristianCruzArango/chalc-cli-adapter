@@ -6,12 +6,12 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRecord, renderDebateLog, renderInforme } from '../lib/debate/report.mjs';
+import { buildRecord, renderDebateLog, renderReport } from '../lib/debate/report.mjs';
 
-const turn = (round, by, postura, extra = {}) => ({
+const turn = (round, by, position, extra = {}) => ({
   round, by, stance: by === 'a' ? 'proponent' : 'challenger',
-  postura, acuerdos: [], desacuerdos: [], resueltos: [], preguntas: [],
-  declaraAcuerdo: false, acuerdoJustificado: false, raw: `===POSTURA===\n${postura}`, ...extra
+  position, agreements: [], disagreements: [], settled: [], raisedQuestions: [],
+  claimsAgreement: false, justifiedAgreement: false, raw: `===POSTURA===\n${position}`, ...extra
 });
 
 const state = {
@@ -24,11 +24,11 @@ const state = {
   roundsRun: 2,
   turns: [turn(1, 'a', 'ARGUMENTO DE A'), turn(1, 'b', 'ARGUMENTO DE B'), turn(2, 'b', 'REPLICA DE B'), turn(2, 'a', 'REPLICA DE A')],
   questions: [
-    { id: 'q1', texto: '¿qué volumen diario?', pedidaPor: ['a', 'b'], respuesta: '10k al día', respondida: true },
-    { id: 'q2', texto: '¿qué presupuesto?', pedidaPor: ['b'], respuesta: '', respondida: false }
+    { id: 'q1', text: '¿qué volumen diario?', askedBy: ['a', 'b'], answer: '10k al día', answered: true },
+    { id: 'q2', text: '¿qué presupuesto?', askedBy: ['b'], answer: '', answered: false }
   ],
-  desacuerdosAbiertos: [{ n: 2, texto: 'el coste de operación no está medido', by: 'b', round: 1 }],
-  desacuerdosResueltos: [{ n: 1, texto: 'la latencia se dispara', by: 'b', round: 1, resueltoEn: 2, resueltoPor: 'a', porque: 'el pico se absorbe en la cola' }],
+  openDisagreements: [{ n: 2, text: 'el coste de operación no está medido', by: 'b', round: 1 }],
+  settledDisagreements: [{ n: 1, text: 'la latencia se dispara', by: 'b', round: 1, settledIn: 2, settledBy: 'a', why: 'el pico se absorbe en la cola' }],
   raisedTotal: 2,
   closedBy: 'limit',
   error: null,
@@ -56,7 +56,7 @@ const state = {
 const meta = { generatedAt: '2026-08-22T10:00:00.000Z' };
 
 test('el informe lleva las siete partes que exige la spec (R24)', () => {
-  const md = renderInforme(state, meta);
+  const md = renderReport(state, meta);
   for (const trozo of [
     'una cola de eventos para el checkout',        // la idea
     'anthropic/claude-opus-4.8', 'openrouter',     // quién debatió, con proveedor
@@ -73,7 +73,7 @@ test('el informe lleva las siete partes que exige la spec (R24)', () => {
 });
 
 test('el acuerdo se entrega EXPLICADO y con lo que aportó cada lado, no como titular (R41)', () => {
-  const md = renderInforme(state, meta);
+  const md = renderReport(state, meta);
   assert.match(md, /Qué se acordó/);
   assert.match(md, /Lo que aportó el lado 1/);
   assert.match(md, /Lo que aportó el lado 2/);
@@ -81,7 +81,7 @@ test('el acuerdo se entrega EXPLICADO y con lo que aportó cada lado, no como ti
 });
 
 test('el informe abre con la idea YA COCINADA: cómo queda después del debate (R44)', () => {
-  const md = renderInforme(state, meta);
+  const md = renderReport(state, meta);
 
   assert.match(md, /Cómo queda la idea|How the idea stands/);
   assert.match(md, /publica el pedido en una cola y responde sin esperar/);
@@ -90,7 +90,7 @@ test('el informe abre con la idea YA COCINADA: cómo queda después del debate (
 });
 
 test('lo no cerrado viaja DENTRO de la propuesta, no en una sección de desacuerdos (R42)', () => {
-  const md = renderInforme(state, meta);
+  const md = renderReport(state, meta);
 
   assert.match(md, /\[PENDIENTE: cuánto cuesta operar la cola/);
   assert.equal(/Puntos que quedaron sin cerrar|Points left unsettled/.test(md), false);
@@ -106,25 +106,25 @@ test('el registro crudo de desacuerdos sigue entero en el JSON, para poder audit
 
 test('si el debate se cortó y no hay propuesta, lo que estaba en disputa sí se enseña (R42, R30)', () => {
   // Sin propuesta, callar lo que quedaba abierto sería entregar un informe que parece completo.
-  const md = renderInforme({ ...state, synthesis: '', closedBy: 'budget' }, meta);
+  const md = renderReport({ ...state, synthesis: '', closedBy: 'budget' }, meta);
   assert.match(md, /Puntos que quedaron sin cerrar|Points left unsettled/);
   assert.match(md, /el coste de operación no está medido/);
 });
 
 test('una pregunta sin responder aparece marcada como tal, no se esconde (R19, R24)', () => {
-  const md = renderInforme(state, meta);
+  const md = renderReport(state, meta);
   const linea = md.split('\n').find((l) => l.includes('¿qué presupuesto?'));
   assert.ok(linea && !linea.includes('10k'), 'la pregunta sin responder debe seguir en el informe');
 });
 
 test('el informe dice cómo se cerró el debate: no es lo mismo acordar que agotar las rondas (R16)', () => {
-  assert.match(renderInforme(state, meta), /2\s*\/\s*3/);   // rondas gastadas de las previstas
-  assert.notEqual(renderInforme({ ...state, closedBy: 'agreement' }, meta), renderInforme(state, meta));
+  assert.match(renderReport(state, meta), /2\s*\/\s*3/);   // rondas gastadas de las previstas
+  assert.notEqual(renderReport({ ...state, closedBy: 'agreement' }, meta), renderReport(state, meta));
 });
 
 test('un debate roto a mitad produce informe PARCIAL con lo ya pagado y dice dónde falló (R30)', () => {
   const roto = { ...state, closedBy: 'error', synthesis: '', error: { round: 2, by: 'b', message: 'API 503: upstream unavailable' } };
-  const md = renderInforme(roto, meta);
+  const md = renderReport(roto, meta);
 
   assert.match(md, /503/);
   assert.ok(md.includes('ARGUMENTO DE A') || md.includes('una cola de eventos'));   // lo pagado no se tira
@@ -151,15 +151,15 @@ test('el JSON es el debate entero y no pierde la trazabilidad de los desacuerdos
 });
 
 test('con dictamen, el informe dice el veredicto y si hubo empate por sesgo de orden (R22)', () => {
-  const conJuez = { ...state, judgment: { ganador: '', empate: true, porque: ['cambia según el orden'], pasadas: [{}, {}] }, judgeIsParticipant: true };
-  const md = renderInforme(conJuez, meta);
+  const conJuez = { ...state, judgment: { winner: '', tie: true, why: ['cambia según el orden'], past: [{}, {}] }, judgeIsParticipant: true };
+  const md = renderReport(conJuez, meta);
   // Los tests corren en los dos idiomas: se compara contra la etiqueta de cualquiera de ellos.
   assert.match(md.toLowerCase(), /empate|tie/);
   assert.match(md.toLowerCase(), /juez|judge/);   // y que el juez era juez y parte
 });
 
 test('los avisos de configuración llegan al informe: el lector debe saber con qué se generó (R4, R5)', () => {
-  const md = renderInforme({ ...state, warnings: ['same-model', 'stale:a'] }, meta);
+  const md = renderReport({ ...state, warnings: ['same-model', 'stale:a'] }, meta);
   assert.match(md.toLowerCase(), /mismo modelo|same model/);
 });
 
@@ -167,7 +167,7 @@ test('los avisos de configuración llegan al informe: el lector debe saber con q
 
 test('si los turnos vieron un RESUMEN, el informe enseña la idea íntegra y lo dice (R35)', () => {
   const conResumen = { ...state, idea: 'resumen corto', ideaFull: 'EL DOCUMENTO ENTERO DEL AUTOR', briefed: true };
-  const md = renderInforme(conResumen, meta);
+  const md = renderReport(conResumen, meta);
 
   assert.ok(md.includes('EL DOCUMENTO ENTERO DEL AUTOR'));   // el lector ve lo que él escribió
   assert.match(md.toLowerCase(), /resumen|summary/);          // y que el debate trabajó sobre un resumen
@@ -179,7 +179,7 @@ test('si los turnos vieron un RESUMEN, el informe enseña la idea íntegra y lo 
 
 test('cerrado por presupuesto: se dice, y el informe se arma sin acta (R33)', () => {
   const cortado = { ...state, closedBy: 'budget', synthesis: '' };
-  const md = renderInforme(cortado, meta);
+  const md = renderReport(cortado, meta);
 
   assert.match(md.toLowerCase(), /presupuesto|budget/);
   assert.match(md, /el coste de operación no está medido/);   // los hechos siguen ahí: los puso el motor
@@ -189,11 +189,11 @@ test('un acta que se quedó sin tokens se declara incompleta, no se entrega como
   // Medido en la corrida real: la llamada del acta devolvió exactamente su tope de salida y la
   // sección de decisiones quedó cortada a mitad de frase.
   const cortada = { ...state, synthesis: '===RESUMEN===\nse debatió la cola\n===ACUERDOS===\n### Uno\nQué se acordó: a medio' };
-  const md = renderInforme(cortada, meta);
+  const md = renderReport(cortada, meta);
   assert.match(md.toLowerCase(), /incompleta|incomplete/);
 
   // y un acta entera no lleva ese aviso
-  assert.equal(/incompleta|incomplete/i.test(renderInforme(state, meta)), false);
+  assert.equal(/incompleta|incomplete/i.test(renderReport(state, meta)), false);
 });
 
 // ── el archivo de evidencia (R25) ──────────────────────────────────────────────────────────────
@@ -223,7 +223,7 @@ test('sin acta, la evidencia lo dice en vez de dejar el hueco (R25, R30)', () =>
 });
 
 test('la ratificación es evidencia: va entera al JSON (R47)', () => {
-  const firmado = { ...state, ratification: { by: 'b', veredicto: 'correcciones', conforme: false, correcciones: ['falta el cupo mínimo'], aplicadas: true, error: '' } };
+  const firmado = { ...state, ratification: { by: 'b', verdict: 'correcciones', agreed: false, corrections: ['falta el cupo mínimo'], applied: true, error: '' } };
   const rec = buildRecord(firmado, meta);
 
   assert.equal(rec.ratification.by, 'b');
@@ -232,13 +232,13 @@ test('la ratificación es evidencia: va entera al JSON (R47)', () => {
 });
 
 test('el informe declara si los dos lo firman, y con qué correcciones (R47)', () => {
-  const conforme = renderInforme({ ...state, ratification: { by: 'b', conforme: true, correcciones: [], aplicadas: false } }, meta);
-  assert.match(conforme, /ratific|ratified/i);   // el test corre en los dos idiomas
-  assert.equal(/NO está ratificado|NOT ratified/.test(conforme), false);
+  const agreed = renderReport({ ...state, ratification: { by: 'b', agreed: true, corrections: [], applied: false } }, meta);
+  assert.match(agreed, /ratific|ratified/i);   // el test corre en los dos idiomas
+  assert.equal(/NO está ratificado|NOT ratified/.test(agreed), false);
 
-  const corregido = renderInforme({ ...state, ratification: { by: 'b', conforme: false, correcciones: ['x', 'y'], aplicadas: true } }, meta);
+  const corregido = renderReport({ ...state, ratification: { by: 'b', agreed: false, corrections: ['x', 'y'], applied: true } }, meta);
   assert.match(corregido, /2 correcci|2 correction/);
 
-  const sinFirma = renderInforme(state, meta);
+  const sinFirma = renderReport(state, meta);
   assert.match(sinFirma, /NO está ratificado|NOT ratified/);
 });

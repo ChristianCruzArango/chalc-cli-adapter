@@ -34,9 +34,11 @@ test('R1: an entry is appended as one JSON line with an id and a date', async ()
   const stored = JSON.parse(lines[0]);
   assert.match(stored.id, /^[0-9a-f]{8}$/);
   assert.equal(stored.date, '2026-10-07T15:00:00.000Z');
-  assert.equal(stored.seen, 1);
+  // F-23: la línea guarda el INCREMENTO; el total lo suma la lectura (dos procesos no pierden cuentas).
+  assert.equal(stored.inc, 1);
+  assert.equal(saved.seen, 1);
   assert.equal(stored.learned, '2026-10-07T15:00:00.000Z');
-  assert.deepEqual({ ...stored, id: undefined, date: undefined, seen: undefined, learned: undefined }, { ...RULE, id: undefined, date: undefined, seen: undefined, learned: undefined });
+  assert.deepEqual({ ...stored, id: undefined, date: undefined, inc: undefined, learned: undefined }, { ...RULE, id: undefined, date: undefined, inc: undefined, learned: undefined });
   assert.equal(saved.id, stored.id);
 });
 

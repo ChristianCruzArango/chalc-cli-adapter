@@ -2,6 +2,7 @@
   "id": "docker-expert",
   "source": "npx skills add https://github.com/sickn33/antigravity-awesome-skills --skill docker-expert -y",
   "sourceType": "skillssh",
-  "contentSha256": "14840bcfb3fad72711975c3413416779ce5b9b14517fb5e326e248314e04f4d6",
-  "installedAt": "2026-09-29T19:32:20.242Z"
+  "contentSha256": "6cfda494d696d4de7ece02888729a58eae14bd64cda8015c9153573efc25d8e5",
+  "installedAt": "2026-09-29T19:32:20.242Z",
+  "hashVersion": 2
 }

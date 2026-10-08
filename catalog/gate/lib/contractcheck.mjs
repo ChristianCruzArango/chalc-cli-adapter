@@ -17,6 +17,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { newestSpec } from './spec.mjs';
 import { RULES } from './rules.mjs';
+import { CODE_SKIP_DIRS } from './dirs.mjs';
 
 const CONTRACT_FILE = 'contracts/api.md';
 
@@ -24,10 +25,7 @@ const CONTRACT_FILE = 'contracts/api.md';
 // implementación, la etapa se aprobaría a sí misma.
 const CODE_FILE = /\.(?:ts|tsx|js|jsx|mjs|cjs|dart|cs|java|kt|py|go|rb|php)$/;
 
-const SKIP_DIRS = new Set([
-  '.git', 'node_modules', 'dist', 'build', 'out', 'target', 'obj', 'bin', '.chalc',
-  '.next', '.nuxt', '.angular', '.dart_tool', '.gradle', '.venv', 'venv', 'coverage'
-]);
+const SKIP_DIRS = CODE_SKIP_DIRS;
 
 // Segmentos que aparecen en casi toda ruta y en casi ninguna implementación: pedirlos sería pedir
 // que el código repita la forma de la URL, no que exponga el recurso.

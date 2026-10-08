@@ -62,14 +62,15 @@ def test_total(cart, discount, expected):
 4. Run mutation testing and strengthen tests until the mutants are killed.
 
 ## Mutation testing (test quality)
-A passing test isn't enough — it must catch bugs. Run **mutmut**:
+A passing test isn't enough — it must catch bugs. Run **mutmut** (3.2 or newer):
 ```bash
-mutmut run                                          # mutates the code; your tests must kill the mutants
-mutmut junitxml > reports/mutation/mutmut.xml       # the report the quality gate parses
-mutmut results                                      # same thing, readable — for you, not for the gate
+mutmut run                  # mutates a copy under mutants/; your tests must kill the mutants
+mutmut export-cicd-stats    # writes mutants/mutmut-cicd-stats.json, the file the quality gate parses
+mutmut results              # the survivors, readable — for you, not for the gate
 ```
-The gate (`.chalc/gate.mjs`) reads the **XML file**, never the stdout, so the run always has to end
-with `mutmut junitxml`. Without that file the mutation stage blocks. Target ≥ 80% killed on critical
+The gate (`.chalc/gate.mjs`) reads the **JSON file**, never the stdout, so the run always has to end
+with `mutmut export-cicd-stats` (mutmut 3 no longer has `junitxml`). Without that file the mutation
+stage blocks. The file only carries counts, so use `mutmut results` to see which mutants survived. Target ≥ 80% killed on critical
 logic (`mutation.threshold` in `.chalc/gate.json`); wire it into CI on changed modules.
 
 ## Checklist

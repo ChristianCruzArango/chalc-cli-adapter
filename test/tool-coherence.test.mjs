@@ -22,6 +22,7 @@ import { detectContext } from '../lib/detect.mjs';
 import { detectGateConfig } from '../lib/gatedetect.mjs';
 import { loadToolTable, resolveStack, resolveTools } from '../lib/tooltable.mjs';
 import { renderMutationSkill } from '../lib/toolskill.mjs';
+import { FORMATS } from '../catalog/gate/lib/mutation.mjs';
 
 const stacks = await loadToolTable();
 
@@ -93,7 +94,8 @@ for (const stack of stacks) {
     const tools = await resolveTools(resolved, dir, ctx);
     const skill = renderMutationSkill('{{MY_STACK}}', { stacks, stack: resolved, tools });
 
-    const verifiable = ['elements', 'junit', 'pit'].includes(tools.mutation?.format);
+    // La lista de formatos verificables sale del portón, no se repite a mano.
+    const verifiable = FORMATS.includes(tools.mutation?.format);
     if (!verifiable) {
       assert.match(skill, /required.*false|no parser|could not|BLOCKER/i,
         `${stack.id}: sin parser, la skill tiene que decirlo y ofrecer la salida`);

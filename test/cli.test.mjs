@@ -40,7 +40,7 @@ test('unsafe target ids are rejected before import', async () => {
   const result = await runChalc(['test/fixtures/angular', '--target', '../claude', '--dry-run', '--yes']);
 
   assert.equal(result.code, 1);
-  assert.match(result.output, /target inválido/);
+  assert.match(result.output, /target inválido|Invalid target/);
 });
 
 test('external install requires explicit execution permission in non-interactive mode', async () => {

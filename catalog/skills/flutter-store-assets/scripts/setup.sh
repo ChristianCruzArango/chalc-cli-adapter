@@ -27,7 +27,7 @@ if [ ! -x .store-assets/venv/bin/python ]; then
   "$PY" -m venv .store-assets/venv
 fi
 .store-assets/venv/bin/python -m pip install --quiet --upgrade pip
-.store-assets/venv/bin/python -m pip install --quiet pillow
+.store-assets/venv/bin/python -m pip install --quiet 'pillow==12.3.0'   # versión fija: reproducible y sin sorpresas
 .store-assets/venv/bin/python -c "import PIL; print('Pillow', PIL.__version__, 'ready')"
 
 if [ -f .gitignore ] && ! grep -qxF '.store-assets/' .gitignore; then

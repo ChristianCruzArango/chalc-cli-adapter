@@ -29,7 +29,7 @@ const ROLES = [
 // Base: verde sin reclamar, una tarea pendiente por delante, ninguna revisión todavía.
 const snapshot = (over = {}) => ({
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — el lector', mtime: GATE - 1, ...over.tasks },
-  gate: { exists: true, date: GATE, verdict: 'pass', fast: false, branch: BRANCH, pending: [], ...over.gate },
+  gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: BRANCH, pending: [], ...over.gate },
   review: { entries: [], ...over.review },
   changed: { files: ['src/pago.ts'], newestMtime: 3000, ...over.changed },
   flow: { approvals: { task: true, feature: true }, roles: ROLES, ...over.flow },

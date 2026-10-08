@@ -167,7 +167,9 @@ test('the evidence declares the work in progress it left out', async () => {
 
 // El registro manda sobre el diff también aquí: el archivo a medias de otra cosa está en el árbol,
 // pero no es de esta tarea y sus problemas no son hallazgos de hoy.
-test('work in progress from something else is not linted as part of this task', async () => {
+// F-07: el registro no puede dejar fuera de la revisión un cambio del diff. Antes este archivo no se
+// lintaba por no estar anotado; esa era justo la vía para cerrar una tarea con código sin revisar.
+test('a changed file that is not in the registry is linted anyway', async () => {
   const dir = await project({
     '.chalc/gate.json': CONFIG,
     'specs/013-alcance/spec.md': '- **R1** — WHEN algo THE SYSTEM SHALL otra cosa.',
@@ -180,5 +182,5 @@ test('work in progress from something else is not linted as part of this task', 
 
   const result = await runGate({ root: dir, run, fast: true });
 
-  assert.deepEqual(filesWith(result, RULES.debugOutput), []);
+  assert.deepEqual(filesWith(result, RULES.debugOutput), ['src/ajeno.ts']);
 });

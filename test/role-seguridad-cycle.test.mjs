@@ -24,7 +24,7 @@ const roles = (...ids) => ids.map((id) => ({
 
 const snapshot = ({ declared = roles('seguridad', 'revisor', 'endurecedor'), entries = [] } = {}) => ({
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — pagar', mtime: GATE - 1 },
-  gate: { exists: true, date: GATE, verdict: 'pass', fast: false, branch: BRANCH, pending: [] },
+  gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: BRANCH, pending: [] },
   review: { entries },
   changed: { files: ['lib/pago.dart'], newestMtime: 3000 },
   flow: { approvals: { task: true, feature: true }, roles: declared },

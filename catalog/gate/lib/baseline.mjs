@@ -16,16 +16,16 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { isPlainObject } from './data.mjs';
 
 export const TASK_REL = '.chalc/task.json';
 
-const NONE = { exists: false, commit: '', date: 0, sealedBy: '' };
+const NONE = { exists: false, commit: '', date: 0, sealedBy: '', config: null };
 
 // Un commit de git, no una revisión cualquiera. `HEAD~1` o una rama servirían para `git diff`, pero
 // se mueven solos: la línea base tiene que apuntar SIEMPRE al mismo sitio, o dejaría de ser una base.
 const COMMIT = /^[0-9a-f]{4,40}$/;
 
-const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
 // Los hechos de la línea base a partir del texto de `.chalc/task.json`. Ausente, corrupto, sin
 // commit usable o sin fecha usable → no hay línea base.
@@ -40,7 +40,7 @@ export function parseBaseline(text) {
   const date = Date.parse(raw.base.date);
   if (!Number.isFinite(date)) return { ...NONE };
 
-  return { exists: true, commit, date, sealedBy: String(raw.sealedBy ?? '') };
+  return { exists: true, commit, date, sealedBy: String(raw.sealedBy ?? ''), config: isPlainObject(raw.config) ? raw.config : null };
 }
 
 // La línea base de `root`.
@@ -56,14 +56,16 @@ export async function readBaseline(root) {
 //
 // Sin un commit usable no se sella nada: escribir una base que `git diff` va a rechazar dejaría el
 // alcance vacío, y R13 prohíbe que un alcance vacío pase por bueno.
-export async function sealBaseline(root, { commit, date = new Date(), sealedBy = 'gate' } = {}) {
+// `config`: las claves vigiladas de gate.json en el momento del cierre, para que la tarea siguiente
+// pueda decir si se relajaron (ver fingerprint.mjs).
+export async function sealBaseline(root, { commit, date = new Date(), sealedBy = 'gate', config = null } = {}) {
   const ref = String(commit ?? '').trim().toLowerCase();
   if (!COMMIT.test(ref)) return { ...NONE };
 
   const current = await readBaseline(root);
   if (current.exists && current.commit === ref) return current;
 
-  const sealed = { base: { commit: ref, date: new Date(date).toISOString() }, sealedBy };
+  const sealed = { base: { commit: ref, date: new Date(date).toISOString() }, sealedBy, ...(config ? { config } : {}) };
   const path = join(root, TASK_REL);
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(sealed, null, 2) + '\n', 'utf8');

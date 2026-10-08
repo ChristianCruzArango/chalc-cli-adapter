@@ -138,3 +138,13 @@ test('frameOf falls back to english for a language it does not have', async () =
 test('messageOf falls back to the rule code instead of leaving a gap', async () => {
   assert.equal(messageOf('regla-que-no-existe', {}, 'es'), 'regla-que-no-existe');
 });
+
+// M-05 — un reporte ilegible se explica en el idioma del proyecto: el lector lanza un código y el
+// informe lo redacta (antes el motivo salía en español aunque el informe estuviera en inglés).
+test('an unreadable mutation report is explained in the project language', async () => {
+  const { messageOf, FRAME } = await import('../catalog/gate/lib/i18n.mjs');
+  const { RULES } = await import('../catalog/gate/lib/rules.mjs');
+  assert.deepEqual(Object.keys(FRAME.es.reportProblems).sort(), Object.keys(FRAME.en.reportProblems).sort());
+  assert.match(messageOf(RULES.badReport, { problem: 'junitNoSuite' }, 'en'), /is not a junit report/);
+  assert.match(messageOf(RULES.badReport, { problem: 'junitNoSuite' }, 'es'), /no es un reporte junit/);
+});

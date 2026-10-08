@@ -12,13 +12,46 @@ import * as kit from '../lib/targetkit.mjs';
 
 export const label = 'Cursor';
 
-export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun , tools = null, roles = [] }) {
-  const plan = [];
-  for (const s of skills) plan.push(`skill     .cursor/rules/chalc-skill-${s}.mdc  (+ .chalc/skills/${s})`);
-  for (const me of methods) plan.push(`método    .cursor/rules/chalc-method-${me.id}.mdc`);
-  for (const m of mcps) plan.push(`mcp       .cursor/mcp.json  ::  ${m.id}`);
-  for (const role of roles) plan.push(`agent     .cursor/rules/chalc-${role.id}.mdc`);
-  plan.push('manifest  .chalc.json');
+// Las reglas .mdc siempre activas: principios obligatorios (implementación mínima + Clean Code + SOLID
+// + arquitectura modular, prominentes), la arquitectura acordada (apunta a docs/architecture.md) y
+// las reglas de cada método.
+function alwaysRules({ projectPath, skills, methods, architecture, specLang }) {
+  const tx = kit.blockText(specLang);
+  const rules = [];
+  const principles = kit.mandatoryPrinciplesBlock(skills, specLang);
+  if (principles) rules.push(['chalc-principles.mdc', tx.rulePrinciples, principles]);
+  const archRef = kit.architectureBlock(projectPath, architecture?.name, specLang);
+  if (archRef) rules.push(['chalc-architecture.mdc', tx.ruleArchitecture, archRef]);
+  for (const me of methods) {
+    rules.push([`chalc-method-${me.id}.mdc`, tx.ruleMethod(`${me.id}${me.mode && me.mode !== 'default' ? ` (${me.mode})` : ''}`), me.rulesText]);
+  }
+  return rules;
+}
+
+// Las reglas .mdc: las siempre activas y, por skill, una que se carga por description cuando aplica
+// (el cuerpo apunta al contenido real).
+async function writeRules(rulesDir, { projectPath, CATALOG, skills, methods, architecture, specLang }) {
+  for (const [file, description, body] of alwaysRules({ projectPath, skills, methods, architecture, specLang })) {
+    await writeFile(join(rulesDir, file), kit.mdc({ description, alwaysApply: true, body }));
+  }
+  const metas = await Promise.all(skills.map((s) => kit.readSkillMeta(CATALOG, s)));
+  for (const m of metas) {
+    await writeFile(join(rulesDir, `chalc-skill-${m.id}.mdc`), kit.mdc({
+      description: m.description || m.name,
+      alwaysApply: false,
+      body: `## ${m.name}\n\nCuando esta tarea aplique, sigue la skill completa en \`.chalc/skills/${m.id}/SKILL.md\`.`
+    }));
+  }
+}
+
+export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun, tools = null, roles = [], force = false }) {
+  const plan = [
+    ...skills.map((s) => `skill     .cursor/rules/chalc-skill-${s}.mdc  (+ .chalc/skills/${s})`),
+    ...methods.map((me) => `método    .cursor/rules/chalc-method-${me.id}.mdc`),
+    ...mcps.map((m) => `mcp       .cursor/mcp.json  ::  ${m.id}`),
+    ...roles.map((role) => `agent     .cursor/rules/chalc-${role.id}.mdc`),
+    'manifest  .chalc.json'
+  ];
   if (dryRun) return { plan, written: false };
 
   const rulesDir = join(projectPath, '.cursor', 'rules');
@@ -32,50 +65,10 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   // Revisor: en Cursor va como regla propia, para invocarlo al cerrar cada tarea (R12).
   for (const role of roles) await kit.writeRole(projectPath, CATALOG, role, { skills, specLang, kind: 'rule' });
 
-  // principios obligatorios (siempre activos): implementación mínima + Clean Code + SOLID + arquitectura modular, prominentes
-  const principles = kit.mandatoryPrinciplesBlock(skills);
-  if (principles) {
-    await writeFile(join(rulesDir, 'chalc-principles.mdc'), kit.mdc({
-      description: 'Principios obligatorios del proyecto (Chalc)',
-      alwaysApply: true,
-      body: principles
-    }));
-  }
-
-  // referencia a la arquitectura acordada (siempre activa): apunta a docs/architecture.md
-  const archRef = kit.architectureBlock(projectPath, architecture?.name);
-  if (archRef) {
-    await writeFile(join(rulesDir, 'chalc-architecture.mdc'), kit.mdc({
-      description: 'Arquitectura acordada del proyecto (Chalc)',
-      alwaysApply: true,
-      body: archRef
-    }));
-  }
-
-  // métodos (siempre activos)
-  for (const me of methods) {
-    await writeFile(join(rulesDir, `chalc-method-${me.id}.mdc`), kit.mdc({
-      description: `Método ${me.id}${me.mode && me.mode !== 'default' ? ` (${me.mode})` : ''} (Chalc)`,
-      alwaysApply: true,
-      body: me.rulesText
-    }));
-  }
-
-  // skills (se cargan por description cuando aplican; el cuerpo apunta al contenido real)
-  const metas = await Promise.all(skills.map((s) => kit.readSkillMeta(CATALOG, s)));
-  for (const m of metas) {
-    await writeFile(join(rulesDir, `chalc-skill-${m.id}.mdc`), kit.mdc({
-      description: m.description || m.name,
-      alwaysApply: false,
-      body: `## ${m.name}\n\nCuando esta tarea aplique, sigue la skill completa en \`.chalc/skills/${m.id}/SKILL.md\`.`
-    }));
-  }
+  await writeRules(rulesDir, { projectPath, CATALOG, skills, methods, architecture, specLang });
 
   if (mcps.length) {
-    await kit.mergeJson(join(projectPath, '.cursor', 'mcp.json'), (j) => {
-      j.mcpServers = j.mcpServers || {};
-      for (const m of mcps) j.mcpServers[m.id] = m.server;
-    });
+    await kit.mergeMcpServers(join(projectPath, '.cursor', 'mcp.json'), mcps, { force });
   }
 
   await kit.writeManifest(projectPath, 'cursor', stacks, skills, mcps, methods);

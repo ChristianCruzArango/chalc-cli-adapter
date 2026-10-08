@@ -13,6 +13,8 @@ import { readFile } from 'node:fs/promises';
 import { join, dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadToolTable } from '../lib/tooltable.mjs';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 
 const ROOT = resolvePath(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -66,12 +68,16 @@ test('R2 — el detector ya no lee archivos de ecosistemas concretos', async () 
 });
 
 // Lo que SÍ debe seguir aquí: no todo lo que hay en `gate.json` es conocimiento de stack.
+// Los umbrales salen de los defaults del propio portón (M-05: una sola fuente); lo que importa es
+// que el detector los siga poniendo en la config que escribe.
 test('R2 — el detector conserva lo que no es de stack: umbrales, specs y puertas', async () => {
-  const code = await source('lib/gatedetect.mjs');
-
-  assert.match(code, /maxFileLines/, 'los umbrales del linter no son conocimiento de stack');
-  assert.match(code, /threshold/, 'el umbral de mutación tampoco');
-  assert.match(code, /approvals/, 'las puertas del advisor tampoco');
+  const { detectGateConfig } = await import('../lib/gatedetect.mjs');
+  const { LINT_DEFAULTS, MUTATION_THRESHOLD } = await import('../catalog/gate/lib/config.mjs');
+  const config = await detectGateConfig(await mkdtemp(join(tmpdir(), 'chalc-detect-')));
+  assert.deepEqual(config.lint, LINT_DEFAULTS, 'los umbrales del linter no son conocimiento de stack');
+  assert.equal(config.mutation.threshold, MUTATION_THRESHOLD, 'el umbral de mutación tampoco');
+  assert.ok(config.flow.approvals, 'las puertas del advisor tampoco');
+  assert.equal(config.spec.dir, 'specs');
 });
 
 test('R2 — el módulo de la tabla tampoco conoce los stacks: la carga es genérica', async () => {

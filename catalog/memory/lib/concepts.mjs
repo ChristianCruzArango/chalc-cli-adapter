@@ -8,7 +8,9 @@
 // «tarifas». El diccionario base trae los conceptos frecuentes; el repo aprende los suyos en
 // `.chalc/memory/concepts.json`, que se commitea junto a la memoria.
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { keepInvalidCopy } from '../../gate/lib/data.mjs';
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 export const LEARNED_REL = '.chalc/memory/concepts.json';
@@ -41,9 +43,24 @@ const wordsOf = (text) => String(text ?? '')
 export const normalizePhrase = (text) => wordsOf(text).join(' ');
 const phrase = normalizePhrase;
 
+// Un diccionario ilegible no se trata como vacío sin más: la siguiente escritura lo reemplazaría y
+// con él todo lo aprendido. Se copia a `<archivo>.invalid-<marca>` y se avisa antes de seguir.
 const readJson = async (path) => {
-  try { return JSON.parse(await readFile(path, 'utf8')); } catch { return {}; }
+  if (path instanceof URL ? false : !existsSync(path)) return {};
+  try { return JSON.parse(await readFile(path, 'utf8')); } catch (error) {
+    if (!(path instanceof URL)) await keepInvalidCopy(path, error);
+    return {};
+  }
 };
+
+// Escritura atómica: temporal en la misma carpeta y `rename`. Un corte a mitad no deja el
+// diccionario truncado.
+async function writeJsonAtomic(path, data) {
+  await mkdir(dirname(path), { recursive: true });
+  const temp = `${path}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(temp, JSON.stringify(data, null, 2) + '\n', 'utf8');
+  await rename(temp, path);
+}
 
 // Las palabras que el diccionario deja fuera por ambiguas («peso» es moneda y también el de un
 // paquete; `Card` es un widget): no son de ningún concepto y el repo no las aprende.
@@ -90,8 +107,7 @@ export async function learnSynonym(root, concept, word) {
   const path = join(root, LEARNED_REL);
   const learned = await readJson(path);
   learned[concept] = { synonyms: [...(learned[concept]?.synonyms || []), synonym] };
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, JSON.stringify(learned, null, 2) + '\n', 'utf8');
+  await writeJsonAtomic(path, learned);
   return true;
 }
 

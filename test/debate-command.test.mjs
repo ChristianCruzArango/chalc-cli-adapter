@@ -102,22 +102,22 @@ test('avisa cuando los dos lados son el mismo modelo, pero no bloquea (R4)', asy
 });
 
 // ── la escritura del entregable (sin IA) ───────────────────────────────────────────────────────
-const estado = (over = {}) => ({
+const stateLine = (over = {}) => ({
   idea: 'una cola de eventos para el checkout',
   participants: {
     a: { id: 'a', stance: 'proponent', model: 'x-ai/grok-4', provider: 'openrouter' },
     b: { id: 'b', stance: 'challenger', model: 'gpt-oss:20b', provider: 'ollama' }
   },
   rounds: 3, roundsRun: 2,
-  turns: [{ round: 1, by: 'a', stance: 'proponent', postura: 'ARGUMENTO', acuerdos: [], desacuerdos: [], resueltos: [], preguntas: [], declaraAcuerdo: false, raw: '===POSTURA===\nARGUMENTO' }],
-  questions: [], desacuerdosAbiertos: [], desacuerdosResueltos: [],
+  turns: [{ round: 1, by: 'a', stance: 'proponent', position: 'ARGUMENTO', agreements: [], disagreements: [], settled: [], raisedQuestions: [], claimsAgreement: false, raw: '===POSTURA===\nARGUMENTO' }],
+  questions: [], openDisagreements: [], settledDisagreements: [],
   closedBy: 'limit', error: null, synthesis: '===RESUMEN===\nsalió bien', judgment: null, warnings: [],
   ...over
 });
 
 test('escribe final.md, debate.md y debate.json en .chalc/debate/NNN-slug y devuelve la ruta (R23, R45)', async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'chalc-debate-out-'));
-  const { dir, files } = await writeDebateOutput({ root: cwd, state: estado(), meta: { generatedAt: '2026-08-22T10:00:00.000Z' } });
+  const { dir, files } = await writeDebateOutput({ root: cwd, state: stateLine(), meta: { generatedAt: '2026-08-22T10:00:00.000Z' } });
 
   assert.deepEqual((await readdir(dir)).sort(), ['debate.json', 'debate.md', 'final.md']);
   assert.match(dir.replace(/\\/g, '/'), /\.chalc\/debate\/001-una-cola-de-eventos/);
@@ -132,9 +132,9 @@ test('escribe final.md, debate.md y debate.json en .chalc/debate/NNN-slug y devu
 test('dos debates sobre la MISMA idea son dos carpetas: el primero no se pisa (R26)', async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'chalc-debate-out-'));
   const meta = { generatedAt: '2026-08-22T10:00:00.000Z' };
-  const uno = await writeDebateOutput({ root: cwd, state: estado(), meta });
+  const uno = await writeDebateOutput({ root: cwd, state: stateLine(), meta });
   await writeFile(join(uno.dir, 'final.md'), 'INFORME ORIGINAL', 'utf8');
-  const dos = await writeDebateOutput({ root: cwd, state: estado(), meta });
+  const dos = await writeDebateOutput({ root: cwd, state: stateLine(), meta });
 
   assert.notEqual(uno.dir, dos.dir);
   assert.match(dos.dir.replace(/\\/g, '/'), /002-una-cola-de-eventos/);
@@ -143,18 +143,18 @@ test('dos debates sobre la MISMA idea son dos carpetas: el primero no se pisa (R
 
 test('un debate roto igual deja su informe parcial escrito (R30)', async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'chalc-debate-out-'));
-  const roto = estado({ closedBy: 'error', synthesis: '', error: { round: 1, by: 'b', message: 'API 503' } });
+  const roto = stateLine({ closedBy: 'error', synthesis: '', error: { round: 1, by: 'b', message: 'API 503' } });
   const { dir } = await writeDebateOutput({ root: cwd, state: roto, meta: { generatedAt: '2026-08-22T10:00:00.000Z' } });
 
-  const informe = await readFile(join(dir, 'final.md'), 'utf8');
-  assert.match(informe, /503/);
-  assert.match(informe, /PARCIAL|PARTIAL/i);
+  const report = await readFile(join(dir, 'final.md'), 'utf8');
+  assert.match(report, /503/);
+  assert.match(report, /PARCIAL|PARTIAL/i);
 });
 
 test('--out manda: el informe se escribe donde el usuario diga (R23)', async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'chalc-debate-out-'));
   const destino = join(cwd, 'informes', 'mi-debate');
-  const { dir } = await writeDebateOutput({ root: cwd, out: destino, state: estado(), meta: { generatedAt: '' } });
+  const { dir } = await writeDebateOutput({ root: cwd, out: destino, state: stateLine(), meta: { generatedAt: '' } });
 
   assert.equal(dir, destino);
   assert.ok((await readdir(destino)).includes('final.md'));

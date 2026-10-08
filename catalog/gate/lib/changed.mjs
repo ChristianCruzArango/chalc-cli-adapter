@@ -15,10 +15,15 @@ import { resolveScope } from './scope.mjs';
 import { parseHunks, removedByFile } from './hunks.mjs';
 
 // Salida de un comando de git, o null si git no está o el repo no existe.
+//
+// `core.quotePath=false`: sin él, git escribe `src/año.ts` como `"src/a\303\261o.ts"`, una ruta que no
+// existe, y el archivo desaparecía del alcance sin que el portón lo dijera. La salida se decodifica
+// como UTF-8 por flujo: concatenar trozos de Buffer partía los caracteres de varios bytes.
 function git(args, cwd) {
   return new Promise((resolve) => {
     let out = '';
-    const child = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'ignore'] });
+    const child = spawn('git', ['-c', 'core.quotePath=false', ...args], { cwd, stdio: ['ignore', 'pipe', 'ignore'] });
+    child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { out += chunk; });
     child.on('error', () => resolve(null));
     child.on('close', (code) => resolve(code === 0 ? out : null));
@@ -26,6 +31,23 @@ function git(args, cwd) {
 }
 
 const lines = (text) => text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+// Salida con `-z`: rutas separadas por NUL, tal cual (espacios, comillas o saltos de línea incluidos).
+const entries = (text) => text.split('\0').filter(Boolean);
+
+// `git status --porcelain -z`: `XY ruta`, y en renombrados y copias la ruta ORIGEN va en la entrada
+// siguiente. Devuelve las rutas actuales.
+function statusPaths(text) {
+  const out = [];
+  const list = text.split('\0');
+  for (let i = 0; i < list.length; i++) {
+    const entry = list[i];
+    if (entry.length < 4) continue;
+    out.push(entry.slice(3));
+    if (entry[0] === 'R' || entry[0] === 'C') i++;
+  }
+  return out;
+}
 
 // La rama actual, o '' si no se puede saber. Va en la evidencia.
 export async function currentBranch(root) {
@@ -111,9 +133,9 @@ export async function changedSince(root, ref) {
   const found = new Set();
 
   if (ref) {
-    const diff = await git(['diff', '--name-only', '--diff-filter=d', '--relative', ref], root);
+    const diff = await git(['diff', '--name-only', '-z', '--diff-filter=d', '--relative', ref], root);
     if (diff === null) return null;
-    lines(diff).forEach((f) => found.add(f));
+    entries(diff).forEach((f) => found.add(f));
   }
 
   // Lo que está en el árbol de trabajo y todavía no se commiteó: es justo lo que se acaba de hacer.
@@ -127,11 +149,10 @@ export async function changedSince(root, ref) {
   // carpeta padre, `status` lista también lo de `front/` y da rutas desde la raíz del repo (el diff
   // lo resuelve `--relative`). Sin esto el portón vería `back/src/x.ts`, que no existe desde `back/`.
   const prefix = (await git(['rev-parse', '--show-prefix'], root) || '').trim();
-  const status = await git(['status', '--porcelain', '-uall', '--', '.'], root);
+  const status = await git(['status', '--porcelain', '-z', '-uall', '--', '.'], root);
   if (status) {
-    for (const line of lines(status)) {
-      const path = line.replace(/^\S+\s+/, '').split(' -> ').pop();
-      if (path && path.startsWith(prefix)) found.add(path.slice(prefix.length));
+    for (const path of statusPaths(status)) {
+      if (path.startsWith(prefix)) found.add(path.slice(prefix.length));
     }
   }
 
@@ -142,7 +163,10 @@ export async function changedSince(root, ref) {
 // '' si no se puede saber. Es el respaldo de R4: sin línea base de tarea se mide contra esto, que
 // sigue siendo «archivos modificados» aunque sea de más — nunca el proyecto entero.
 export async function mergeBase(root) {
-  for (const candidate of ['develop', 'main', 'master']) {
+  // Primero la rama por defecto del remoto (`origin/HEAD`), que es la que el equipo usa de verdad;
+  // luego los nombres habituales, `trunk` incluido.
+  const remoteHead = (await git(['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], root) || '').trim();
+  for (const candidate of [remoteHead, 'develop', 'main', 'master', 'trunk'].filter(Boolean)) {
     const base = await git(['merge-base', 'HEAD', candidate], root);
     if (base && base.trim()) return base.trim();
   }

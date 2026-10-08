@@ -147,7 +147,7 @@ test('applySkillUpdate valida la copia temporal antes del swap y conserva la ver
     await writeFile(join(skillDir, 'SKILL.md'), '# mi-skill v2\n');
     await assert.rejects(
       () => applySkillUpdate({ id: 'mi-skill', catalog, dir: skillDir, manifest: antes, newHash: 'hash-falso' }),
-      /hash inesperado/
+      /hash inesperado|unexpected hash/
     );
     assert.match(await readFile(join(catalog, 'skills', 'mi-skill', 'SKILL.md'), 'utf8'), /v1/);
     assert.deepEqual(await manifestOf(catalog, 'mi-skill'), antes);

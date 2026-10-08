@@ -9,7 +9,7 @@ import * as kit from '../lib/targetkit.mjs';
 
 export const label = 'Gemini CLI';
 
-export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun , tools = null, roles = [] }) {
+export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun, tools = null, roles = [], force = false }) {
   const plan = [];
   for (const s of skills) plan.push(`skill     .chalc/skills/${s}`);
   for (const m of mcps) plan.push(`mcp       .gemini/settings.json  ::  ${m.id}`);
@@ -27,10 +27,7 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   await kit.writeManagedBlock(join(projectPath, 'GEMINI.md'), block);
 
   if (mcps.length) {
-    await kit.mergeJson(join(projectPath, '.gemini', 'settings.json'), (j) => {
-      j.mcpServers = j.mcpServers || {};
-      for (const m of mcps) j.mcpServers[m.id] = m.server;
-    });
+    await kit.mergeMcpServers(join(projectPath, '.gemini', 'settings.json'), mcps, { force });
   }
 
   await kit.writeManifest(projectPath, 'gemini', stacks, skills, mcps, methods);

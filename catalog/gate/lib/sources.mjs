@@ -10,14 +10,13 @@
 
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { CODE_SKIP_DIRS } from './dirs.mjs';
 
-// Extensiones que alguna etapa sabe revisar. Lo demás no entra.
-export const SOURCE_FILE = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|dart|cs|java|kt|py)$/;
+// Extensiones que alguna etapa sabe revisar. Lo demás no entra. Sin distinguir mayúsculas: en
+// Windows `Program.CS` es tan fuente como `Program.cs`.
+export const SOURCE_FILE = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|dart|cs|java|kt|py)$/i;
 
-export const SKIP_DIRS = new Set([
-  '.git', '.chalc', 'node_modules', 'dist', 'build', 'out', 'target', 'obj', 'bin',
-  '.next', '.nuxt', '.angular', '.dart_tool', '.gradle', '.venv', 'venv', 'coverage'
-]);
+export const SKIP_DIRS = CODE_SKIP_DIRS;
 
 // ¿Es esta ruta código del usuario? Es la MISMA pregunta que responde el recorrido de arriba, pero
 // para una ruta que ya viene de fuera —de git, o del registro de rutas escritas de la spec 013—, y

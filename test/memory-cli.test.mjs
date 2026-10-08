@@ -84,8 +84,15 @@ test('R20: a 20,000-line memory still answers with at most 8 short lines, quickl
   assert.ok(ms < 2000, `tardó ${ms} ms`);
 });
 
+// El idioma del proyecto vive en .chalc/gate.json, igual que para el portón.
+const speak = async (root, language) => {
+  await mkdir(join(root, '.chalc'), { recursive: true });
+  await writeFile(join(root, '.chalc', 'gate.json'), JSON.stringify({ language }));
+  return root;
+};
+
 test('R20: each command answers in its own words', async () => {
-  const root = await withMemory();
+  const root = await speak(await withMemory(), 'es');
   assert.equal((await run(['search', 'logo'], root)).out, 'Nada en la memoria sobre eso.');
   assert.equal((await run(['compact'], root)).out, 'No hacía falta compactar.');
   assert.match((await run(['capture'], root)).out, /^Memoria: 0 regla\(s\) y 0 decisión\(es\) capturadas\.$/);
@@ -94,7 +101,14 @@ test('R20: each command answers in its own words', async () => {
 });
 
 test('R3: compact reports when it did compact', async () => {
-  const root = await withMemory();
+  const root = await speak(await withMemory(), 'es');
   for (let i = 0; i < 4; i++) await remember(root, { key: 'dinero:2-decimales', kind: 'bug', concepts: ['dinero'], title: 'x' });
   assert.equal((await run(['compact'], root)).out, 'Memoria compactada.');
+});
+
+test('M-05: the memory answers in the project language', async () => {
+  const root = await speak(await withMemory(), 'en');
+  assert.equal((await run(['search', 'logo'], root)).out, 'Nothing in memory about that.');
+  assert.match((await run(['capture'], root)).out, /^Memory: 0 rule\(s\) and 0 decision\(s\) captured\.$/);
+  assert.match((await run([], root)).out, /^Usage:/);
 });

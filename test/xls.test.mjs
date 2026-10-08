@@ -133,7 +133,7 @@ function makeXls(sst, sheets) {
 test('isCompound reconoce la firma OLE2 y rechaza cualquier otra cosa', () => {
   const buf = makeCompound({ Workbook: Buffer.from('hola') });
   assert.equal(isCompound(buf), true);
-  assert.equal(isCompound(Buffer.from('PK esto es un zip')), false);
+  assert.equal(isCompound(Buffer.from('PK\x03\x04 esto es un zip')), false);
   assert.equal(isCompound(Buffer.alloc(3)), false);
 });
 

@@ -163,3 +163,13 @@ test('R7 — enviarse un aviso a uno mismo se rechaza aunque uno figure entre lo
   assert.equal(result.ok, false);
   assert.match(result.error, /ti mismo|yourself/i);
 });
+
+// M-05 — el buzón habla el idioma del proyecto (`language` en .chalc/gate.json), como el portón.
+test('the mailbox answers in the project language', async () => {
+  const { textOf, LANGS } = await import('../catalog/mail/lib/text.mjs');
+  const es = textOf('es');
+  for (const lang of LANGS) assert.deepEqual(Object.keys(textOf(lang)).sort(), Object.keys(es).sort(), `paridad ${lang}`);
+  const { send } = await import('../catalog/mail/lib/mailbox.mjs');
+  const r = await send({ dir: '/nonexistent', from: 'back', to: '', message: 'x', peers: [], now: 'n', lang: 'en' });
+  assert.equal(r.error, 'The recipient is missing.');
+});

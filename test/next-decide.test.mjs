@@ -27,7 +27,7 @@ const BRANCH = 'feature/008-advisor';
 // Snapshot base: verde ya reclamado y una tarea pendiente por delante → toca trabajar.
 const snapshot = (over = {}) => ({
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — implementar el lector', mtime: TICKED, ...over.tasks },
-  gate: { exists: true, date: GATE, verdict: 'pass', fast: false, branch: BRANCH, pending: [], ...over.gate },
+  gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: BRANCH, pending: [], ...over.gate },
   review: { entries: [{ role: 'revisor', date: REVIEW, ok: true, findings: 0 }], ...over.review },
   changed: { files: ['src/pago.ts'], newestMtime: TOUCHED, ...over.changed },
   flow: { approvals: { task: true, feature: true }, review: { required: true }, roles: ROLES, ...over.flow },

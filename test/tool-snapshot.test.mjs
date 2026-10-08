@@ -175,10 +175,10 @@ test('R11 — python + pytest', async () => {
     test: 'pytest',
     mutation: {
       tool: 'mutmut',
-      command: 'mutmut run && mutmut junitxml > reports/mutation/mutmut.xml',
-      report: 'reports/mutation/mutmut.xml',
-      format: 'junit',
-      install: 'uv add --dev mutmut',
+      command: 'mutmut run; mutmut export-cicd-stats',
+      report: 'mutants/mutmut-cicd-stats.json',
+      format: 'mutmut-stats',
+      install: "uv add --dev 'mutmut>=3.2'",
       scopeFlag: '',
       threshold: 80,
       required: true

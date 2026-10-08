@@ -28,7 +28,7 @@ test('R22: a state from an older chalc, with no stages, reads as no failed stage
 test('R22: fix_gate carries the failed stages as facts', () => {
   const result = decide({
     tasks: { hasTasksFile: true, done: 0, total: 2, current: 'T1', mtime: 1 },
-    gate: { exists: true, date: 4000, verdict: 'fail', fast: false, branch: 'b', pending: [], failedStages: ['security'] },
+    gate: { exists: true, date: 4000, verdict: 'fail', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: 'b', pending: [], failedStages: ['security'] },
     review: { entries: [] },
     changed: { files: ['lib/a.dart'], newestMtime: 3000 },
     flow: { approvals: { task: true, feature: true }, roles: [] },

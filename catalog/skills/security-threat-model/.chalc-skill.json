@@ -2,6 +2,7 @@
   "id": "security-threat-model",
   "source": "npx skills add https://github.com/openai/skills --skill security-threat-model -y",
   "sourceType": "skillssh",
-  "contentSha256": "a262f878637565892051aa945c88e8748e743896c20925b59c5c2d7d79e061a7",
-  "installedAt": "2026-10-05T16:14:29.788Z"
+  "contentSha256": "6d66f27a8e4353f49264547acf4e541efd835f2e3a2d91f5a43e2104be5bd65e",
+  "installedAt": "2026-10-05T16:14:29.788Z",
+  "hashVersion": 2
 }

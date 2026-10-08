@@ -87,11 +87,11 @@ test('createHttpClient: error HTTP y URL inalcanzable lanzan con detalle', async
     await assert.rejects(() => bad.listTools(), /MCP HTTP 500/);
   } finally { server.close(); }
   const unreachable = createHttpClient({ url: 'http://127.0.0.1:1/', timeoutMs: 1500, allowPrivate: true });
-  await assert.rejects(() => unreachable.listTools(), /no se pudo contactar/);
+  await assert.rejects(() => unreachable.listTools(), /no se pudo contactar|could not reach/);
 });
 
 test('createHttpClient exige url', () => {
-  assert.throws(() => createHttpClient({}), /falta "url"/);
+  assert.throws(() => createHttpClient({}), /falta "url"|"url" is missing/);
 });
 
 test('createHttpClient bloquea una URL privada antes de hacer la petición salvo opt-in local', async () => {
@@ -100,6 +100,6 @@ test('createHttpClient bloquea una URL privada antes de hacer la petición salvo
     url: 'http://127.0.0.1:12345/mcp',
     fetchImpl: async () => { called = true; throw new Error('no debería llegar'); }
   });
-  await assert.rejects(() => client.listTools(), /URL no permitida/);
+  await assert.rejects(() => client.listTools(), /URL no permitida|URL not allowed/);
   assert.equal(called, false);
 });

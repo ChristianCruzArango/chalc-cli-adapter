@@ -38,7 +38,7 @@ test('orchestrateFeature: contract first, then back spec, then front spec (each 
 });
 
 test('orchestrateFeature rejects an empty user story', async () => {
-  await assert.rejects(() => orchestrateFeature({ cfg: {}, userStory: '   ', back: {}, front: {} }), /vac/i);
+  await assert.rejects(() => orchestrateFeature({ cfg: {}, userStory: '   ', back: {}, front: {} }), /vac|empty/i);
 });
 
 // R5 — con repo móvil: contrato → back → front → móvil, rol MOBILE con contrato y HU embebidos.
@@ -177,5 +177,5 @@ test('orchestrateFeatures with one story behaves like the single orchestrator', 
 
 // R5 — sin HUs: error claro, sin llamadas de IA.
 test('orchestrateFeatures rejects an empty story list', async () => {
-  await assert.rejects(() => orchestrateFeatures({ cfg: {}, userStories: [], back: {}, front: {} }), /HU|histor/i);
+  await assert.rejects(() => orchestrateFeatures({ cfg: {}, userStories: [], back: {}, front: {} }), /HU|histor|stor/i);
 });

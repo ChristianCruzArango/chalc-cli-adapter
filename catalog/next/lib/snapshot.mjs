@@ -13,10 +13,13 @@
 // no participa en él.
 
 import { existsSync } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { currentBranch, taskScope } from '../../gate/lib/changed.mjs';
-import { loadConfig } from '../../gate/lib/config.mjs';
+import { currentBranch, headCommit, taskScope } from '../../gate/lib/changed.mjs';
+import { scopeHash } from '../../gate/lib/fingerprint.mjs';
+import { CONFIG_REL, loadConfig } from '../../gate/lib/config.mjs';
+import { STATE_REL } from '../../gate/lib/evidence.mjs';
+import { textOf } from '../../gate/lib/data.mjs';
 import { newestSpec } from '../../gate/lib/spec.mjs';
 import { allReviews, lastReview } from './review.mjs';
 import { contractDrift } from './contract.mjs';
@@ -25,7 +28,6 @@ import { parseGateState } from './state.mjs';
 import { readMemoryFacts } from './memory.mjs';
 import { tasksProgress, currentTask } from './tasks.mjs';
 
-const STATE_REL = '.chalc/gate.state.json';
 const REVIEW_REL = '.chalc/review.md';
 
 // Puertas por defecto, iguales a las que el portón escribe en `gate.json`. Se repiten aquí porque un
@@ -40,7 +42,6 @@ const rolesOr = (declared, review) => (Array.isArray(declared) && declared.lengt
   ? declared
   : [{ id: 'revisor', order: 10, cadence: 'task', required: review.required !== false }]);
 
-const textOf = async (path) => { try { return await readFile(path, 'utf8'); } catch { return ''; } };
 
 const mtimeOf = async (path) => { try { return (await stat(path)).mtimeMs; } catch { return 0; } };
 
@@ -154,14 +155,22 @@ const sidesFacts = async (problems, { root, sides, specDir, findSpec }) => ({
     { unread: 0, from: [] })
 });
 
+// El estado del portón y la huella del contenido que su evidencia dice haber revisado, recalculada
+// AHORA (F-07): si no coincide, alguien cambió el código después del portón o el estado no salió
+// de esta corrida.
+async function gateFacts(root, now) {
+  const parsed = parseGateState(await textOf(join(root, STATE_REL)), { now });
+  return parsed.exists ? { ...parsed, currentScopeHash: await scopeHash(root, parsed.scopeFiles) } : parsed;
+}
+
 // Los hechos del repo en `root`. Las lecturas del portón se inyectan para poder probar el manejo de
 // fallos sin romper la instalación. Devuelve el snapshot que consume `decide`.
 export async function snapshot(root, {
-  changed = taskScope, branch = currentBranch, config = loadConfig, findSpec = newestSpec
+  changed = taskScope, branch = currentBranch, config = loadConfig, findSpec = newestSpec, head = headCommit, now = Date.now()
 } = {}) {
   const problems = [];
 
-  const loaded = await attempt(problems, '.chalc/gate.json', () => config(root), null);
+  const loaded = await attempt(problems, CONFIG_REL, () => config(root), null);
   const gateConfig = loaded?.config || {};
 
   const scope = await readScope(problems, () => changed(root));
@@ -170,7 +179,8 @@ export async function snapshot(root, {
 
   const tasks = await tasksOrProblem(problems, root, gateConfig.spec?.dir || 'specs', findSpec);
 
-  const gate = parseGateState(await textOf(join(root, STATE_REL)));
+  const gate = await gateFacts(root, now);
+  const currentHead = await attempt(problems, 'git', () => head(root), '');
   const reviewText = await textOf(join(root, REVIEW_REL));
   const flow = flowOf(gateConfig);
   const sides = flow.sides;
@@ -182,7 +192,8 @@ export async function snapshot(root, {
     changed: { files, newestMtime: await newestOf(root, files), source: scope.source, undetermined: scope.undetermined },
     flow,
     ...await sidesFacts(problems, { root, sides, specDir: gateConfig.spec?.dir || 'specs', findSpec }),
-    git: { isRepo: !!currentRef, branch: currentRef },
+    git: { isRepo: !!currentRef, branch: currentRef, head: currentHead || '' },
+    now,
     platform: { mobile: isMobileRepo(root) },
     // Lo que la memoria del proyecto sabe de la tarea en curso (spec 015). Solo lectura.
     memory: await readMemoryFacts(root, { specDir: gateConfig.spec?.dir || 'specs', task: tasks.current, findSpec }),

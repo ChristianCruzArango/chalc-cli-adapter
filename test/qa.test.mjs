@@ -47,7 +47,7 @@ test('probePlaywright detects the @playwright/test runner via an injectable runn
   assert.deepEqual(yes, { available: true, version: '1.50.0', detail: '@playwright/test 1.50.0' });
   const no = await probePlaywright('/proj', async () => ({ ok: false }));
   assert.equal(no.available, false);
-  assert.match(no.detail, /@playwright\/test no está instalado/);
+  assert.match(no.detail, /@playwright\/test (no está instalado|is not installed)/);
 });
 
 test('QA lists only feature specs and reads their documented requirements', async () => {
@@ -101,10 +101,10 @@ test('QA generates runnable browser tests only for observable cases and fixmes f
   const context = { id: '001-login', files: { 'spec.md': '- **R1** — Login works.\n- **R2** — Shows error.\n' } };
   const code = buildBrowserTests(context, { cases: [{ id: 'R1', path: '/login', expected: 'Welcome' }] });
   assert.match(code, /page\.goto\("\/login"\)/);
-  assert.match(code, /test\.fixme\('R2/);
+  assert.match(code, /test\.fixme\("R2/);
   // El spec generado debe ser Playwright válido: runner correcto y fixme con función, no string.
   assert.match(code, /from '@playwright\/test'/);
-  assert.match(code, /test\.fixme\('R2[^\n]*', \(\) => \{\}\);/);
+  assert.match(code, /test\.fixme\("R2[^\n]*", \(\) => \{\}\);/);
 });
 
 test('QA plan marks the table BLOCKED when the spec declares no requirements', () => {
@@ -320,4 +320,13 @@ test('QA reports Docker states without starting containers', async () => {
   assert.equal(ready.daemon, true);
   assert.equal(ready.compose, true);
   assert.deepEqual(requirementIds('- **R4** — ok\n- **r4** — duplicate'), ['R4']);
+});
+
+// Regresión: un puerto adivinado que ya respondía antes de arrancar (en macOS, AirPlay en el 5000)
+// se daba por la app levantada.
+test('notAnswering keeps only the candidate URLs nobody is serving yet', async () => {
+  const { notAnswering } = await import('../lib/qa.mjs');
+  const fetchImpl = async (url) => { if (url.endsWith(':5000')) return { status: 403 }; throw new Error('refused'); };
+  assert.deepEqual(await notAnswering(['http://localhost:3000', 'http://localhost:5000', '', 'http://localhost:8080'], { fetchImpl }),
+    ['http://localhost:3000', 'http://localhost:8080']);
 });

@@ -12,11 +12,11 @@ const participants = {
   b: { id: 'b', stance: 'challenger', model: 'modelo-b', provider: 'openai' }
 };
 
-const turno = ({ postura = 'argumento', desacuerdos = [], resueltos = [], preguntas = [], acuerdo = false }) => [
-  '===POSTURA===', postura,
-  '===DESACUERDOS===', ...desacuerdos.map((d) => `- ${d}`),
-  '===RESUELTOS===', ...resueltos.map((r) => `- ${r}`),
-  '===PREGUNTAS_USUARIO===', ...preguntas.map((p) => `- ${p}`),
+const turno = ({ position = 'argumento', disagreements = [], settled = [], raisedQuestions = [], acuerdo = false }) => [
+  '===POSTURA===', position,
+  '===DESACUERDOS===', ...disagreements.map((d) => `- ${d}`),
+  '===RESUELTOS===', ...settled.map((r) => `- ${r}`),
+  '===PREGUNTAS_USUARIO===', ...raisedQuestions.map((p) => `- ${p}`),
   '===ESTADO===', `acuerdo: ${acuerdo ? 'si' : 'no'}`
 ].join('\n');
 
@@ -42,14 +42,14 @@ test('la ronda de aclaración pregunta a los DOS y luego alterna quién abre cad
   const clarify = calls.filter((c) => c.kind === 'clarify').map((c) => c.participant.id);
   assert.deepEqual(clarify, ['a', 'b']);   // los dos leen la idea antes de discutir
 
-  const turnos = calls.filter((c) => c.kind === 'turn').map((c) => `${c.round}${c.participant.id}`);
-  assert.deepEqual(turnos, ['1a', '1b', '2b', '2a', '3a', '3b']);   // R14: nadie cierra siempre
+  const turnBlocks = calls.filter((c) => c.kind === 'turn').map((c) => `${c.round}${c.participant.id}`);
+  assert.deepEqual(turnBlocks, ['1a', '1b', '2b', '2a', '3a', '3b']);   // R14: nadie cierra siempre
 });
 
 // ── T8 · los dos cierres ───────────────────────────────────────────────────────────────────────
 test('aunque los dos declaren acuerdo desde el primer turno, no se cierra en la ronda 1 (R11)', async () => {
-  const conforme = turno({ acuerdo: true, postura: 'me parece perfecto' });
-  const { ask, calls } = scripted([conforme, conforme, conforme, conforme, conforme, conforme, conforme, conforme]);
+  const agreed = turno({ acuerdo: true, position: 'me parece perfecto' });
+  const { ask, calls } = scripted([agreed, agreed, agreed, agreed, agreed, agreed, agreed, agreed]);
   const state = await runDebate({ ...base, ask, askUser: async () => [] });
 
   // Nadie objetó nada en todo el debate: eso no es consenso, es complacencia. No cierra por acuerdo.
@@ -60,10 +60,10 @@ test('aunque los dos declaren acuerdo desde el primer turno, no se cierra en la 
 test('con desacuerdo real y acuerdo justificado por los dos, cierra antes de gastar las rondas (R13)', async () => {
   const { ask, calls } = scripted([
     turno({}), turno({}),                                                          // aclaración
-    turno({ postura: 'propongo la cola' }),                                        // 1a
-    turno({ desacuerdos: ['el coste de operación no está medido'] }),              // 1b
-    turno({ acuerdo: true, resueltos: ['D1: el coste queda acotado por el plan de autoscaling que acordamos'] }),   // 2b… (abre b)
-    turno({ acuerdo: true, resueltos: ['D1: el coste queda acotado por el plan de autoscaling que acordamos'] })    // 2a
+    turno({ position: 'propongo la cola' }),                                        // 1a
+    turno({ disagreements: ['el coste de operación no está medido'] }),              // 1b
+    turno({ acuerdo: true, settled: ['D1: el coste queda acotado por el plan de autoscaling que acordamos'] }),   // 2b… (abre b)
+    turno({ acuerdo: true, settled: ['D1: el coste queda acotado por el plan de autoscaling que acordamos'] })    // 2a
   ]);
   const state = await runDebate({ ...base, ask, askUser: async () => [] });
 
@@ -74,30 +74,30 @@ test('con desacuerdo real y acuerdo justificado por los dos, cierra antes de gas
 test('un acuerdo SIN justificar no cierra: el debate sigue hasta el tope (R12, R16)', async () => {
   const { ask } = scripted([
     turno({}), turno({}),
-    turno({ postura: 'propongo la cola' }),
-    turno({ desacuerdos: ['el coste de operación no está medido'] }),
+    turno({ position: 'propongo la cola' }),
+    turno({ disagreements: ['el coste de operación no está medido'] }),
     turno({ acuerdo: true }),                       // "de acuerdo" a secas: no cuenta
     turno({ acuerdo: true })
   ]);
   const state = await runDebate({ ...base, ask, askUser: async () => [] });
 
   assert.equal(state.closedBy, 'limit');
-  assert.equal(state.desacuerdosAbiertos.length, 1);   // el desacuerdo sigue vivo, no se maquilla
+  assert.equal(state.openDisagreements.length, 1);   // el desacuerdo sigue vivo, no se maquilla
 });
 
 // ── T9 · el tope ───────────────────────────────────────────────────────────────────────────────
 test('agotado el tope sin acuerdo, cierra por límite y conserva los desacuerdos abiertos (R16)', async () => {
   const { ask } = scripted([
     turno({}), turno({}),
-    turno({ postura: 'propongo la cola' }),
-    turno({ desacuerdos: ['no hay plan de reproceso', 'el coste no está medido'] })
+    turno({ position: 'propongo la cola' }),
+    turno({ disagreements: ['no hay plan de reproceso', 'el coste no está medido'] })
   ]);
   const state = await runDebate({ ...base, rounds: 1, ask, askUser: async () => [] });
 
   assert.equal(state.closedBy, 'limit');
   assert.equal(state.rounds, 1);
-  assert.deepEqual(state.desacuerdosAbiertos.map((d) => d.n), [1, 2]);
-  assert.match(state.desacuerdosAbiertos[0].texto, /reproceso/);
+  assert.deepEqual(state.openDisagreements.map((d) => d.n), [1, 2]);
+  assert.match(state.openDisagreements[0].text, /reproceso/);
 });
 
 test('un tope menor que 1 se rechaza antes de gastar una sola llamada (R15)', async () => {
@@ -110,43 +110,43 @@ test('un tope menor que 1 se rechaza antes de gastar una sola llamada (R15)', as
 
 // ── T10 · las preguntas al usuario ─────────────────────────────────────────────────────────────
 test('las preguntas de aclaración se fusionan y se hacen ANTES de la primera ronda (R17)', async () => {
-  const pregunta = turno({ preguntas: ['¿Qué volumen diario esperas?'] });
-  const { ask, calls } = scripted([pregunta, pregunta]);
+  const question = turno({ raisedQuestions: ['¿Qué volumen diario esperas?'] });
+  const { ask, calls } = scripted([question, question]);
   const preguntadas = [];
   const askUser = async (qs) => {
     preguntadas.push({ tras: calls.length, ids: qs.map((q) => q.id) });
-    return qs.map((q) => ({ id: q.id, respuesta: '10k al día' }));
+    return qs.map((q) => ({ id: q.id, answer: '10k al día' }));
   };
   const state = await runDebate({ ...base, rounds: 1, ask, askUser });
 
   assert.equal(preguntadas[0].tras, 2);            // justo después de la aclaración, antes de debatir
   assert.deepEqual(preguntadas[0].ids, ['q1']);    // una sola pregunta: la fusionaron
-  assert.equal(state.questions[0].respuesta, '10k al día');
-  assert.deepEqual(state.questions[0].pedidaPor, ['a', 'b']);
+  assert.equal(state.questions[0].answer, '10k al día');
+  assert.deepEqual(state.questions[0].askedBy, ['a', 'b']);
 });
 
 test('una pregunta levantada a mitad del debate se traslada al usuario y su respuesta llega a los DOS (R18)', async () => {
   const { ask, calls } = scripted([
     turno({}), turno({}),
-    turno({ preguntas: ['¿el checkout es síncrono?'] }),   // 1a pregunta a mitad
-    turno({ desacuerdos: ['falta el plan de reproceso'] })
+    turno({ raisedQuestions: ['¿el checkout es síncrono?'] }),   // 1a pregunta a mitad
+    turno({ disagreements: ['falta el plan de reproceso'] })
   ]);
-  const askUser = async (qs) => qs.map((q) => ({ id: q.id, respuesta: 'es asíncrono' }));
+  const askUser = async (qs) => qs.map((q) => ({ id: q.id, answer: 'es asíncrono' }));
   const state = await runDebate({ ...base, rounds: 1, ask, askUser });
 
   assert.equal(state.questions.length, 1);
-  assert.equal(state.questions[0].respondida, true);
+  assert.equal(state.questions[0].answered, true);
   // el turno siguiente (1b) ya recibió el estado con la respuesta dentro
   const turnoB = calls.find((c) => c.kind === 'turn' && c.participant.id === 'b');
-  assert.equal(turnoB.state.questions[0].respuesta, 'es asíncrono');
+  assert.equal(turnoB.state.questions[0].answer, 'es asíncrono');
 });
 
 test('sin askUser (no interactivo) las preguntas quedan sin responder y el debate NO se bloquea (R20)', async () => {
-  const { ask } = scripted([turno({ preguntas: ['¿volumen?'] }), turno({})]);
+  const { ask } = scripted([turno({ raisedQuestions: ['¿volumen?'] }), turno({})]);
   const state = await runDebate({ ...base, rounds: 1, ask });
 
   assert.equal(state.questions.length, 1);
-  assert.equal(state.questions[0].respondida, false);
+  assert.equal(state.questions[0].answered, false);
   assert.equal(state.closedBy, 'limit');
 });
 
@@ -160,7 +160,7 @@ test('el coste previsto es exacto: aclaración + rondas + acta + ratificación (
 test('si un proveedor se cae a mitad, se conserva lo ya pagado y se dice dónde falló (R30)', async () => {
   const { ask } = scripted([
     turno({}), turno({}),
-    turno({ postura: 'propongo la cola' }),
+    turno({ position: 'propongo la cola' }),
     new Error('API 503: upstream unavailable')
   ]);
   const state = await runDebate({ ...base, ask, askUser: async () => [] });
@@ -196,9 +196,9 @@ test('el acuerdo justificado desde el primer turno tampoco cierra dentro de la r
   // objeción entra en el segundo turno y el cierre sigue necesitando el tercero.
   const { ask } = scripted([
     turno({}), turno({}),
-    turno({ postura: 'propongo la cola', acuerdo: true }),                                                     // 1a
-    turno({ desacuerdos: ['el reproceso no está definido'], acuerdo: true }),                                  // 1b
-    turno({ acuerdo: true, resueltos: ['D1: el reproceso queda cubierto por la cola de mensajes muertos'] })    // 2b
+    turno({ position: 'propongo la cola', acuerdo: true }),                                                     // 1a
+    turno({ disagreements: ['el reproceso no está definido'], acuerdo: true }),                                  // 1b
+    turno({ acuerdo: true, settled: ['D1: el reproceso queda cubierto por la cola de mensajes muertos'] })    // 2b
   ]);
   const state = await runDebate({ ...base, rounds: 2, ask, askUser: async () => [] });
 
@@ -210,14 +210,14 @@ test('la misma objeción repetida ronda tras ronda es UN desacuerdo, no varios',
   const objecion = 'el coste de operación no está medido';
   const { ask } = scripted([
     turno({}), turno({}),
-    turno({ postura: 'propongo la cola' }),                    // 1a
-    turno({ desacuerdos: [objecion] }),                        // 1b
-    turno({ desacuerdos: [`${objecion} todavía`] }),           // 2b: la misma, con otras palabras
+    turno({ position: 'propongo la cola' }),                    // 1a
+    turno({ disagreements: [objecion] }),                        // 1b
+    turno({ disagreements: [`${objecion} todavía`] }),           // 2b: la misma, con otras palabras
     turno({})
   ]);
   const state = await runDebate({ ...base, rounds: 2, ask, askUser: async () => [] });
 
-  assert.equal(state.desacuerdosAbiertos.length, 1);
+  assert.equal(state.openDisagreements.length, 1);
   assert.equal(state.raisedTotal, 1);   // y el informe no dirá que hubo dos objeciones distintas
 });
 
@@ -241,9 +241,9 @@ test('el coste previsto refleja lo que de verdad se va a gastar (R37)', () => {
 
 test('al agotarse el presupuesto se cierra entre turnos y NO se paga el acta (R33)', async () => {
   const { ask, calls } = scripted([]);
-  let turnos = 0;
+  let turnBlocks = 0;
   // El freno mira el gasto real; aquí se simula que se pasa tras el segundo turno.
-  const shouldStop = () => { turnos = calls.filter((c) => c.kind === 'turn').length; return turnos >= 2; };
+  const shouldStop = () => { turnBlocks = calls.filter((c) => c.kind === 'turn').length; return turnBlocks >= 2; };
   const state = await runDebate({ ...base, rounds: 3, clarify: false, ask, shouldStop });
 
   assert.equal(state.closedBy, 'budget');
@@ -286,48 +286,48 @@ test('la idea comprimida viaja en los turnos y el texto íntegro se conserva apa
 // "Los dos están de acuerdo con el informe" es una afirmación fuerte. Hasta aquí el acta la escribía
 // un modelo y el otro no la veía nunca: el que la firma tiene que haberla leído.
 
-const acta = (texto = 'el acta') => `===PROPUESTA===\n${texto}\n===PROXIMOS_PASOS===\n- empezar`;
-const ratifica = (veredicto, correcciones = []) =>
-  ['===VEREDICTO===', veredicto, '===CORRECCIONES===', ...correcciones.map((c) => `- ${c}`)].join('\n');
+const minutes = (text = 'el acta') => `===PROPUESTA===\n${text}\n===PROXIMOS_PASOS===\n- empezar`;
+const ratifica = (verdict, corrections = []) =>
+  ['===VEREDICTO===', verdict, '===CORRECCIONES===', ...corrections.map((c) => `- ${c}`)].join('\n');
 
 test('el informe lo ratifica el lado que NO lo escribió (R46)', async () => {
-  const { ask, calls } = scripted([turno({}), turno({}), acta('v1'), ratifica('conforme')]);
+  const { ask, calls } = scripted([turno({}), turno({}), minutes('v1'), ratifica('conforme')]);
   const state = await runDebate({ ...base, rounds: 1, clarify: false, ask, rapporteur: 'a' });
 
   const rat = calls.find((c) => c.kind === 'ratify');
   assert.equal(rat.participant.id, 'b');            // lo revisa el otro, no el autor
-  assert.equal(state.ratification.veredicto, 'conforme');
-  assert.equal(state.ratification.correcciones.length, 0);
-  assert.equal(state.synthesis, acta('v1'));        // conforme: no se reescribe nada
+  assert.equal(state.ratification.verdict, 'conforme');
+  assert.equal(state.ratification.corrections.length, 0);
+  assert.equal(state.synthesis, minutes('v1'));        // conforme: no se reescribe nada
 });
 
 test('con correcciones, el acta se reescribe incorporándolas antes de entregarla (R46)', async () => {
   const { ask, calls } = scripted([
     turno({}), turno({}),
-    acta('v1'),
+    minutes('v1'),
     ratifica('correcciones', ['dice que se acordó el escrow y no se acordó', 'falta el cupo mínimo']),
-    acta('v2 corregida')
+    minutes('v2 corregida')
   ]);
   const state = await runDebate({ ...base, rounds: 1, clarify: false, ask, rapporteur: 'a' });
 
   const rewrite = calls.find((c) => c.kind === 'rewrite');
-  assert.equal(rewrite.correcciones.length, 2);
-  assert.equal(state.synthesis, acta('v2 corregida'));      // se entrega la corregida
-  assert.equal(state.ratification.veredicto, 'correcciones');
-  assert.equal(state.ratification.aplicadas, true);
+  assert.equal(rewrite.corrections.length, 2);
+  assert.equal(state.synthesis, minutes('v2 corregida'));      // se entrega la corregida
+  assert.equal(state.ratification.verdict, 'correcciones');
+  assert.equal(state.ratification.applied, true);
 });
 
 test('una ratificación ilegible no se cuenta como conforme (R47)', async () => {
-  const { ask } = scripted([turno({}), turno({}), acta(), 'me parece bien todo']);
+  const { ask } = scripted([turno({}), turno({}), minutes(), 'me parece bien todo']);
   const state = await runDebate({ ...base, rounds: 1, clarify: false, ask, rapporteur: 'a' });
 
-  assert.equal(state.ratification.veredicto, '');
-  assert.equal(state.ratification.conforme, false);   // ante la duda, NO está ratificado
+  assert.equal(state.ratification.verdict, '');
+  assert.equal(state.ratification.agreed, false);   // ante la duda, NO está ratificado
 });
 
 test('sin presupuesto para ratificar, el informe se entrega SIN ratificar (R48)', async () => {
   let llamadas = 0;
-  const { ask } = scripted([turno({}), turno({}), acta()]);
+  const { ask } = scripted([turno({}), turno({}), minutes()]);
   const contando = async (req) => { llamadas += 1; return ask(req); };
   const state = await runDebate({
     ...base, rounds: 1, clarify: false, ask: contando, rapporteur: 'a',
@@ -339,11 +339,11 @@ test('sin presupuesto para ratificar, el informe se entrega SIN ratificar (R48)'
 });
 
 test('si la ratificación falla, no se pierde el informe ya pagado (R48, R30)', async () => {
-  const { ask } = scripted([turno({}), turno({}), acta(), new Error('API 503')]);
+  const { ask } = scripted([turno({}), turno({}), minutes(), new Error('API 503')]);
   const state = await runDebate({ ...base, rounds: 1, clarify: false, ask, rapporteur: 'a' });
 
   assert.ok(state.synthesis.length > 0);
-  assert.equal(state.ratification?.conforme, false);
+  assert.equal(state.ratification?.agreed, false);
   assert.match(state.ratification.error, /503/);
 });
 

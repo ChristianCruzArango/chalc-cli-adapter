@@ -5,6 +5,14 @@ on:
     branches: [develop, main]
   pull_request:
 
+# Mínimo privilegio: el workflow solo lee el repo. Sin este bloque, GITHUB_TOKEN hereda los permisos
+# por defecto de la organización, que pueden incluir escritura.
+permissions:
+  contents: read
+
+# Las acciones van fijadas por SHA de commit (con su versión en el comentario): una etiqueta como `@v4`
+# se puede mover y ejecutaría código nuevo sin revisar.
+
 # chalc no tiene dependencias de runtime ni de dev: no se ejecuta `npm install`.
 # Solo verificamos que la suite pase en los 3 SO (esto es lo que atrapa los bugs de portabilidad).
 jobs:
@@ -18,19 +26,39 @@ jobs:
         # Node 18 es EOL (abril 2025); engines exige >=20. Se prueba 20 (mínimo), 22 (LTS) y 24 (actual).
         node: ['20', '22', '24']
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node }}
       - name: Run tests
         run: node --test
 
+  # Cobertura medida (M-08). Los pisos de package.json (`test:coverage`) están justo por debajo de la
+  # cobertura actual: el job falla si un cambio la hace bajar. Requiere Node >= 22.8 (umbrales y
+  # `--test-coverage-exclude`), por eso no corre en la matriz de Node 20.
+  coverage:
+    name: coverage (node 22)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Run tests with coverage floors
+        run: npm run test:coverage
+
   doctor:
     name: doctor (valida catálogo)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
       - name: Validate bundled catalog

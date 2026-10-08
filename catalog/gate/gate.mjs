@@ -10,7 +10,8 @@
 // comprobarlo. Lo que no se puede comprobar, se bloquea; nunca se aprueba por defecto.
 
 import { currentBranch, headCommit, taskScope } from './lib/changed.mjs';
-import { sealBaseline } from './lib/baseline.mjs';
+import { readBaseline, sealBaseline } from './lib/baseline.mjs';
+import { configChanges, guardedConfig, scopeHash } from './lib/fingerprint.mjs';
 import { clearTouched } from './lib/touched.mjs';
 import { checkContract } from './lib/contractcheck.mjs';
 import { checkTraceability } from './lib/traceability.mjs';
@@ -60,7 +61,10 @@ export async function runGate({ root = process.cwd(), fast = false, run = runCom
   const spec = await newestSpec(root, config.spec.dir, 'spec.md');
   // El alcance viaja en la meta hasta la evidencia y el estado (R7): sin dejar escrito sobre qué se
   // miró, un informe sin hallazgos no se distingue de un informe que no miró nada.
-  const meta = { branch: await currentBranch(root), role: config.role, spec: spec ? spec.dir : '', scope };
+  // Las claves de gate.json que cambiaron desde que se cerró la tarea anterior (F-07): no bloquean
+  // —el usuario ajusta su portón—, pero la evidencia y el advisor lo dicen.
+  const changedConfig = configChanges((await readBaseline(root)).config, config);
+  const meta = { branch: await currentBranch(root), role: config.role, spec: spec ? spec.dir : '', scope, config, configChanges: changedConfig };
 
   // Sin saber QUÉ revisar no se revisa (R4b). La salida histórica era el árbol de fuentes entero, y
   // eso no es revisar de más: es cambiar de pregunta sin avisar, y enterrar la tarea de hoy bajo la
@@ -165,14 +169,21 @@ async function finish({ root, lang, fast }, stages, meta) {
   // pruebas, que es justo lo que más cuesta y lo que más se omite.
   const closesTask = verdict === 'pass' && !fast;
 
-  const stamped = { ...meta, date: new Date() };
+  // La evidencia queda atada al CONTENIDO revisado y al commit: el advisor recalcula la huella y una
+  // edición posterior (o un estado copiado de otra corrida) deja de contar como vigente.
+  const stamped = {
+    ...meta,
+    date: new Date(),
+    head: await headCommit(root),
+    scopeHash: await scopeHash(root, meta.scope?.files || [])
+  };
   const evidence = await writeEvidence(root, renderEvidence({ stages, meta: stamped, lang }));
 
   // El mismo resultado, para el advisor (spec 008, R13). Se escribe aquí y no en otro sitio para
   // que informe y estado no puedan discrepar: misma corrida, misma fecha, mismo `verdictOf`.
   await writeState(root, renderState({ stages, meta: stamped, fast }));
 
-  if (closesTask) await sealTask(root);
+  if (closesTask) await sealTask(root, meta.config);
 
   return { code: verdict === 'pass' ? 0 : 1, verdict, closesTask, stages, evidence };
 }
@@ -187,8 +198,8 @@ async function finish({ root, lang, fast }, stages, meta) {
 // Sin git no hay commit que sellar y `sealBaseline` se niega —una referencia inservible es peor que
 // ninguna, que al menos tiene respaldo declarado (R4)—. El registro se vacía igual: es de la tarea
 // que acaba de cerrarse, venga de donde venga.
-async function sealTask(root) {
-  await sealBaseline(root, { commit: await headCommit(root) });
+async function sealTask(root, config) {
+  await sealBaseline(root, { commit: await headCommit(root), config: config ? guardedConfig(config) : null });
   await clearTouched(root);
 }
 

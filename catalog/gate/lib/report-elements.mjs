@@ -10,6 +10,7 @@
 // a aprobar sin evidencia.
 
 import { summarize } from './mutants.mjs';
+import { ReportError } from './report-error.mjs';
 
 // Todos los mutantes del reporte, aplanados con su archivo. Tolera entradas sin `mutants`.
 // Los estados del esquema ya son el vocabulario común, así que no hay traducción que hacer.
@@ -26,9 +27,9 @@ function flatten(files) {
 // Parsea el texto del reporte. Misma salida que `parseJUnit` y `parsePit`.
 export function parseElements(text, opts = {}) {
   let json;
-  try { json = JSON.parse(text); } catch { throw new Error('mutation report: JSON inválido'); }
+  try { json = JSON.parse(text); } catch { throw new ReportError('notJson'); }
   if (!json || typeof json.files !== 'object' || json.files === null) {
-    throw new Error('mutation report: falta la sección "files" del esquema mutation-testing-elements');
+    throw new ReportError('elementsNoFiles');
   }
 
   return summarize(flatten(json.files), opts);

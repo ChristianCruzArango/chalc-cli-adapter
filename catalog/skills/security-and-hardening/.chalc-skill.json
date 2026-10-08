@@ -2,6 +2,7 @@
   "id": "security-and-hardening",
   "source": "npx skills add https://github.com/addyosmani/agent-skills --skill security-and-hardening -y",
   "sourceType": "skillssh",
-  "contentSha256": "9d64c9e2881d79fc8cdaeb2c0663e0570934ea3d3041ac6a895de9e42fd1ad55",
-  "installedAt": "2026-10-05T16:14:21.486Z"
+  "contentSha256": "21713b2fe68eb6895a38b6d609e05a2cc91b0780fc3d0ef6305b61a7df7457e1",
+  "installedAt": "2026-10-05T16:14:21.486Z",
+  "hashVersion": 2
 }

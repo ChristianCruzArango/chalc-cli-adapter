@@ -1,10 +1,14 @@
 {
   "id": "angular-cli",
   "kind": "npx",
-  "description": "Servidor MCP oficial del Angular CLI (on-demand, no requiere instalar nada).",
+  "description": "Servidor MCP oficial del Angular CLI, el del propio proyecto (su versión bloqueada; no descarga nada).",
   "requiresSecret": false,
   "server": {
     "command": "npx",
-    "args": ["-y", "@angular/cli", "mcp"]
+    "args": [
+      "--no-install",
+      "@angular/cli",
+      "mcp"
+    ]
   }
 }

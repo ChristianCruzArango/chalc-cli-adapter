@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { t } from '../lib/i18n.mjs';
-import { c, stripAnsi, box, banner, contextBox, stepLine, resultLine, summarizeObservation, mutationReport } from '../cli/ui/render.mjs';
+import { c, stripAnsi, box, banner, stepLine, resultLine, summarizeObservation, mutationReport } from '../cli/ui/render.mjs';
 import { createSpinner } from '../cli/ui/spinner.mjs';
 import { createScreen, wrapAnsi, matchSlash, wheelDelta } from '../cli/ui/screen.mjs';
 
@@ -27,13 +27,6 @@ test('banner colapsa las skills a un CONTEO (no vuelca los 19 nombres)', () => {
   assert.match(out, /git develop/);
   assert.match(out, /Angular/);                  // el stack se muestra con su marca, no en minúscula
   assert.doesNotMatch(out, /angular ·/);
-});
-
-test('contextBox muestra la ventana (tokens/num_ctx) y formatea miles con k', () => {
-  const out = contextBox({ model: 'qwen', provider: 'ollama', inputTokens: 3120, numCtx: 16384, steps: 3 });
-  assert.ok(out.includes(t('cliCtxContext')));   // etiqueta en el idioma activo (es/en)
-  assert.match(out, /3\.1k\/16\.4k/);
-  assert.ok(out.includes(t('cliCtxSteps')));
 });
 
 test('stepLine y resultLine reflejan error/éxito', () => {

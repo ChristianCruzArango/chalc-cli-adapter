@@ -2,6 +2,8 @@
 // La política decide qué comandos base puede intentar el modelo; los guardrails de shell.mjs
 // siguen aplicando siempre (sin metacaracteres, sin eval inline, sin rutas fuera del proyecto).
 
+import { commandTokens } from './shell.mjs';
+
 export const DEV_ALLOW = ['ls', 'cat', 'dir', 'type', 'git', 'npm', 'npx', 'node', 'pnpm', 'yarn', 'ng', 'dotnet', 'python', 'python3', 'pip', 'pytest', 'go', 'cargo', 'flutter', 'dart', 'mkdir', 'echo'];
 
 export const TRUSTED_ALLOW = [...new Set([
@@ -31,19 +33,41 @@ export function normalizeTrustProfile(value) {
 // build, cargo build…) queda fuera — es el flujo central del agente y el usuario activó /auto
 // sabiendo que el agente trabaja sobre su proyecto. Esto NO es un sandbox: cierra los caminos
 // más directos a ejecución arbitraria no supervisada.
-const EVAL_CAPABLE_BASE = new Set(['node', 'python', 'python3', 'npx', 'ruby', 'php']);
+const EVAL_CAPABLE_BASE = new Set(['node', 'python', 'python3', 'npx', 'pnpx', 'bunx', 'ruby', 'php']);
+// `init`/`create` también: descargan un paquete `create-*` y ejecutan su código.
+const NPM_RUNNERS = ['run', 'run-script', 'rum', 'urn', 'exec', 'x', 'init', 'create'];
 const RUNNER_SUBCOMMANDS = new Map([
-  ['npm', new Set(['run', 'exec', 'x'])],
-  ['pnpm', new Set(['run', 'exec', 'dlx'])],
-  ['yarn', new Set(['run', 'exec', 'dlx'])],
-  ['bun', new Set(['run', 'x'])]
+  ['npm', new Set(NPM_RUNNERS)],
+  ['pnpm', new Set(['run', 'run-script', 'exec', 'dlx', 'x', 'create', 'init'])],
+  ['yarn', new Set(['run', 'exec', 'dlx', 'create', 'init'])],
+  ['bun', new Set(['run', 'x', 'create', 'init'])]
 ]);
 
+// `./node`, `C:\tools\node.exe` o `NPM.CMD` son el mismo binario para el sistema: se comparan por
+// el nombre base, sin extensión ejecutable y en minúsculas.
+const binaryName = (token) => token.split(/[\\/]/).pop().toLowerCase().replace(/\.(exe|cmd|bat|com)$/, '');
+
+// Clasifica sobre los MISMOS tokens que ejecuta la shell (`commandTokens`): si aprobación y ejecución
+// leyeran el texto de forma distinta, `"node" x.js` o `npm "run" x` pasarían por inocuos y luego
+// correrían. El subcomando de un runner no está en una posición fija —`npm -s run x`,
+// `npm --prefix . run x`—, así que basta con que CUALQUIER token que no sea una opción sea un
+// subcomando ejecutor: confundir el valor de una opción con un subcomando solo pide una confirmación
+// de más, y ese es el lado seguro. Lo que no se puede parsear también la pide.
+// Subcomandos de git que ejecutan un comando arbitrario que viene en sus argumentos.
+const GIT_EXEC = [['submodule', 'foreach'], ['bisect', 'run'], ['rebase', '--exec'], ['rebase', '-x'], ['filter-branch'], ['difftool', '--extcmd'], ['mergetool']];
+
+const gitExecutes = (args) => GIT_EXEC.some(([sub, arg]) =>
+  args.includes(sub) && (!arg || args.some((tk) => tk === arg || tk.startsWith(`${arg}=`))));
+
 export function isEvalCapableCommand(command) {
-  const tokens = String(command || '').trim().toLowerCase().split(/\s+/);
-  if (EVAL_CAPABLE_BASE.has(tokens[0])) return true;
-  const subs = RUNNER_SUBCOMMANDS.get(tokens[0]);
-  return !!subs && subs.has(tokens[1] || '');
+  let tokens;
+  try { tokens = commandTokens(String(command || '').trim()); } catch { return true; }
+  if (!tokens.length) return false;
+  const base = binaryName(tokens[0]);
+  if (EVAL_CAPABLE_BASE.has(base)) return true;
+  if (base === 'git') return gitExecutes(tokens.slice(1));
+  const subs = RUNNER_SUBCOMMANDS.get(base);
+  return !!subs && tokens.slice(1).some((tk) => !tk.startsWith('-') && subs.has(tk.toLowerCase()));
 }
 
 // Decisión que consume el approve() de la shell: ¿esta acción exige confirmación humana aunque

@@ -44,6 +44,22 @@ async function modelThinks(baseURL, model, fetchImpl) {
   return capsCache.get(key);
 }
 
+// Texto de la respuesta de Ollama según lo que el modelo haya emitido.
+function ollamaReply(msg) {
+  if (msg.content && msg.content.trim()) return msg.content;
+  // Razonadores con tool-calling nativo (gpt-oss): ignoran "reply with JSON" y emiten un tool call
+  // harmony, que Ollama parsea a message.tool_calls AUNQUE no se declaren tools. Se traduce al
+  // protocolo (UN action por turno); nombres/args inválidos los corrige el feedback del loop.
+  const fn = msg.tool_calls?.[0]?.function;
+  if (fn?.name) {
+    let args = fn.arguments ?? {};
+    if (typeof args === 'string') { try { args = JSON.parse(args); } catch { args = {}; } }
+    return JSON.stringify({ thought: String(msg.thinking || '').slice(0, 300), action: { tool: fn.name, args } });
+  }
+  // Última red: a veces el JSON queda literal dentro del thinking; el protocolo intenta extraerlo.
+  return msg.thinking || '';
+}
+
 // Llamada nativa a Ollama. Fija num_ctx (imposible por la ruta OpenAI-compatible) y pide salida JSON.
 // fetchImpl es inyectable para testear sin red.
 export async function chatOllama(cfg, { system, user, numCtx = OLLAMA_DEFAULT_CTX, maxTokens = 2048, fetchImpl = fetchWithTimeout }) {
@@ -73,19 +89,7 @@ export async function chatOllama(cfg, { system, user, numCtx = OLLAMA_DEFAULT_CT
     recordUsage(usage);
     logAiCall({ provider: cfg.provider || 'ollama', model: cfg.model, task: cfg.task }, usage);   // histórico por proyecto (R1)
   }
-  const msg = j.message || {};
-  if (msg.content && msg.content.trim()) return msg.content;
-  // Razonadores con tool-calling nativo (gpt-oss): ignoran "reply with JSON" y emiten un tool call
-  // harmony, que Ollama parsea a message.tool_calls AUNQUE no se declaren tools. Se traduce al
-  // protocolo (UN action por turno); nombres/args inválidos los corrige el feedback del loop.
-  const fn = msg.tool_calls?.[0]?.function;
-  if (fn?.name) {
-    let args = fn.arguments ?? {};
-    if (typeof args === 'string') { try { args = JSON.parse(args); } catch { args = {}; } }
-    return JSON.stringify({ thought: String(msg.thinking || '').slice(0, 300), action: { tool: fn.name, args } });
-  }
-  // Última red: a veces el JSON queda literal dentro del thinking; el protocolo intenta extraerlo.
-  return msg.thinking || '';
+  return ollamaReply(j.message || {});
 }
 
 // Construye el chatImpl que consume el loop, según cfg. Ollama → ruta nativa con num_ctx; resto → chat() con

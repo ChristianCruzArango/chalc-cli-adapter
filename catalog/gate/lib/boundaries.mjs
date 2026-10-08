@@ -9,12 +9,10 @@
 
 import { readdir, readFile } from 'node:fs/promises';
 import { join, dirname, posix } from 'node:path';
+import { CODE_SKIP_DIRS } from './dirs.mjs';
 
-const SKIP_DIRS = new Set([
-  '.git', 'node_modules', 'dist', 'build', 'out', 'target', 'obj', 'bin',
-  '.next', '.nuxt', '.angular', '.dart_tool', '.gradle', '.idea', '.vscode',
-  '.venv', 'venv', 'coverage', 'android', 'ios', 'macos', 'linux', 'windows', 'web'
-]);
+// Además del código ajeno, las carpetas de plataforma y de editor: no son capas de la arquitectura.
+const SKIP_DIRS = new Set([...CODE_SKIP_DIRS, '.idea', '.vscode', 'android', 'ios', 'macos', 'linux', 'windows', 'web']);
 
 // Roles de capa conocidos (de las arquitecturas que genera chalc). Buckets = carpetas que agrupan unidades
 // hermanas (cada subcarpeta es un feature/módulo independiente).
@@ -29,7 +27,8 @@ const FORBIDDEN_IMPORTS = {
   shared: ['features', 'feature', 'modules', 'presentation', 'application', 'data', 'infrastructure']
 };
 
-const SOURCE_FILE = /\.(ts|tsx|js|jsx|mjs|cjs|dart)$/;
+// Solo los lenguajes cuyos imports sabe leer el linter de fronteras (un subconjunto de SOURCE_FILE).
+const LAYERED_SOURCE = /\.(ts|tsx|js|jsx|mjs|cjs|dart)$/;
 const GENERATED_OR_TEST = /(\.spec\.|\.test\.|_test\.|\.g\.dart$|\.freezed\.dart$|\.mocks\.dart$)/;
 
 // La capa (y feature, si aplica) de una ruta, según el primer segmento que sea un rol de capa.
@@ -88,7 +87,7 @@ async function sourceFiles(projectDir, max = 5000) {
       const childRel = relDir ? `${relDir}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith('.')) await walk(join(absDir, entry.name), childRel);
-      } else if (SOURCE_FILE.test(entry.name) && !GENERATED_OR_TEST.test(entry.name)) {
+      } else if (LAYERED_SOURCE.test(entry.name) && !GENERATED_OR_TEST.test(entry.name)) {
         found.push(childRel);
       }
     }
@@ -111,7 +110,7 @@ export async function lintBoundariesIn(projectDir, files) {
   for (const relPath of files) {
     // Lo que no es fuente de producción no tiene fronteras que romper: markdown, specs, y los tests
     // y generados que el recorrido completo ya salta.
-    if (!SOURCE_FILE.test(relPath) || GENERATED_OR_TEST.test(relPath)) continue;
+    if (!LAYERED_SOURCE.test(relPath) || GENERATED_OR_TEST.test(relPath)) continue;
     const source = layerOf(relPath);
     if (!source.layer) continue;                          // archivo fuera de una capa: no aplica
     let content = '';

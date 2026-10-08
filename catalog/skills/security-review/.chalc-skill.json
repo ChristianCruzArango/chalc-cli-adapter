@@ -2,6 +2,7 @@
   "id": "security-review",
   "source": "npx skills add https://github.com/getsentry/skills --skill security-review -y",
   "sourceType": "skillssh",
-  "contentSha256": "11055500b40ff886045d2aea9e46bcd2b7c4d28e8ee0d64fb0e260f48717d111",
-  "installedAt": "2026-10-05T16:14:24.699Z"
+  "contentSha256": "ddabdab5653ac0e32d81637fc40f0d650c2294cf938293a28cd9d6b9f5de5066",
+  "installedAt": "2026-10-05T16:14:24.699Z",
+  "hashVersion": 2
 }

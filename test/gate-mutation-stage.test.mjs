@@ -168,9 +168,9 @@ test('runMutation accepts a report newer than the sources of the run', async () 
 test('runMutation accepts a report written in the same instant as the source', async () => {
   const dir = await project();
   await file(dir, 'src/precio.ts', 'export const x = 1;\n', at(30));
-  await file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed']), at(30));
+  const run = runner({ code: 0, writes: () => file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed']), at(30)) });
 
-  const r = await runMutation(config(), { root: dir, changed: ['src/precio.ts'], run: runner({ code: 0 }) });
+  const r = await runMutation(config(), { root: dir, changed: ['src/precio.ts'], run });
 
   assert.equal(r.blocked, false, 'mismo mtime no es un reporte de otra versión del código');
   assert.equal(r.score, 100);
@@ -216,15 +216,25 @@ test('runMutation trusts a fresh valid report even when the tool exits non-zero'
 test('runMutation resolves a globbed report path to the most recent match', async () => {
   const dir = await project();
   await file(dir, 'StrykerOutput/2024-01-01/reports/mutation-report.json', elementsReport(['Survived', 'Survived']), at(600));
-  await file(dir, 'StrykerOutput/2024-06-02/reports/mutation-report.json', elementsReport(['Killed', 'Killed']), at(10));
+  const run = runner({ code: 0, writes: () => file(dir, 'StrykerOutput/2024-06-02/reports/mutation-report.json', elementsReport(['Killed', 'Killed']), at(10)) });
 
-  const r = await runMutation(
-    config({ report: 'StrykerOutput/**/reports/mutation-report.json' }),
-    { root: dir, run: runner({ code: 0 }) }
-  );
+  const r = await runMutation(config({ report: 'StrykerOutput/**/reports/mutation-report.json' }), { root: dir, run });
 
   assert.equal(r.blocked, false);
   assert.equal(r.score, 100, 'se leyó el reporte viejo en vez del de la última corrida');
+});
+
+// F-19 (auditoría): si la herramienta aborta sin escribir, el reporte que ya estaba es de OTRA
+// corrida, aunque sea más nuevo que los fuentes. No se acepta.
+test('runMutation blocks when the run did not rewrite the report that was already there', async () => {
+  const dir = await project();
+  await file(dir, 'src/precio.ts', 'export const x = 1;\n', at(600));
+  await file(dir, 'reports/mutation/mutation.json', elementsReport(['Killed']), at(10));
+
+  const r = await runMutation(config(), { root: dir, changed: ['src/precio.ts'], run: runner({ code: 1 }) });
+
+  assert.equal(r.blocked, true);
+  assert.equal(r.reason, 'stale-report');
 });
 
 // ── R5: umbral ────────────────────────────────────────────────────────────────────────────────
@@ -339,10 +349,11 @@ test('runMutation scopes each file to its own project when the repo has several'
 
   await runMutation(
     config({ scopeFlag: '--mutate' }),
-    { root: dir, changed: ['src/Tienda.Dominio/Precios/Total.cs'], run }
+    { root: dir, changed: ['src/Tienda.Dominio/Precios/Total.cs'], run, platform: 'linux' }
   );
 
-  assert.equal(run.calls[0].command, 'npx stryker run --mutate **/Precios/Total.cs');
+  // Entre comillas: sin ellas el shell expandiría el `**` antes de que lo viera la herramienta.
+  assert.equal(run.calls[0].command, "npx stryker run --mutate '**/Precios/Total.cs'");
 });
 
 // ── spec 018: Stryker.NET solo sobre el proyecto que cambió ───────────────────────────────────
@@ -370,13 +381,14 @@ test('runMutation passes the one project the task changed when the tool declares
     {
       root: dir,
       changed: ['src/Tienda.Dominio/Precios/Total.cs', 'src/Tienda.Dominio/Precios/Iva.cs', 'tests/Tienda.Dominio.Tests/TotalTests.cs'],
-      run
+      run,
+      platform: 'linux'
     }
   );
 
   assert.equal(
     run.calls[0].command,
-    'npx stryker run --mutate **/Precios/Total.cs --mutate **/Precios/Iva.cs --project Tienda.Dominio.csproj'
+    "npx stryker run --mutate '**/Precios/Total.cs' --mutate '**/Precios/Iva.cs' --project Tienda.Dominio.csproj"
   );
 });
 
@@ -416,10 +428,10 @@ test('runMutation passes no project when the tool declares no project flag (spec
 
   await runMutation(
     config({ scopeFlag: '--mutate', scopeJoin: 'repeat' }),
-    { root: dir, changed: ['src/Tienda.Dominio/Precios/Total.cs'], run }
+    { root: dir, changed: ['src/Tienda.Dominio/Precios/Total.cs'], run, platform: 'linux' }
   );
 
-  assert.equal(run.calls[0].command, 'npx stryker run --mutate **/Precios/Total.cs');
+  assert.equal(run.calls[0].command, "npx stryker run --mutate '**/Precios/Total.cs'");
 });
 
 test('runMutation repeats the scope flag for tools that do not take a comma-separated list', async () => {
@@ -525,10 +537,11 @@ test('runMutation writes the ranges the way Stryker.NET reads them: character po
 
   await runMutation(
     config({ scopeFlag: '--mutate', scopeJoin: 'repeat', scopeSpan: 'braces' }),
-    { root: dir, changed: ['src/Precio.cs'], lines: new Map([['src/Precio.cs', new Set([2])]]), run }
+    { root: dir, changed: ['src/Precio.cs'], lines: new Map([['src/Precio.cs', new Set([2])]]), run, platform: 'linux' }
   );
 
-  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/Precio.cs{8..26}');
+  // Entre comillas: bash expandiría `{8..26}` en varios argumentos y la corrida se quedaría sin mutantes.
+  assert.equal(run.calls[0].command, "npx stryker run --mutate 'src/Precio.cs{8..26}'");
 });
 
 // Spec 017 (R3): sin texto no hay posiciones que calcular; se mide de más, que es el lado seguro.
@@ -551,10 +564,10 @@ test('runMutation spans several Stryker.NET lines from the first character to th
 
   await runMutation(
     config({ scopeFlag: '--mutate', scopeJoin: 'repeat', scopeSpan: 'braces' }),
-    { root: dir, changed: ['src/Precio.cs'], lines: new Map([['src/Precio.cs', new Set([2, 3])]]), run }
+    { root: dir, changed: ['src/Precio.cs'], lines: new Map([['src/Precio.cs', new Set([2, 3])]]), run, platform: 'linux' }
   );
 
-  assert.equal(run.calls[0].command, 'npx stryker run --mutate src/Precio.cs{2..8}');
+  assert.equal(run.calls[0].command, "npx stryker run --mutate 'src/Precio.cs{2..8}'");
 });
 
 // Un archivo NUEVO no sale en ningún diff y no tiene tramos: hay que mutarlo entero, que es

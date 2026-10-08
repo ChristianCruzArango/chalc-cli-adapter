@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { sideAdvice } from '../lib/dashboard.mjs';
 import { emitGate } from '../lib/gateemit.mjs';
 import { emitNext } from '../lib/nextemit.mjs';
+import { scopeHash } from '../catalog/gate/lib/fingerprint.mjs';
 
 const SPEC = '008-advisor';
 
@@ -39,7 +40,7 @@ async function side({ tasks = '- [x] T1\n- [ ] T2 — en esto voy\n', state, rev
   await writeFile(join(dest, 'src', 'a.ts'), 'export const x = 1;\n');
   await utimes(join(dest, 'src', 'a.ts'), TOUCHED / 1000, TOUCHED / 1000);
   await writeFile(join(dest, '.chalc', 'task.files'), 'src/a.ts\n');
-  if (state) await writeFile(join(dest, '.chalc', 'gate.state.json'), JSON.stringify(state));
+  if (state) await writeFile(join(dest, '.chalc', 'gate.state.json'), JSON.stringify({ scope: { files: ['src/a.ts'] }, scopeHash: await scopeHash(dest, ['src/a.ts']), ...state }));
   if (review) await writeFile(join(dest, '.chalc', 'review.md'), review);
   return dest;
 }
@@ -82,4 +83,27 @@ test('R21 — la consulta no modifica el lado: el dashboard sigue siendo de solo
   const second = await sideAdvice(dest);
 
   assert.deepEqual(first, second);
+});
+
+// El consejo no se quedaba en una función que solo usaban estos tests: el escaneo lo lleva a cada
+// lado y la vista de consola lo muestra (M-07). Un lado sin advisor no muestra nada.
+test('R21 — el escaneo del workspace lleva el NEXT_ACTION de cada lado y la consola lo muestra', async () => {
+  const { scanWorkspace, renderTerminal } = await import('../lib/dashboard.mjs');
+  const { execFileSync } = await import('node:child_process');
+  const { rename } = await import('node:fs/promises');
+  const base = await mkdtemp(join(tmpdir(), 'chalc-dash-ws-'));
+  await mkdir(join(base, SPEC), { recursive: true });
+  await rename(await side(), join(base, SPEC, 'back'));
+  const front = join(base, SPEC, 'front');
+  await mkdir(join(front, 'specs', SPEC), { recursive: true });
+  await writeFile(join(front, 'specs', SPEC, 'tasks.md'), '- [ ] T1\n');
+  for (const dir of [join(base, SPEC, 'back'), front]) execFileSync('git', ['init', '-q'], { cwd: dir });
+
+  const ws = await scanWorkspace(base, SPEC);
+  const back = ws.sides.find((s) => s.name === 'back');
+  const plain = ws.sides.find((s) => s.name === 'front');
+  assert.equal(typeof back.next, 'string');
+  assert.ok(back.next.length);
+  assert.equal(plain.next, undefined, 'sin advisor emitido no hay consejo que mostrar');
+  assert.ok(renderTerminal({ workspaces: [ws], log: [] }).includes(back.next));
 });

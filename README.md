@@ -95,7 +95,7 @@ npm start -- /path/to/project      # equips another project
 npm run inspect -- /path/to/project
 npm run doctor
 npm run configure
-npm run init -- angular mi-app --description "admin dashboard with roles and permissions"
+npm run init-project -- angular mi-app --description "admin dashboard with roles and permissions"
 npm run spec
 ```
 
@@ -461,6 +461,12 @@ Adding a language = creating `rules/<lang>.json` with its `detect`. It supports:
 
 ## Configuring the catalog (rules, skills, and MCP)
 
+**Where your additions are stored.** With chalc installed as a package (`npm i -g`), the rules, skills
+and MCP you create or install go to `~/.chalc/` (or `CHALC_HOME`) and are **layered** over the package
+catalog: with the same id, yours wins. Nothing is written inside the package (EACCES on global installs),
+and nothing is lost on the next `npm update`. When you run chalc from a git checkout of chalc itself, it
+keeps writing to `catalog/` and `rules/`, which is how a new skill is vendored.
+
 The recommended way to maintain Chalc is interactively:
 
 ```bash
@@ -671,8 +677,8 @@ The scope now has three sources, most specific first:
 
 | Source | What it is | When it is used |
 |---|---|---|
-| `registry` | `.chalc/task.files`, the paths written during this task | whenever it exists |
-| `baseline` | changes since the commit sealed when the last task closed (`.chalc/task.json`) | no registry |
+| `registry` | `.chalc/task.files`, the paths written during this task | no diff to check against; with a diff, it only informs |
+| `baseline` | changes since the commit sealed when the last task closed (`.chalc/task.json`) | whenever git is available |
 | `branch` | changes since the branch base | no baseline either |
 
 **And never the whole project.** With no git and no registry the scope cannot be determined, and the
@@ -688,12 +694,23 @@ against, and **what it left out**:
 
 - Source: record of written paths (.chalc/task.files)
 - Since: `a1b2c3d4e5`
-- Files reviewed: `src/payment.service.ts`, `src/payment.model.ts`
-- Out of scope (in the tree, but not from this task): `src/other-task-wip.ts`
+- Files reviewed: `src/other-task-wip.ts`, `src/payment.model.ts`, `src/payment.service.ts`
+- Reviewed although they were not in the record (the full diff always counts): `src/other-task-wip.ts`
 ```
 
-That last line is the half that used to be missing: a one-file scope in a tree with twenty changes
-reads as "only one changed" unless somebody says the other nineteen were not yours.
+The record **cannot narrow the review**: when a diff is available the whole diff is reviewed and the
+record only says which changes were not written down. It used to leave them out, which let a task close
+with code written through Bash, by a generator, or by recording a clean file by hand.
+
+#### What the gate guarantees and what it does not
+
+The gate is built for an agent that **cooperates**, not an adversarial one. It raises the bar — the
+evidence is tied to the evaluated commit and to a fingerprint of the reviewed content; a future date
+does not count; a `review.md` entry only counts for the evaluated or the current commit; if `gate.json`
+is relaxed since the previous task closed, the report says so at the top — but it is **not tamper-proof**:
+whoever can write to the repo can edit `gate.json`, recompute the fingerprint or write the state by hand,
+because there is no local secret an agent with a shell cannot read. For guarantees against a hostile
+agent, run the gate in CI on the commit, out of the agent's reach.
 
 The gate seals the baseline and clears the registry **when a run closes a task** — never on a run that
 failed or used `--fast`, which would move the reference into the middle of the task in progress. And
@@ -841,6 +858,12 @@ Both the permissions the target grants and the prose the role reads come from th
 drift apart. And there is a hard check: **a role that declares nothing in `writes` cannot receive a
 write tool**, and `Edit` is never granted — writing your own logbook and modifying someone else's
 code are not the same permission.
+
+**Honest limit:** the roles need `Bash` (for `git diff` and `git rev-parse`) and `Write` (for their
+logbook), and Claude Code cannot narrow those tools to a path inside a subagent. That a role only writes
+to `.chalc/review.md` is therefore a **convention** its prompt imposes, not a permission the assistant
+enforces. What is guaranteed is the effect: if a role touches code, the fingerprint of the gate evidence
+stops matching and the advisor asks for the gate to run again before the task can close.
 
 There are three roles today, and they do not overlap:
 
@@ -1380,7 +1403,7 @@ tool is missing the gate prints the exact command and stops.
 - **Bilingual CLI (es/en)**: all user-facing output goes through `lib/i18n.mjs` and comes out in the chosen language.
 - **Set the language once**: `chalc lang es` or `chalc lang en` saves it in `~/.chalc/config.json`
   and applies to all your projects. `chalc lang` with no argument opens the interactive menu.
-- **Language precedence**: `--lang` > `CHALC_LANG` > saved config (`chalc lang`) > `LANG`/`LC_*` of the OS > `en`.
+- **Interface language precedence**: `CHALC_LANG` > saved config (`chalc lang`) > `LANG`/`LC_*` of the OS > `en`. The `--lang` flag does not change the interface: in `spec-ia` and `feature` it is the spec language.
 - **Spec language**: `chalc spec-ia --lang es|en|pt|…` (or the menu) — independent of the CLI language.
 - The SDD method (constitution, templates, rules, explanatory diagram) is in **es and en**.
 
@@ -1409,7 +1432,14 @@ npm test
 
 The suite covers the argument parser, stack detection with fixtures versioned in `test/fixtures/`,
 security blocks (unsafe `target`, external install without `--allow-exec`, local URLs), and
-`doctor`. For CI, the recommended minimum is:
+`doctor`. To measure coverage (requires Node 22.8 or later):
+
+```bash
+npm run test:coverage
+```
+
+It fails if lines drop below 85%, branches below 80% or functions below 60%; CI runs it in its own
+job on Node 22. For CI, the recommended minimum is:
 
 ```bash
 npm test

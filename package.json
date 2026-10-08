@@ -40,13 +40,13 @@
     "start": "node bin/chalc.mjs",
     "apply": "node bin/chalc.mjs",
     "lang": "node bin/chalc.mjs lang",
-    "init": "node bin/chalc.mjs init",
+    "init-project": "node bin/chalc.mjs init",
     "verify": "node bin/chalc.mjs verify",
     "inspect": "node bin/chalc.mjs inspect",
     "doctor": "node bin/chalc.mjs doctor",
     "configure": "node bin/chalc.mjs configure",
     "install-skill": "node bin/chalc.mjs install",
-    "update": "node bin/chalc.mjs update",
+    "update-skills": "node bin/chalc.mjs update",
     "spec": "node bin/chalc.mjs spec",
     "config-ia": "node bin/chalc.mjs config-ia",
     "ai-doctor": "node bin/chalc.mjs ai-doctor",
@@ -61,7 +61,9 @@
     "cli": "node cli/index.mjs",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm test && npm run doctor -- --yes && npm run eval-ia && npm run pack:check",
-    "test": "node --test"
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=test/** --test-coverage-lines=85 --test-coverage-branches=80 --test-coverage-functions=60",
+    "lock-skills": "node -e \"import('./lib/update.mjs').then((m) => m.writeSkillsLock('.', 'catalog'))\""
   },
   "engines": {
     "node": ">=20"

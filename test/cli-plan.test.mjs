@@ -169,7 +169,7 @@ test('flujo completo: session.plan propone y ask({plan}) ejecuta con el plan en 
     assert.match(systems[0], /PLANNER/);          // el planner llevaba su rol
     assert.doesNotMatch(systems[0], /- write:/);            // ...y su índice de tools NO ofrecía write
 
-    const result = await session.ask('sube la versión a 2', { plan: p.plan });
+    const result = await session.ask('sube la versión a 2', { plan: p.plan, approve: async () => true });
     assert.equal(result.done, true);
     const coderSystem = systems[systems.length - 2];        // primer system de la fase coder
     assert.match(coderSystem, /plan approved by the user/);

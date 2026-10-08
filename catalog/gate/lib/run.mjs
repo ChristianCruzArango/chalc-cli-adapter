@@ -56,10 +56,36 @@ function hookOnce() {
   hooked = true;
 
   process.on('exit', killRunning);
-  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) {
+  // El código convencional de cada señal (128 + su número): 130 es Ctrl+C, no cualquier final. Un
+  // supervisor que mandó SIGTERM tiene que poder distinguirlo de una cancelación del usuario.
+  for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143], ['SIGHUP', 129], ['SIGBREAK', 149]]) {
     // `process.exit` dispara el manejador de `exit`, que es quien limpia.
-    try { process.on(signal, () => process.exit(130)); } catch { /* señal que esta plataforma no tiene */ }
+    try { process.on(signal, () => process.exit(code)); } catch { /* señal que esta plataforma no tiene */ }
   }
+}
+
+// Un argumento que el shell deja tal cual: sin comodines, comillas, espacios ni sustituciones.
+const BARE_ARG = /^[\w@+=:,./-]+$/;
+
+// Lo que cmd.exe sigue interpretando incluso entre comillas dobles, y los saltos de línea.
+const CMD_UNSAFE = /["%!\r\n\0]/;
+
+export class UnsafeArgError extends Error {}
+
+// Escapa UN argumento que viene de datos (una ruta de git, un globo) para pegarlo a un comando que
+// se ejecuta con `shell: true`. El comando del repo sí es shell a propósito —lo escribe el humano en
+// `gate.json`—, pero una ruta con `$(…)` o con espacios no puede convertirse en código ni en dos
+// argumentos. En POSIX las comillas simples no admiten ninguna expansión; en cmd.exe no hay escape
+// completo, así que lo que no se puede citar se rechaza.
+export function shellArg(value, platform = process.platform) {
+  const text = String(value);
+  if (BARE_ARG.test(text)) return text;
+  if (platform === 'win32') {
+    if (CMD_UNSAFE.test(text)) throw new UnsafeArgError(text);
+    return `"${text}"`;
+  }
+  if (text.includes('\0')) throw new UnsafeArgError(text);
+  return `'${text.replace(/'/g, `'\\''`)}'`;
 }
 
 // Corre `command` en `cwd`. Nunca lanza: un binario que no existe se reporta como código 127, el
@@ -69,7 +95,10 @@ export function runCommand(command, { cwd } = {}) {
     const started = Date.now();
     hookOnce();
 
-    const child = spawn(command, { cwd, shell: true, stdio: 'inherit', detached: !WINDOWS });
+    // stdin cerrado: el hijo va en su propio grupo (`detached`, para poder matar el árbol) y por eso no
+    // tiene la terminal; si heredara stdin, un prompt interactivo daría EIO o colgaría. Sin stdin,
+    // recibe EOF y la herramienta falla con su propio mensaje. La salida sí se hereda.
+    const child = spawn(command, { cwd, shell: true, stdio: ['ignore', 'inherit', 'inherit'], detached: !WINDOWS });
     running.add(child);
 
     const done = (code) => {

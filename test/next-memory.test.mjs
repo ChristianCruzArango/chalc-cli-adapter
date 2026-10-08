@@ -25,7 +25,7 @@ const ROLES = [{ id: 'revisor', order: 10, cadence: 'task', required: true }];
 
 const snap = ({ entries = [], log = '', gate = { exists: true, date: GATE, verdict: 'pass' }, changed = ['src/tarifa.mjs'] } = {}) => ({
   tasks: { hasTasksFile: true, done: 1, total: 3, current: '**T2** (R2) — Calcular tarifas', mtime: GATE - 1 },
-  gate: { fast: false, branch: 'b', pending: [], ...gate },
+  gate: { fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: 'b', pending: [], ...gate },
   review: { entries: allReviews(log) },
   changed: { files: changed, newestMtime: changed.length ? GATE - 10 : 0 },
   flow: { approvals: { task: true, feature: true }, roles: ROLES },

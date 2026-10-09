@@ -19,10 +19,16 @@ import { parseHunks, removedByFile } from './hunks.mjs';
 // `core.quotePath=false`: sin él, git escribe `src/año.ts` como `"src/a\303\261o.ts"`, una ruta que no
 // existe, y el archivo desaparecía del alcance sin que el portón lo dijera. La salida se decodifica
 // como UTF-8 por flujo: concatenar trozos de Buffer partía los caracteres de varios bytes.
-function git(args, cwd) {
+//
+// `core.fsmonitor=false` y, en `diff`, `--no-ext-diff --no-textconv`: una `.git/config` hostil no
+// ejecuta nada cuando el portón inspecciona, y un diff externo no sustituye al unificado que el
+// portón parsea (sin hunks, la tarea no tendría líneas atribuidas). Ver spec 016, R5.
+function git([sub, ...rest], cwd) {
+  const noExternal = sub === 'diff' ? ['--no-ext-diff', '--no-textconv'] : [];
   return new Promise((resolve) => {
     let out = '';
-    const child = spawn('git', ['-c', 'core.quotePath=false', ...args], { cwd, stdio: ['ignore', 'pipe', 'ignore'] });
+    const args = ['-c', 'core.quotePath=false', '-c', 'core.fsmonitor=false', sub, ...noExternal, ...rest];
+    const child = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'ignore'] });
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { out += chunk; });
     child.on('error', () => resolve(null));

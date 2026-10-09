@@ -12,7 +12,7 @@ const isSymlink = (p) => { try { return lstatSync(p).isSymbolicLink(); } catch {
 // pero sus carpetas padre sí — y son ellas las que podrían ser un symlink/junction hacia fuera.
 // Un enlace COLGANTE (o en bucle) también hace fallar a realpath, pero no es "no existe": su destino
 // puede estar fuera del proyecto, así que se devuelve null y quien llama lo rechaza.
-function deepestExistingRealpath(p) {
+export function deepestExistingRealpath(p) {
   let cur = p;
   for (;;) {
     try { return realpathSync(cur); } catch { /* no existe, o es un enlace sin destino */ }
@@ -23,7 +23,7 @@ function deepestExistingRealpath(p) {
   }
 }
 
-const escapes = (base, target) => {
+export const escapes = (base, target) => {
   const rel = relative(base, target);
   return rel !== '' && (rel.split(/[\\/]/)[0] === '..' || isAbsolute(rel));
 };
@@ -44,10 +44,28 @@ export function resolveInRoot(root, p) {
   return abs;
 }
 
+// La ruta REAL de `abs` relativa a la raíz real, con '/': lo que de verdad se va a escribir aunque se
+// pida por un enlace interno (`notes -> .claude`). Para un archivo que aún no existe se resuelve su
+// ancestro existente más profundo y se le añade el resto. Llamar tras resolveInRoot (ya confinada).
+export function realRelative(root, abs) {
+  const realRoot = realpathSync(resolve(root));
+  const rest = [];
+  for (let cur = abs; ; cur = dirname(cur)) {
+    try { return relative(realRoot, join(realpathSync(cur), ...rest)).replace(/\\/g, '/'); } catch { /* aún no existe: se sube */ }
+    rest.unshift(basename(cur));
+  }
+}
+
+// La ruta tal cual y su ruta real relativa a la raíz, para clasificar por las dos (V-04: un enlace
+// `notes.txt -> .env` es un `.env`). Si la real no se puede resolver, solo la pedida.
+export function pathAndReal(root, p) {
+  try { return [p, realRelative(root, resolve(root, p))]; } catch { return [p]; }
+}
+
 // `.git/` no es código del proyecto: un `.git/hooks/pre-commit` o un `.git/config` con
 // `core.fsmonitor` se ejecutan solos en el siguiente commit o `git status`. Se mira la ruta pedida y
 // la real (un enlace interno hacia `.git` cuenta igual); sin distinguir mayúsculas, como macOS y Windows.
-const GIT_DIR = /(^|[\\/])\.git([\\/]|$)/i;
+export const GIT_DIR = /(^|[\\/])\.git([\\/]|$)/i;
 export function assertNotGitDir(base, p, target) {
   const rel = relative(base, target);
   if (GIT_DIR.test(String(p)) || GIT_DIR.test(rel)) throw new Error(`writing inside .git/ is not allowed: ${p}`);

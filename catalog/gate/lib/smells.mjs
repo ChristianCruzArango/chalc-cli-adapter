@@ -204,8 +204,25 @@ export function lintSource(text, { file, limits, changedLines = null, removedLin
     ...typeInService(file, clean, lines, dialect),
     ...measurable({ file, text: clean, lines, dialect }, limits)
   ]
-    .filter((found) => belongsToTask(found, scope))
+    .flatMap((found) => (belongsToTask(found, scope) ? [found] : grewOverLimit(found, scope)))
     .sort((a, b) => a.line - b.line);
+}
+
+// La deuda de tamaño previa no es de la tarea, pero HACERLA CRECER sí (G-03, R40). En un archivo el
+// crecimiento neto es exacto (escritas − borradas). En una función solo se conocen las borradas del
+// archivo entero, así que se usa la cota segura: si dentro se escribió más de lo que el archivo perdió,
+// la función creció con certeza (un reemplazo de líneas no se cobra).
+function grewOverLimit(found, { changedLines, removedLines, total, limits }) {
+  if (found.rule === RULES.fileTooLong) {
+    const growth = writtenIn(changedLines, 1, total) - removedLines;
+    return growth > 0 ? [finding(found.file, 1, RULES.oversizedGrew, { kind: 'file', before: total - growth, after: total, limit: limits.maxFileLines })] : [];
+  }
+  if (found.rule === RULES.functionTooLong) {
+    const growth = writtenIn(changedLines, found.line, found.until ?? found.line) - removedLines;
+    const data = { kind: 'function', name: found.data.name, before: found.data.lines - growth, after: found.data.lines, limit: limits.maxFunctionLines };
+    return growth > 0 ? [{ ...finding(found.file, found.line, RULES.oversizedGrew, data), until: found.until }] : [];
+  }
+  return [];
 }
 
 // Cuántas de las líneas de la tarea caen dentro de `from`..`to`.
@@ -224,23 +241,25 @@ const writtenIn = (changedLines, from, to) => {
 // líneas casi nunca se toca, y `file-too-long` vive en la línea 1—, así que se preguntan de otro
 // modo: ¿seguiría pasándose del límite sin lo que escribió la tarea? Si sí, la deuda ya estaba.
 // Quien añade dos líneas a un archivo de trescientas una no es quien lo dejó largo, y cobrárselo
-// solo enseña a ignorar el informe.
+// solo enseña a ignorar el informe. Pero si lo que la tarea añadió dentro supera por SÍ SOLO el
+// límite, el crecimiento sí es suyo aunque la deuda ya estuviera (G-03): sin esto, a un archivo de
+// 301 líneas se le podían sumar 600 sin aviso.
 //
 // Lo demás se atribuye por posición: basta con que la tarea haya escrito dentro del tramo.
 function belongsToTask(found, { changedLines, removedLines, total, limits }) {
   if (!changedLines || !changedLines.size) return true;
 
   if (found.rule === RULES.fileTooLong) {
-    const antes = total - writtenIn(changedLines, 1, total) + removedLines;
-    return antes <= limits.maxFileLines;
+    const escritas = writtenIn(changedLines, 1, total);
+    const antes = total - escritas + removedLines;
+    return antes <= limits.maxFileLines || escritas - removedLines > limits.maxFileLines;
   }
 
   if (found.rule === RULES.functionTooLong) {
-    const desde = found.line;
-    const hasta = found.until ?? found.line;
     // Las borradas no se pueden situar dentro de una función concreta, así que aquí la reconstrucción
     // es solo con lo añadido. Erra hacia reportar, que es el lado seguro.
-    return found.data.lines - writtenIn(changedLines, desde, hasta) <= limits.maxFunctionLines;
+    const escritas = writtenIn(changedLines, found.line, found.until ?? found.line);
+    return found.data.lines - escritas <= limits.maxFunctionLines || escritas > limits.maxFunctionLines;
   }
 
   return writtenIn(changedLines, found.line, found.until ?? found.line) > 0;

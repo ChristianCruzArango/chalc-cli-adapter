@@ -13,7 +13,7 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   const plan = [];
   for (const s of skills) plan.push(`skill     .chalc/skills/${s}`);
   for (const m of mcps) plan.push(`mcp       .gemini/settings.json  ::  ${m.id}`);
-  for (const me of methods) plan.push(`método    ${me.id}${me.mode && me.mode !== 'default' ? ` (${me.mode})` : ''}`);
+  for (const me of methods) plan.push(kit.methodPlanLine(me));
   plan.push('rules     GEMINI.md');
   plan.push('manifest  .chalc.json');
   if (dryRun) return { plan, written: false };
@@ -30,6 +30,6 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
     await kit.mergeMcpServers(join(projectPath, '.gemini', 'settings.json'), mcps, { force });
   }
 
-  await kit.writeManifest(projectPath, 'gemini', stacks, skills, mcps, methods);
+  await kit.writeManifest(projectPath, 'gemini', { stacks, skills, mcps, methods });
   return { plan, written: true };
 }

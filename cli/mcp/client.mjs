@@ -15,6 +15,30 @@ const PROTOCOL_VERSION = '2024-11-05';
 // sin límite hasta agotar la memoria del CLI.
 const MAX_LINE_BYTES = 8 * 1024 * 1024;
 
+// Tras el SIGTERM de stop(), cuánto se espera antes de SIGKILL: un servidor que lo ignora seguía vivo (O-03).
+const STOP_GRACE_MS = 2000;
+
+// Servidores vivos: al salir el CLI (también por señal, ver lib/fatal.mjs) se matan, síncronamente.
+const live = new Set();
+let exitHooked = false;
+function track(child) {
+  live.add(child);
+  child.on('exit', () => live.delete(child));
+  if (exitHooked) return;
+  exitHooked = true;
+  process.on('exit', () => { for (const c of live) killTree(c, 'SIGKILL'); });
+}
+
+// Termina el servidor: SIGTERM, SIGKILL si sigue vivo tras el margen; resuelve cuando ha salido.
+function stopChild(child, graceMs) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve) => {
+    const hard = setTimeout(() => killTree(child, 'SIGKILL'), graceMs);
+    child.once('exit', () => { clearTimeout(hard); resolve(); });
+    killTree(child);
+  });
+}
+
 // Lanza el servidor MCP con stdio en tubería. En Windows, npx/npm/uvx son .cmd y spawn directo da
 // ENOENT: se lanza vía `cmd.exe /d /s /c "<línea>"` con la línea construida a mano (ver lib/proc.mjs).
 function spawnServer({ command, args, env, cwd }) {
@@ -30,11 +54,12 @@ function spawnServer({ command, args, env, cwd }) {
 }
 
 // Lector del stdout del servidor: parte en líneas JSON y se las pasa al dispatcher. Una línea sin fin
-// que supera el tope cierra la conexión y mata al servidor.
+// que supera el tope cierra la conexión y mata al servidor. Recibe texto ya decodificado por flujo
+// (`setEncoding`): `chunk.toString()` por trozo rompía un carácter UTF-8 partido entre dos (O-03).
 function lineReader(child, rpc) {
   let buffer = '';
   return (chunk) => {
-    buffer += chunk.toString();
+    buffer += chunk;
     if (buffer.length > MAX_LINE_BYTES && buffer.indexOf('\n') < 0) {
       buffer = '';
       rpc.close(new Error(t('mcpLineTooLong', MAX_LINE_BYTES)));
@@ -52,22 +77,30 @@ function lineReader(child, rpc) {
 }
 
 
-export function createStdioClient({ command, args = [], env, cwd, timeoutMs = MCP_REQUEST_TIMEOUT_MS, onStderr } = {}) {
+// Conecta los flujos del servidor con el JSON-RPC: stdout/stderr decodificados por flujo (O-03) y los
+// errores de E/S convertidos en rechazo del request pendiente.
+function wireServer(child, rpc, onStderr) {
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', lineReader(child, rpc));
+  child.stderr.setEncoding('utf8');
+  if (onStderr) child.stderr.on('data', onStderr);
+  // Sin este listener, un write tras la muerte del server (EPIPE) sería una excepción no capturada
+  // que tumba todo el CLI; con él, el request pendiente se rechaza y el loop sigue.
+  child.stdin.on('error', (e) => rpc.close(e));
+  child.on('error', (e) => rpc.close(e));
+  child.on('exit', (code) => rpc.close(new Error(t('mcpServerExited', code))));
+}
+
+export function createStdioClient({ command, args = [], env, cwd, timeoutMs = MCP_REQUEST_TIMEOUT_MS, onStderr, stopGraceMs = STOP_GRACE_MS } = {}) {
   if (!command) throw new Error(t('mcpNoCommand'));
   let child = null;
   let rpc = null;
 
   const start = async () => {
     child = spawnServer({ command, args, env, cwd });
+    track(child);
     rpc = createJsonRpc({ send: (m) => child.stdin.write(JSON.stringify(m) + '\n'), timeoutMs });
-
-    child.stdout.on('data', lineReader(child, rpc));
-    if (onStderr) child.stderr.on('data', (d) => onStderr(d.toString()));
-    // Sin este listener, un write tras la muerte del server (EPIPE) sería una excepción no capturada
-    // que tumba todo el CLI; con él, el request pendiente se rechaza y el loop sigue.
-    child.stdin.on('error', (e) => rpc.close(e));
-    child.on('error', (e) => rpc.close(e));
-    child.on('exit', (code) => rpc.close(new Error(t('mcpServerExited', code))));
+    wireServer(child, rpc, onStderr);
 
     await rpc.request('initialize', { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: CLIENT_INFO });
     rpc.notify('notifications/initialized', {});
@@ -75,6 +108,7 @@ export function createStdioClient({ command, args = [], env, cwd, timeoutMs = MC
 
   return {
     start,
+    get pid() { return child?.pid; },
     async listTools() {
       const r = await rpc.request('tools/list', {});
       return r?.tools || [];
@@ -85,7 +119,7 @@ export function createStdioClient({ command, args = [], env, cwd, timeoutMs = MC
     },
     async stop() {
       try { rpc?.close(); } catch { /* ya cerrado */ }
-      if (child && !child.killed) killTree(child);
+      await stopChild(child, stopGraceMs);
     }
   };
 }

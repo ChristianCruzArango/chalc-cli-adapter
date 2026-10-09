@@ -18,6 +18,8 @@ import { stripControl } from '../lib/termsafe.mjs';
 import { c, bigTitle } from './ui/render.mjs';
 import { resolveShellPolicy } from './tools/trust.mjs';
 import { runScroll, runTui } from './shell/frontends.mjs';
+import { userFlag } from '../lib/userpref.mjs';
+import { installFatalHandlers, installSignalExit } from '../lib/fatal.mjs';
 
 const MUTATING = ['write', 'edit', 'bash'];
 const resolveModel = (cfg) => cfg.models?.code || cfg.model || '';
@@ -95,7 +97,7 @@ function createShellState(session, cfg, model) {
     // Auto-aprobación (/auto, o cli.autoApprove en la config): ejecuta write/edit/bash/MCP sin preguntar.
     // Es el modo "acepta todo" de Claude Code — más fluido, menos control; se puede alternar en la sesión.
     // EXCEPCIÓN (trust.mjs): bash eval-capable (node/npx/python, npm run…) pide confirmación SIEMPRE.
-    approval: { auto: cfg.cli?.autoApprove === true },
+    approval: { auto: userFlag(cfg, 'autoApprove') },
     policy: createApprovalPolicy({
       mcpMode: cfg.cli?.mcpApproval || cfg.cli?.mcpApprove || cfg.cli?.mcpApprovalMode,
       mutatingTools: MUTATING
@@ -104,6 +106,11 @@ function createShellState(session, cfg, model) {
     lastRun: { task: '', paths: [] }   // lo último ejecutado (para /review bajo demanda)
   };
 }
+
+// Excepciones no capturadas y señales salen por `process.exit` (lib/fatal.mjs, O-03): así corren las
+// limpiezas de `exit` (terminal restaurada, hijos de la shell y servidores MCP muertos).
+installFatalHandlers({ print: (message) => console.error(c.red('✗ ' + message)), exit: (code) => process.exit(code) });
+installSignalExit({ exit: (code) => process.exit(code) });
 
 async function main() {
   const cfg = await loadConfig();

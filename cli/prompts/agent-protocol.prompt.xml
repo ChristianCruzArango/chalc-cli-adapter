@@ -22,7 +22,7 @@
       (templateUrl/styleUrl), do the same — create the .html/.css files with the REAL content, not inline and
       not placeholders. This wins even if the plan words it differently: the plan defines WHAT to build; the
       project's existing files define HOW files are laid out.
-    - If an observation carries [CCR ref=X …], expand it with {"action":{"tool":"recall","args":{"ref":"X"}}} only if you need it.
+    - If an observation carries [CCR ref=X …], expand it with {"action":{"tool":"recall","args":{"ref":"X"}}} only if you need it. A long one comes in chunks: if the recall result has "next", ask for the following chunk with "offset": that number.
   </principles>
 
   <rules strict="true">

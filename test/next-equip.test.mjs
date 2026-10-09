@@ -38,7 +38,7 @@ const jest = () => project({
 test('R1 — equipar deja el advisor ejecutable en el repo', async () => {
   const proj = await jest();
 
-  await equipForSpec(proj, 'lite', 'claude', 'español');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   assert.ok(existsSync(join(proj, '.chalc', 'next.mjs')), 'falta la entrada del advisor');
   assert.ok(existsSync(join(proj, '.chalc', 'next', 'next.mjs')));
@@ -51,7 +51,7 @@ for (const target of TARGETS) {
   test(`R1 — con el target ${target}, equipar deja advisor y portón juntos`, async () => {
     const proj = await jest();
 
-    await equipForSpec(proj, 'lite', target, 'español');
+    await equipForSpec(proj, 'lite', target, { specLang: 'español' });
 
     assert.ok(existsSync(join(proj, '.chalc', 'next.mjs')), `${target}: falta el advisor`);
     assert.ok(existsSync(join(proj, '.chalc', 'gate.mjs')), `${target}: falta el portón`);
@@ -61,7 +61,7 @@ for (const target of TARGETS) {
 test('R13 — el advisor se emite DESPUÉS del portón: importa su lector de cambios', async () => {
   const proj = await jest();
 
-  await equipForSpec(proj, 'lite', 'claude', 'español');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   // La ruta que `snapshot.mjs` resuelve desde `.chalc/next/lib/`.
   assert.ok(existsSync(join(proj, '.chalc', 'gate', 'lib', 'changed.mjs')), 'el advisor quedaría colgando');
@@ -72,7 +72,7 @@ test('R13 — el advisor se emite DESPUÉS del portón: importa su lector de cam
 test('R17 — equipar deja las puertas del advisor visibles en gate.json', async () => {
   const proj = await jest();
 
-  await equipForSpec(proj, 'lite', 'claude', 'español');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   const cfg = JSON.parse(await readFile(join(proj, '.chalc', 'gate.json'), 'utf8'));
   assert.equal(cfg.flow.approvals.task, true);
@@ -81,14 +81,14 @@ test('R17 — equipar deja las puertas del advisor visibles en gate.json', async
 
 test('R3 — re-equipar no rompe lo que el usuario ajustó en las puertas', async () => {
   const proj = await jest();
-  await equipForSpec(proj, 'lite', 'claude', 'español');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   const path = join(proj, '.chalc', 'gate.json');
   const cfg = JSON.parse(await readFile(path, 'utf8'));
   cfg.flow.approvals.task = false;
   await writeFile(path, JSON.stringify(cfg, null, 2), 'utf8');
 
-  await equipForSpec(proj, 'lite', 'claude', 'español');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   assert.equal(JSON.parse(await readFile(path, 'utf8')).flow.approvals.task, false);
 });
@@ -100,7 +100,7 @@ test('R4 — equipar un worktree no escribe nada en el repo principal', async ()
   const worktree = await jest();
 
   const before = (await readdir(main)).sort();
-  await equipForSpec(worktree, 'lite', 'claude', 'español');
+  await equipForSpec(worktree, 'lite', 'claude', { specLang: 'español' });
 
   assert.deepEqual((await readdir(main)).sort(), before, 'el repo principal quedó intacto');
   assert.ok(existsSync(join(worktree, '.chalc', 'next.mjs')), 'el advisor va DENTRO del worktree');

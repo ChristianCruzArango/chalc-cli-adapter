@@ -15,7 +15,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { blankOut } from './source.mjs';
-import { sourceFiles } from './sources.mjs';
+import { sourceFiles, isUserSource } from './sources.mjs';
 import { touchesChange } from './hunks.mjs';
 import { RULES } from './rules.mjs';
 import { LINT_DEFAULTS } from './config.mjs';
@@ -121,30 +121,42 @@ export function findDuplication(files, { minLines = 6 } = {}) {
 // Pero solo se REPORTA si una de las dos puntas está en algo que tocaste (R5). Es la misma regla que
 // rige el resto del linter: un repo con historia tiene duplicación vieja a montones, y volcarla
 // entera enterraría el trabajo de hoy.
-export async function lintDuplication(root, changed, config = {}, changedLines = null) {
+//
+// Devuelve { findings, capped }. `capped` dice que el recorrido se acotó por `maxFiles` y viaja a la
+// etapa y a la evidencia (G-04): sin hallazgos, un recorte callado se leía como «revisado y limpio».
+// Los archivos CAMBIADOS entran siempre, aunque el recorrido se haya acotado antes de llegar a ellos.
+export async function scanDuplication(root, changed, config = {}, changedLines = null) {
   const D = LINT_DEFAULTS.duplication;   // los defaults del portón, una sola fuente
   const { enabled = D.enabled, minLines = D.minLines, maxFiles = D.maxFiles } = config;
-  if (!enabled) return [];
+  if (!enabled) return { findings: [], capped: false };
 
-  const { files, capped } = await sourceFiles(root, { max: maxFiles });
-  if (!files.length) return [];
+  const touched = new Set(changed.map((f) => f.replace(/\\/g, '/')));
+  const scanned = await sourceFiles(root, { max: maxFiles });
+  const files = [...new Set([...scanned.files, ...[...touched].filter(isUserSource)])];
 
   const texts = [];
   for (const file of files) {
-    try { texts.push({ file, text: await readFile(join(root, file), 'utf8') }); } catch { /* ilegible */ }
+    try { texts.push({ file, text: await readFile(join(root, file), 'utf8') }); } catch { /* borrado o ilegible */ }
   }
+  return { findings: duplicationFindings(texts, { touched, minLines, changedLines, capped: scanned.capped }), capped: scanned.capped };
+}
 
-  const touched = new Set(changed.map((f) => f.replace(/\\/g, '/')));
+// La API de siempre: solo los hallazgos (la etapa del portón usa scanDuplication para ver `capped`).
+export async function lintDuplication(root, changed, config = {}, changedLines = null) {
+  return (await scanDuplication(root, changed, config, changedLines)).findings;
+}
+
+// Los pares duplicados con una punta ESCRITA por la tarea, en el formato del portón.
+function duplicationFindings(texts, { touched, minLines, changedLines, capped }) {
   const findings = [];
 
   for (const { a, b, lines } of findDuplication(texts, { minLines })) {
-    // El hallazgo apunta al archivo que tocaste; el otro va como dato.
-    const mine = touched.has(a.file) ? a : touched.has(b.file) ? b : null;
+    // El hallazgo apunta a la punta que ESCRIBISTE; la otra va como dato. Que el archivo sea tuyo no
+    // basta: el bloque puede llevar años ahí y la tarea haber tocado otra zona. Se miran las DOS
+    // puntas (G-02): con ambas en archivos tocados, mirar solo la primera descartaba la copia pegada.
+    const wrote = (spot) => touched.has(spot.file) && touchesChange(changedLines, spot.file, spot.line, spot.line + lines - 1);
+    const mine = [a, b].find(wrote);
     if (!mine) continue;
-
-    // Y que el archivo sea tuyo no basta: el bloque puede llevar años ahí y la tarea haber añadido
-    // dos líneas al final. Se reporta solo si escribiste DENTRO del bloque repetido.
-    if (!touchesChange(changedLines, mine.file, mine.line, mine.line + lines - 1)) continue;
 
     const other = mine === a ? b : a;
 

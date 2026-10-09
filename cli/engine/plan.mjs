@@ -118,7 +118,7 @@ export function stepRetryTask(goal, items, index, spec = '') {
 // nada usable (el orquestador decide qué hacer; nunca se ejecuta un plan vacío).
 // Puerta de calidad + UN reintento: si responde prosa narrativa en vez del plan numerado, se le corrige
 // una vez con feedback explícito (en inglés: es para el modelo); si reincide, se rechaza.
-export async function runPlanner({ chatImpl, tools = {}, projectSections = [], task, budgetTokens, language, maxSteps = 6, onStep, shouldStop, ccr, maxRetries = 1 } = {}) {
+export async function runPlanner({ chatImpl, tools = {}, projectSections = [], task, budgetTokens, language, maxSteps = 6, onStep, shouldStop, ccr, maxRetries = 1, retryDelayMs } = {}) {
   if (!task || !String(task).trim()) throw new Error('runPlanner requiere una tarea.');
   const f = frame(language);
   const roTools = readOnlyTools(tools);
@@ -127,7 +127,7 @@ export async function runPlanner({ chatImpl, tools = {}, projectSections = [], t
   let rejected = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const renderPrompt = createRenderPrompt({ task: taskText, tools: roTools, projectSections: sections, budgetTokens, language });
-    const r = await runAgent({ chatImpl, tools: roTools, renderPrompt, ccr, maxSteps, onStep, shouldStop });
+    const r = await runAgent({ chatImpl, tools: roTools, renderPrompt, ccr, maxSteps, onStep, shouldStop, retryDelayMs });
     // El entregable trae plan + spec (---SPEC---): la puerta de calidad juzga el PLAN; el spec viaja aparte.
     const parts = splitPlanSpec(r.done ? r.summary : '');
     const summary = r.done ? formatPlan(parts.plan) : '';

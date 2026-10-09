@@ -12,15 +12,17 @@ import { createRenderPrompt } from './harness.mjs';
 import { frame } from '../prompts/text.mjs';
 import { readOnlyTools } from './plan.mjs';
 import { MAX_CHILD_OUTPUT } from '../../lib/proc.mjs';
+import { safeGitArgs } from '../../lib/gitprep.mjs';
 
 // Tope del material a revisar: la sección "cambios" es requerida (entra SIEMPRE al prompt), así que se
 // acota aquí (~2k tokens) para no desbordar la ventana del modelo local.
 const MAX_CHANGES = 8 * 1024;
 
 // git diff HEAD de las rutas tocadas. '' si no hay repo / git falla (se cae al contenido de archivos).
+// Sin fsmonitor ni herramientas de diff externas (R-01): el repo revisado puede no ser de confianza.
 function gitDiff(root, paths) {
   return new Promise((resolve) => {
-    execFile('git', ['diff', 'HEAD', '--', ...paths], { cwd: root, maxBuffer: MAX_CHILD_OUTPUT, windowsHide: true },
+    execFile('git', safeGitArgs(['diff', 'HEAD', '--', ...paths]), { cwd: root, maxBuffer: MAX_CHILD_OUTPUT, windowsHide: true },
       (err, stdout) => resolve(err ? '' : String(stdout)));
   });
 }
@@ -47,7 +49,7 @@ const isOk = (summary) => /^ok\b[.!]?$/i.test(String(summary).trim());
 
 // Corre el reviewer sobre `changes`. Devuelve { ok, findings, steps, interrupted?, error? }.
 // ok=true con findings='' significa aprobado; error/interrupted → ni aprobado ni hallazgos (no se corrige a ciegas).
-export async function runReviewer({ chatImpl, tools = {}, projectSections = [], task, changes, budgetTokens, language, maxSteps = 6, onStep, shouldStop, ccr } = {}) {
+export async function runReviewer({ chatImpl, tools = {}, projectSections = [], task, changes, budgetTokens, language, maxSteps = 6, onStep, shouldStop, ccr, retryDelayMs } = {}) {
   if (!changes || !String(changes).trim()) return { ok: true, findings: '', steps: [], empty: true };
   const f = frame(language);
   const roTools = readOnlyTools(tools);
@@ -57,7 +59,7 @@ export async function runReviewer({ chatImpl, tools = {}, projectSections = [], 
     { key: 'cambios', text: `${f.changesTitle}\n${changes}`, required: true }
   ];
   const renderPrompt = createRenderPrompt({ task, tools: roTools, projectSections: sections, budgetTokens, language });
-  const r = await runAgent({ chatImpl, tools: roTools, renderPrompt, ccr, maxSteps, onStep, shouldStop });
+  const r = await runAgent({ chatImpl, tools: roTools, renderPrompt, ccr, maxSteps, onStep, shouldStop, retryDelayMs });
   if (!r.done) return { ok: false, findings: '', steps: r.steps, interrupted: r.interrupted, error: r.error };
   const summary = String(r.summary || '').trim();
   return { ok: isOk(summary), findings: isOk(summary) ? '' : summary, steps: r.steps };

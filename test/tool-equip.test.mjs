@@ -44,7 +44,7 @@ const skillOf = (proj, target) => readFile(join(proj, TARGETS[target], 'mutation
 for (const target of Object.keys(TARGETS)) {
   test(`R9 — con el target ${target}, la skill llega SIN marcadores en crudo`, async () => {
     const proj = await jest();
-    await equipForSpec(proj, 'lite', target, 'español');
+    await equipForSpec(proj, 'lite', target, { specLang: 'español' });
 
     const skill = await skillOf(proj, target);
     const leftover = skill.match(/\{\{\w+\}\}/g);
@@ -53,7 +53,7 @@ for (const target of Object.keys(TARGETS)) {
 
   test(`R9 — con el target ${target}, la skill habla del stack de ESTE repo`, async () => {
     const proj = await jest();
-    await equipForSpec(proj, 'lite', target, 'español');
+    await equipForSpec(proj, 'lite', target, { specLang: 'español' });
 
     const skill = await skillOf(proj, target);
     assert.match(skill, /This repo: JS \/ TS/, `${target}: la skill no aterriza en el stack`);
@@ -65,7 +65,7 @@ for (const target of Object.keys(TARGETS)) {
 
 test('R6 — la skill emitida y gate.json coinciden en comando, reporte y formato', async () => {
   const proj = await jest();
-  await equipForSpec(proj, 'lite', 'claude', 'español');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   const config = JSON.parse(await readFile(join(proj, '.chalc', 'gate.json'), 'utf8'));
   const skill = await skillOf(proj, 'claude');
@@ -78,7 +78,7 @@ test('R6 — la skill emitida y gate.json coinciden en comando, reporte y format
 
 test('R9 — un repo sin stack recibe la skill diciendo que no se detectó', async () => {
   const proj = await project({ 'LEEME.txt': 'hola\n' });
-  await equipForSpec(proj, 'lite', 'claude', 'español');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   // Sin stack no hay skills de stack, pero mutation-testing es global y se equipa igual.
   if (!existsSync(join(proj, '.claude', 'skills', 'mutation-testing'))) return;
@@ -92,7 +92,7 @@ test('R9 — un repo sin stack recibe la skill diciendo que no se detectó', asy
 
 test('R9 — una skill sin marcadores se copia intacta', async () => {
   const proj = await jest();
-  await equipForSpec(proj, 'lite', 'claude', 'español');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   const source = await readFile(join(process.cwd(), 'catalog', 'skills', 'clean-code', 'SKILL.md'), 'utf8');
   const copied = await readFile(join(proj, '.claude', 'skills', 'clean-code', 'SKILL.md'), 'utf8');

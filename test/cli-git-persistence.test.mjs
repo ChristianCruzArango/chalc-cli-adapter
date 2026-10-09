@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createShellTool } from '../cli/tools/shell.mjs';
 import { createFsTools } from '../cli/tools/fs.mjs';
-import { isEvalCapableCommand } from '../cli/tools/trust.mjs';
+import { requiresExplicitApproval } from '../cli/tools/trust.mjs';
 
 const root = await mkdtemp(join(tmpdir(), 'chalc-s05-'));
 const { bash } = createShellTool({ root, allow: ['git', 'node', 'python', 'python3'], approve: async () => false });
@@ -30,10 +30,11 @@ test('reading git config is still allowed (reaches the approval step)', async ()
 
 test('git subcommands that run arbitrary commands always need explicit approval', () => {
   for (const cmd of ['git submodule foreach "touch x"', 'git bisect run make', 'git rebase --exec "make" main', 'git rebase -x make main', 'git filter-branch --tree-filter x']) {
-    assert.equal(isEvalCapableCommand(cmd), true, cmd);
+    assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: cmd } }), true, cmd);
   }
-  assert.equal(isEvalCapableCommand('git rebase main'), false);
-  assert.equal(isEvalCapableCommand('git status'), false);
+  // Desde R7 (spec 016) /auto solo deja pasar los git de lectura: `rebase` también pregunta.
+  assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: 'git rebase main' } }), true);
+  assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: 'git status' } }), false);
 });
 
 test('inline-eval flags are caught in every spelling the binaries accept', async () => {

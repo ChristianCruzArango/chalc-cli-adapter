@@ -27,6 +27,8 @@ export const RULES = Object.freeze({
   typeInService: 'type-in-service',
   fileTooLong: 'file-too-long',
   functionTooLong: 'function-too-long',
+  // Algo que YA superaba el límite y la tarea hizo crecer (G-03, R40): la deuda no es suya, el crecimiento sí.
+  oversizedGrew: 'oversized-grew',
   tooManyParams: 'too-many-params',
   deepNesting: 'deep-nesting',
   emptyCatch: 'empty-catch',

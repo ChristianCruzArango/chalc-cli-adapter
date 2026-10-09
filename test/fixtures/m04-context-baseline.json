@@ -1,0 +1,1227 @@
+{
+ "lang": {
+  "verb": "lang",
+  "projectArg": "lang",
+  "dryRun": false
+ },
+ "lang p1": {
+  "verb": "lang",
+  "projectArg": "lang",
+  "dryRun": false
+ },
+ "lang p1 p2": {
+  "verb": "lang",
+  "projectArg": "lang",
+  "dryRun": false
+ },
+ "lang p1 p2 p3": {
+  "verb": "lang",
+  "projectArg": "lang",
+  "dryRun": false
+ },
+ "config-lang": {
+  "verb": "lang",
+  "projectArg": "config-lang",
+  "dryRun": false
+ },
+ "config-lang p1": {
+  "verb": "lang",
+  "projectArg": "config-lang",
+  "dryRun": false
+ },
+ "config-lang p1 p2": {
+  "verb": "lang",
+  "projectArg": "config-lang",
+  "dryRun": false
+ },
+ "config-lang p1 p2 p3": {
+  "verb": "lang",
+  "projectArg": "config-lang",
+  "dryRun": false
+ },
+ "idioma": {
+  "verb": "lang",
+  "projectArg": "idioma",
+  "dryRun": false
+ },
+ "idioma p1": {
+  "verb": "lang",
+  "projectArg": "idioma",
+  "dryRun": false
+ },
+ "idioma p1 p2": {
+  "verb": "lang",
+  "projectArg": "idioma",
+  "dryRun": false
+ },
+ "idioma p1 p2 p3": {
+  "verb": "lang",
+  "projectArg": "idioma",
+  "dryRun": false
+ },
+ "language": {
+  "verb": "lang",
+  "projectArg": "language",
+  "dryRun": false
+ },
+ "language p1": {
+  "verb": "lang",
+  "projectArg": "language",
+  "dryRun": false
+ },
+ "language p1 p2": {
+  "verb": "lang",
+  "projectArg": "language",
+  "dryRun": false
+ },
+ "language p1 p2 p3": {
+  "verb": "lang",
+  "projectArg": "language",
+  "dryRun": false
+ },
+ "init": {
+  "verb": "init",
+  "projectArg": "init",
+  "dryRun": false
+ },
+ "init p1": {
+  "verb": "init",
+  "projectArg": "init",
+  "dryRun": false
+ },
+ "init p1 p2": {
+  "verb": "init",
+  "projectArg": "init",
+  "dryRun": false
+ },
+ "init p1 p2 p3": {
+  "verb": "init",
+  "projectArg": "init",
+  "dryRun": false
+ },
+ "new": {
+  "verb": "init",
+  "projectArg": "new",
+  "dryRun": false
+ },
+ "new p1": {
+  "verb": "init",
+  "projectArg": "new",
+  "dryRun": false
+ },
+ "new p1 p2": {
+  "verb": "init",
+  "projectArg": "new",
+  "dryRun": false
+ },
+ "new p1 p2 p3": {
+  "verb": "init",
+  "projectArg": "new",
+  "dryRun": false
+ },
+ "create": {
+  "verb": "init",
+  "projectArg": "create",
+  "dryRun": false
+ },
+ "create p1": {
+  "verb": "init",
+  "projectArg": "create",
+  "dryRun": false
+ },
+ "create p1 p2": {
+  "verb": "init",
+  "projectArg": "create",
+  "dryRun": false
+ },
+ "create p1 p2 p3": {
+  "verb": "init",
+  "projectArg": "create",
+  "dryRun": false
+ },
+ "install": {
+  "verb": "install",
+  "dryRun": false
+ },
+ "install p1": {
+  "verb": "install",
+  "dryRun": false
+ },
+ "install p1 p2": {
+  "verb": "install",
+  "projectArg": "p2",
+  "dryRun": false
+ },
+ "install p1 p2 p3": {
+  "verb": "install",
+  "projectArg": "p2",
+  "dryRun": false
+ },
+ "add": {
+  "verb": "install",
+  "dryRun": false
+ },
+ "add p1": {
+  "verb": "install",
+  "dryRun": false
+ },
+ "add p1 p2": {
+  "verb": "install",
+  "projectArg": "p2",
+  "dryRun": false
+ },
+ "add p1 p2 p3": {
+  "verb": "install",
+  "projectArg": "p2",
+  "dryRun": false
+ },
+ "inspect": {
+  "verb": "inspect",
+  "dryRun": false
+ },
+ "inspect p1": {
+  "verb": "inspect",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "inspect p1 p2": {
+  "verb": "inspect",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "inspect p1 p2 p3": {
+  "verb": "inspect",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "explain": {
+  "verb": "inspect",
+  "dryRun": false
+ },
+ "explain p1": {
+  "verb": "inspect",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "explain p1 p2": {
+  "verb": "inspect",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "explain p1 p2 p3": {
+  "verb": "inspect",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "verify": {
+  "verb": "verify",
+  "projectArg": "verify",
+  "dryRun": false
+ },
+ "verify p1": {
+  "verb": "verify",
+  "projectArg": "verify",
+  "dryRun": false
+ },
+ "verify p1 p2": {
+  "verb": "verify",
+  "projectArg": "verify",
+  "dryRun": false
+ },
+ "verify p1 p2 p3": {
+  "verb": "verify",
+  "projectArg": "verify",
+  "dryRun": false
+ },
+ "check": {
+  "verb": "verify",
+  "projectArg": "check",
+  "dryRun": false
+ },
+ "check p1": {
+  "verb": "verify",
+  "projectArg": "check",
+  "dryRun": false
+ },
+ "check p1 p2": {
+  "verb": "verify",
+  "projectArg": "check",
+  "dryRun": false
+ },
+ "check p1 p2 p3": {
+  "verb": "verify",
+  "projectArg": "check",
+  "dryRun": false
+ },
+ "audit": {
+  "verb": "verify",
+  "projectArg": "audit",
+  "dryRun": false
+ },
+ "audit p1": {
+  "verb": "verify",
+  "projectArg": "audit",
+  "dryRun": false
+ },
+ "audit p1 p2": {
+  "verb": "verify",
+  "projectArg": "audit",
+  "dryRun": false
+ },
+ "audit p1 p2 p3": {
+  "verb": "verify",
+  "projectArg": "audit",
+  "dryRun": false
+ },
+ "doctor": {
+  "verb": "doctor",
+  "dryRun": false
+ },
+ "doctor p1": {
+  "verb": "doctor",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "doctor p1 p2": {
+  "verb": "doctor",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "doctor p1 p2 p3": {
+  "verb": "doctor",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "configure": {
+  "verb": "configure",
+  "projectArg": "configure",
+  "dryRun": false
+ },
+ "configure p1": {
+  "verb": "configure",
+  "projectArg": "configure",
+  "dryRun": false
+ },
+ "configure p1 p2": {
+  "verb": "configure",
+  "projectArg": "configure",
+  "dryRun": false
+ },
+ "configure p1 p2 p3": {
+  "verb": "configure",
+  "projectArg": "configure",
+  "dryRun": false
+ },
+ "config": {
+  "verb": "configure",
+  "projectArg": "config",
+  "dryRun": false
+ },
+ "config p1": {
+  "verb": "configure",
+  "projectArg": "config",
+  "dryRun": false
+ },
+ "config p1 p2": {
+  "verb": "configure",
+  "projectArg": "config",
+  "dryRun": false
+ },
+ "config p1 p2 p3": {
+  "verb": "configure",
+  "projectArg": "config",
+  "dryRun": false
+ },
+ "setup": {
+  "verb": "configure",
+  "projectArg": "setup",
+  "dryRun": false
+ },
+ "setup p1": {
+  "verb": "configure",
+  "projectArg": "setup",
+  "dryRun": false
+ },
+ "setup p1 p2": {
+  "verb": "configure",
+  "projectArg": "setup",
+  "dryRun": false
+ },
+ "setup p1 p2 p3": {
+  "verb": "configure",
+  "projectArg": "setup",
+  "dryRun": false
+ },
+ "config-ia": {
+  "verb": "ai",
+  "projectArg": "config-ia",
+  "dryRun": false
+ },
+ "config-ia p1": {
+  "verb": "ai",
+  "projectArg": "config-ia",
+  "dryRun": false
+ },
+ "config-ia p1 p2": {
+  "verb": "ai",
+  "projectArg": "config-ia",
+  "dryRun": false
+ },
+ "config-ia p1 p2 p3": {
+  "verb": "ai",
+  "projectArg": "config-ia",
+  "dryRun": false
+ },
+ "config-ai": {
+  "verb": "ai",
+  "projectArg": "config-ai",
+  "dryRun": false
+ },
+ "config-ai p1": {
+  "verb": "ai",
+  "projectArg": "config-ai",
+  "dryRun": false
+ },
+ "config-ai p1 p2": {
+  "verb": "ai",
+  "projectArg": "config-ai",
+  "dryRun": false
+ },
+ "config-ai p1 p2 p3": {
+  "verb": "ai",
+  "projectArg": "config-ai",
+  "dryRun": false
+ },
+ "configia": {
+  "verb": "ai",
+  "projectArg": "configia",
+  "dryRun": false
+ },
+ "configia p1": {
+  "verb": "ai",
+  "projectArg": "configia",
+  "dryRun": false
+ },
+ "configia p1 p2": {
+  "verb": "ai",
+  "projectArg": "configia",
+  "dryRun": false
+ },
+ "configia p1 p2 p3": {
+  "verb": "ai",
+  "projectArg": "configia",
+  "dryRun": false
+ },
+ "ai": {
+  "verb": "ai",
+  "projectArg": "ai",
+  "dryRun": false
+ },
+ "ai p1": {
+  "verb": "ai",
+  "projectArg": "ai",
+  "dryRun": false
+ },
+ "ai p1 p2": {
+  "verb": "ai",
+  "projectArg": "ai",
+  "dryRun": false
+ },
+ "ai p1 p2 p3": {
+  "verb": "ai",
+  "projectArg": "ai",
+  "dryRun": false
+ },
+ "provider": {
+  "verb": "ai",
+  "projectArg": "provider",
+  "dryRun": false
+ },
+ "provider p1": {
+  "verb": "ai",
+  "projectArg": "provider",
+  "dryRun": false
+ },
+ "provider p1 p2": {
+  "verb": "ai",
+  "projectArg": "provider",
+  "dryRun": false
+ },
+ "provider p1 p2 p3": {
+  "verb": "ai",
+  "projectArg": "provider",
+  "dryRun": false
+ },
+ "ai-doctor": {
+  "verb": "aidoctor",
+  "projectArg": "ai-doctor",
+  "dryRun": false
+ },
+ "ai-doctor p1": {
+  "verb": "aidoctor",
+  "projectArg": "ai-doctor",
+  "dryRun": false
+ },
+ "ai-doctor p1 p2": {
+  "verb": "aidoctor",
+  "projectArg": "ai-doctor",
+  "dryRun": false
+ },
+ "ai-doctor p1 p2 p3": {
+  "verb": "aidoctor",
+  "projectArg": "ai-doctor",
+  "dryRun": false
+ },
+ "doctor-ia": {
+  "verb": "aidoctor",
+  "projectArg": "doctor-ia",
+  "dryRun": false
+ },
+ "doctor-ia p1": {
+  "verb": "aidoctor",
+  "projectArg": "doctor-ia",
+  "dryRun": false
+ },
+ "doctor-ia p1 p2": {
+  "verb": "aidoctor",
+  "projectArg": "doctor-ia",
+  "dryRun": false
+ },
+ "doctor-ia p1 p2 p3": {
+  "verb": "aidoctor",
+  "projectArg": "doctor-ia",
+  "dryRun": false
+ },
+ "eval-ia": {
+  "verb": "aieval",
+  "projectArg": "eval-ia",
+  "dryRun": false
+ },
+ "eval-ia p1": {
+  "verb": "aieval",
+  "projectArg": "eval-ia",
+  "dryRun": false
+ },
+ "eval-ia p1 p2": {
+  "verb": "aieval",
+  "projectArg": "eval-ia",
+  "dryRun": false
+ },
+ "eval-ia p1 p2 p3": {
+  "verb": "aieval",
+  "projectArg": "eval-ia",
+  "dryRun": false
+ },
+ "eval-ai": {
+  "verb": "aieval",
+  "projectArg": "eval-ai",
+  "dryRun": false
+ },
+ "eval-ai p1": {
+  "verb": "aieval",
+  "projectArg": "eval-ai",
+  "dryRun": false
+ },
+ "eval-ai p1 p2": {
+  "verb": "aieval",
+  "projectArg": "eval-ai",
+  "dryRun": false
+ },
+ "eval-ai p1 p2 p3": {
+  "verb": "aieval",
+  "projectArg": "eval-ai",
+  "dryRun": false
+ },
+ "ai-eval": {
+  "verb": "aieval",
+  "projectArg": "ai-eval",
+  "dryRun": false
+ },
+ "ai-eval p1": {
+  "verb": "aieval",
+  "projectArg": "ai-eval",
+  "dryRun": false
+ },
+ "ai-eval p1 p2": {
+  "verb": "aieval",
+  "projectArg": "ai-eval",
+  "dryRun": false
+ },
+ "ai-eval p1 p2 p3": {
+  "verb": "aieval",
+  "projectArg": "ai-eval",
+  "dryRun": false
+ },
+ "spec-ia": {
+  "verb": "specgen",
+  "projectArg": "spec-ia",
+  "dryRun": false
+ },
+ "spec-ia p1": {
+  "verb": "specgen",
+  "projectArg": "spec-ia",
+  "dryRun": false
+ },
+ "spec-ia p1 p2": {
+  "verb": "specgen",
+  "projectArg": "spec-ia",
+  "dryRun": false
+ },
+ "spec-ia p1 p2 p3": {
+  "verb": "specgen",
+  "projectArg": "spec-ia",
+  "dryRun": false
+ },
+ "spec-ai": {
+  "verb": "specgen",
+  "projectArg": "spec-ai",
+  "dryRun": false
+ },
+ "spec-ai p1": {
+  "verb": "specgen",
+  "projectArg": "spec-ai",
+  "dryRun": false
+ },
+ "spec-ai p1 p2": {
+  "verb": "specgen",
+  "projectArg": "spec-ai",
+  "dryRun": false
+ },
+ "spec-ai p1 p2 p3": {
+  "verb": "specgen",
+  "projectArg": "spec-ai",
+  "dryRun": false
+ },
+ "spec-gen": {
+  "verb": "specgen",
+  "projectArg": "spec-gen",
+  "dryRun": false
+ },
+ "spec-gen p1": {
+  "verb": "specgen",
+  "projectArg": "spec-gen",
+  "dryRun": false
+ },
+ "spec-gen p1 p2": {
+  "verb": "specgen",
+  "projectArg": "spec-gen",
+  "dryRun": false
+ },
+ "spec-gen p1 p2 p3": {
+  "verb": "specgen",
+  "projectArg": "spec-gen",
+  "dryRun": false
+ },
+ "specgen": {
+  "verb": "specgen",
+  "projectArg": "specgen",
+  "dryRun": false
+ },
+ "specgen p1": {
+  "verb": "specgen",
+  "projectArg": "specgen",
+  "dryRun": false
+ },
+ "specgen p1 p2": {
+  "verb": "specgen",
+  "projectArg": "specgen",
+  "dryRun": false
+ },
+ "specgen p1 p2 p3": {
+  "verb": "specgen",
+  "projectArg": "specgen",
+  "dryRun": false
+ },
+ "gen": {
+  "verb": "specgen",
+  "projectArg": "gen",
+  "dryRun": false
+ },
+ "gen p1": {
+  "verb": "specgen",
+  "projectArg": "gen",
+  "dryRun": false
+ },
+ "gen p1 p2": {
+  "verb": "specgen",
+  "projectArg": "gen",
+  "dryRun": false
+ },
+ "gen p1 p2 p3": {
+  "verb": "specgen",
+  "projectArg": "gen",
+  "dryRun": false
+ },
+ "feature": {
+  "verb": "feature",
+  "projectArg": "feature",
+  "dryRun": false
+ },
+ "feature p1": {
+  "verb": "feature",
+  "projectArg": "feature",
+  "dryRun": false
+ },
+ "feature p1 p2": {
+  "verb": "feature",
+  "projectArg": "feature",
+  "dryRun": false
+ },
+ "feature p1 p2 p3": {
+  "verb": "feature",
+  "projectArg": "feature",
+  "dryRun": false
+ },
+ "hu": {
+  "verb": "feature",
+  "projectArg": "hu",
+  "dryRun": false
+ },
+ "hu p1": {
+  "verb": "feature",
+  "projectArg": "hu",
+  "dryRun": false
+ },
+ "hu p1 p2": {
+  "verb": "feature",
+  "projectArg": "hu",
+  "dryRun": false
+ },
+ "hu p1 p2 p3": {
+  "verb": "feature",
+  "projectArg": "hu",
+  "dryRun": false
+ },
+ "fullstack": {
+  "verb": "feature",
+  "projectArg": "fullstack",
+  "dryRun": false
+ },
+ "fullstack p1": {
+  "verb": "feature",
+  "projectArg": "fullstack",
+  "dryRun": false
+ },
+ "fullstack p1 p2": {
+  "verb": "feature",
+  "projectArg": "fullstack",
+  "dryRun": false
+ },
+ "fullstack p1 p2 p3": {
+  "verb": "feature",
+  "projectArg": "fullstack",
+  "dryRun": false
+ },
+ "spec": {
+  "verb": "spec",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "spec p1": {
+  "verb": "spec",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "spec p1 p2": {
+  "verb": "spec",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "spec p1 p2 p3": {
+  "verb": "spec",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "specs": {
+  "verb": "spec",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "specs p1": {
+  "verb": "spec",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "specs p1 p2": {
+  "verb": "spec",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "specs p1 p2 p3": {
+  "verb": "spec",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "qa": {
+  "verb": "qa",
+  "dryRun": false
+ },
+ "qa p1": {
+  "verb": "qa",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "qa p1 p2": {
+  "verb": "qa",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "qa p1 p2 p3": {
+  "verb": "qa",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "quality": {
+  "verb": "qa",
+  "dryRun": false
+ },
+ "quality p1": {
+  "verb": "qa",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "quality p1 p2": {
+  "verb": "qa",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "quality p1 p2 p3": {
+  "verb": "qa",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "deliver": {
+  "verb": "deliver",
+  "dryRun": false
+ },
+ "deliver p1": {
+  "verb": "deliver",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "deliver p1 p2": {
+  "verb": "deliver",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "deliver p1 p2 p3": {
+  "verb": "deliver",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "delivery": {
+  "verb": "deliver",
+  "dryRun": false
+ },
+ "delivery p1": {
+  "verb": "deliver",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "delivery p1 p2": {
+  "verb": "deliver",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "delivery p1 p2 p3": {
+  "verb": "deliver",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "tokens": {
+  "verb": "tokens",
+  "dryRun": false
+ },
+ "tokens p1": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "tokens p1 p2": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "tokens p1 p2 p3": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "cost": {
+  "verb": "tokens",
+  "dryRun": false
+ },
+ "cost p1": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "cost p1 p2": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "cost p1 p2 p3": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "costs": {
+  "verb": "tokens",
+  "dryRun": false
+ },
+ "costs p1": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "costs p1 p2": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "costs p1 p2 p3": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "costes": {
+  "verb": "tokens",
+  "dryRun": false
+ },
+ "costes p1": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "costes p1 p2": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "costes p1 p2 p3": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "gasto": {
+  "verb": "tokens",
+  "dryRun": false
+ },
+ "gasto p1": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "gasto p1 p2": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "gasto p1 p2 p3": {
+  "verb": "tokens",
+  "projectArg": "p1",
+  "dryRun": false
+ },
+ "update": {
+  "verb": "update",
+  "projectArg": "update",
+  "dryRun": false
+ },
+ "update p1": {
+  "verb": "update",
+  "projectArg": "update",
+  "dryRun": false
+ },
+ "update p1 p2": {
+  "verb": "update",
+  "projectArg": "update",
+  "dryRun": false
+ },
+ "update p1 p2 p3": {
+  "verb": "update",
+  "projectArg": "update",
+  "dryRun": false
+ },
+ "upgrade": {
+  "verb": "update",
+  "projectArg": "upgrade",
+  "dryRun": false
+ },
+ "upgrade p1": {
+  "verb": "update",
+  "projectArg": "upgrade",
+  "dryRun": false
+ },
+ "upgrade p1 p2": {
+  "verb": "update",
+  "projectArg": "upgrade",
+  "dryRun": false
+ },
+ "upgrade p1 p2 p3": {
+  "verb": "update",
+  "projectArg": "upgrade",
+  "dryRun": false
+ },
+ "sync": {
+  "verb": "update",
+  "projectArg": "sync",
+  "dryRun": false
+ },
+ "sync p1": {
+  "verb": "update",
+  "projectArg": "sync",
+  "dryRun": false
+ },
+ "sync p1 p2": {
+  "verb": "update",
+  "projectArg": "sync",
+  "dryRun": false
+ },
+ "sync p1 p2 p3": {
+  "verb": "update",
+  "projectArg": "sync",
+  "dryRun": false
+ },
+ "dashboard": {
+  "verb": "dashboard",
+  "projectArg": "dashboard",
+  "dryRun": false
+ },
+ "dashboard p1": {
+  "verb": "dashboard",
+  "projectArg": "dashboard",
+  "dryRun": false
+ },
+ "dashboard p1 p2": {
+  "verb": "dashboard",
+  "projectArg": "dashboard",
+  "dryRun": false
+ },
+ "dashboard p1 p2 p3": {
+  "verb": "dashboard",
+  "projectArg": "dashboard",
+  "dryRun": false
+ },
+ "dash": {
+  "verb": "dashboard",
+  "projectArg": "dash",
+  "dryRun": false
+ },
+ "dash p1": {
+  "verb": "dashboard",
+  "projectArg": "dash",
+  "dryRun": false
+ },
+ "dash p1 p2": {
+  "verb": "dashboard",
+  "projectArg": "dash",
+  "dryRun": false
+ },
+ "dash p1 p2 p3": {
+  "verb": "dashboard",
+  "projectArg": "dash",
+  "dryRun": false
+ },
+ "monitor": {
+  "verb": "dashboard",
+  "projectArg": "monitor",
+  "dryRun": false
+ },
+ "monitor p1": {
+  "verb": "dashboard",
+  "projectArg": "monitor",
+  "dryRun": false
+ },
+ "monitor p1 p2": {
+  "verb": "dashboard",
+  "projectArg": "monitor",
+  "dryRun": false
+ },
+ "monitor p1 p2 p3": {
+  "verb": "dashboard",
+  "projectArg": "monitor",
+  "dryRun": false
+ },
+ "debate": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "debate p1": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "debate p1 p2": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "debate p1 p2 p3": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "model": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "model p1": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "model p1 p2": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "model p1 p2 p3": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "models": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "models p1": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "models p1 p2": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "models p1 p2 p3": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "debatir": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "debatir p1": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "debatir p1 p2": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "debatir p1 p2 p3": {
+  "verb": "debate",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "apply": {
+  "verb": "apply",
+  "projectArg": "apply",
+  "dryRun": false
+ },
+ "apply p1": {
+  "verb": "apply",
+  "projectArg": "apply",
+  "dryRun": false
+ },
+ "apply p1 p2": {
+  "verb": "apply",
+  "projectArg": "apply",
+  "dryRun": false
+ },
+ "apply p1 p2 p3": {
+  "verb": "apply",
+  "projectArg": "apply",
+  "dryRun": false
+ },
+ "zz-desconocido": {
+  "verb": "apply",
+  "projectArg": "zz-desconocido",
+  "dryRun": false
+ },
+ "zz-desconocido p1": {
+  "verb": "apply",
+  "projectArg": "zz-desconocido",
+  "dryRun": false
+ },
+ "zz-desconocido p1 p2": {
+  "verb": "apply",
+  "projectArg": "zz-desconocido",
+  "dryRun": false
+ },
+ "zz-desconocido p1 p2 p3": {
+  "verb": "apply",
+  "projectArg": "zz-desconocido",
+  "dryRun": false
+ },
+ "HU": {
+  "verb": "feature",
+  "projectArg": "HU",
+  "dryRun": false
+ },
+ "HU p1": {
+  "verb": "feature",
+  "projectArg": "HU",
+  "dryRun": false
+ },
+ "HU p1 p2": {
+  "verb": "feature",
+  "projectArg": "HU",
+  "dryRun": false
+ },
+ "HU p1 p2 p3": {
+  "verb": "feature",
+  "projectArg": "HU",
+  "dryRun": false
+ },
+ "Spec": {
+  "verb": "spec",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "Spec p1": {
+  "verb": "spec",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "Spec p1 p2": {
+  "verb": "spec",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "Spec p1 p2 p3": {
+  "verb": "spec",
+  "projectArg": null,
+  "dryRun": false
+ },
+ "FLAGS --dry-run": {
+  "verb": "apply",
+  "dryRun": true
+ },
+ "FLAGS apply --dry-run": {
+  "verb": "apply",
+  "projectArg": "apply",
+  "dryRun": true
+ },
+ "FLAGS --dry-run --no-dry-run": {
+  "verb": "apply",
+  "dryRun": false
+ },
+ "FLAGS --no-dry-run --dry-run": {
+  "verb": "apply",
+  "dryRun": true
+ },
+ "FLAGS ": {
+  "verb": "apply",
+  "dryRun": false
+ }
+}

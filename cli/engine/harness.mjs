@@ -22,15 +22,28 @@ export function buildSystem({ tools = {}, projectSections = [], budgetTokens = I
   return project.text ? `${core}\n\n${f.hProject}\n${project.text}` : core;
 }
 
-// Historial compacto para el turno. Las observaciones ya vienen comprimidas por CCR desde el loop;
-// aquí solo se limita el número de pasos visibles para no crecer sin fin.
-export function formatHistory(history = [], { max = 12, language } = {}) {
+// Los pasos más recientes que entran SIEMPRE, aunque excedan el presupuesto: sin ellos el modelo no
+// sabe qué acaba de hacer.
+const ALWAYS_KEPT_STEPS = 2;
+
+// Historial compacto para el turno. Las observaciones ya vienen comprimidas por CCR desde el loop; aquí
+// se limita el número de pasos visibles y, con `budgetTokens`, se meten del más reciente hacia atrás
+// mientras quepan (O-01): sin tope, un historial grande desplazaba el inicio del prompt —el protocolo—
+// en Ollama y costaba tokens reales en la nube. Lo omitido se dice en una línea.
+export function formatHistory(history = [], { max = 12, language, budgetTokens = Infinity } = {}) {
   const f = frame(language);
-  const recent = history.slice(-max);
-  if (!recent.length) return f.noSteps;
-  return recent
-    .map((r) => `${f.step} ${r.step}: ${r.thought || ''}\n  ${f.action}: ${JSON.stringify(r.action)}\n  ${f.obs}: ${JSON.stringify(r.observation)}`)
-    .join('\n');
+  const lines = history.slice(-max)
+    .map((r) => `${f.step} ${r.step}: ${r.thought || ''}\n  ${f.action}: ${JSON.stringify(r.action)}\n  ${f.obs}: ${JSON.stringify(r.observation)}`);
+  if (!lines.length) return f.noSteps;
+  let kept = 0;
+  let tokens = 0;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    tokens += estimateTokens(lines[i]);
+    if (kept >= ALWAYS_KEPT_STEPS && tokens > budgetTokens) break;
+    kept++;
+  }
+  const omitted = lines.length - kept;
+  return [...(omitted ? [f.stepsOmitted(omitted)] : []), ...lines.slice(omitted)].join('\n');
 }
 
 // Crea el `renderPrompt(state)` que espera el loop. `system` se construye UNA vez (cacheable);
@@ -44,7 +57,7 @@ export function createRenderPrompt({ task, tools = {}, projectSections = [], bud
     system,
     user: [
       `${f.hTask}\n${String(task).trim()}`,
-      `${f.hSteps}\n${formatHistory(history, { max: historyMax, language })}`,
+      `${f.hSteps}\n${formatHistory(history, { max: historyMax, language, budgetTokens })}`,
       stepsLeft <= 0 ? f.lastStep : f.stepsLeft(stepsLeft),
       retry
     ].filter(Boolean).join('\n\n')

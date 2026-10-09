@@ -19,7 +19,7 @@ import { contractRoutesWithLines } from './lib/contract-routes.mjs';
 import { frameOf, messageOf } from './lib/i18n.mjs';
 import { lintBoundariesIn } from './lib/boundaries.mjs';
 import { lintChanged } from './lib/smells.mjs';
-import { lintDuplication } from './lib/duplication.mjs';
+import { scanDuplication } from './lib/duplication.mjs';
 import { lintSecurity } from './lib/security.mjs';
 import { loadConfig } from './lib/config.mjs';
 import { newestSpec } from './lib/spec.mjs';
@@ -113,9 +113,10 @@ async function staticStages(config, { root, files, scope }) {
   stages.push(staticStage('smells', smells.value, smells.ms));
 
   // Duplicación (spec 012): mira el árbol entero, pero solo reporta lo que tiene una punta en algo
-  // que la tarea tocó. Va junto a `smells` porque las dos leen el mismo texto.
-  const duplication = await timed(() => lintDuplication(root, files, config.lint?.duplication, scope.lines));
-  stages.push(staticStage('duplication', duplication.value, duplication.ms));
+  // que la tarea tocó. Va junto a `smells` porque las dos leen el mismo texto. Si el recorrido se
+  // acotó por `maxFiles`, la etapa lo lleva y la evidencia lo dice aunque no haya hallazgos (G-04).
+  const duplication = await timed(() => scanDuplication(root, files, config.lint?.duplication, scope.lines));
+  stages.push({ ...staticStage('duplication', duplication.value.findings, duplication.ms), capped: duplication.value.capped });
 
   // Seguridad (spec 014): las señales que se pueden afirmar con archivo y línea. Apagarla es una
   // decisión escrita en gate.json, y aun así el informe dice que se apagó (R14).

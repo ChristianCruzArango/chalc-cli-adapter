@@ -39,7 +39,7 @@ async function writeRules(rulesDir, { projectPath, CATALOG, skills, methods, arc
     await writeFile(join(rulesDir, `chalc-skill-${m.id}.mdc`), kit.mdc({
       description: m.description || m.name,
       alwaysApply: false,
-      body: `## ${m.name}\n\nCuando esta tarea aplique, sigue la skill completa en \`.chalc/skills/${m.id}/SKILL.md\`.`
+      body: kit.blockText(specLang).skillRuleBody(m.name, m.id)
     }));
   }
 }
@@ -47,7 +47,7 @@ async function writeRules(rulesDir, { projectPath, CATALOG, skills, methods, arc
 export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun, tools = null, roles = [], force = false }) {
   const plan = [
     ...skills.map((s) => `skill     .cursor/rules/chalc-skill-${s}.mdc  (+ .chalc/skills/${s})`),
-    ...methods.map((me) => `método    .cursor/rules/chalc-method-${me.id}.mdc`),
+    ...methods.map((me) => `${kit.planLabel('planMethod')}.cursor/rules/chalc-method-${me.id}.mdc`),
     ...mcps.map((m) => `mcp       .cursor/mcp.json  ::  ${m.id}`),
     ...roles.map((role) => `agent     .cursor/rules/chalc-${role.id}.mdc`),
     'manifest  .chalc.json'
@@ -71,6 +71,6 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
     await kit.mergeMcpServers(join(projectPath, '.cursor', 'mcp.json'), mcps, { force });
   }
 
-  await kit.writeManifest(projectPath, 'cursor', stacks, skills, mcps, methods);
+  await kit.writeManifest(projectPath, 'cursor', { stacks, skills, mcps, methods });
   return { plan, written: true };
 }

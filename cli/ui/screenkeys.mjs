@@ -5,6 +5,14 @@
 import { matchSlash, viewportH, wheelDelta } from './screenparts.mjs';
 import { setBuf, setScroll, settleChooser, updateInput, updateStatus } from './screenview.mjs';
 
+// Un ESC suelto puede ser el primer byte de una secuencia partida entre chunks (habitual por SSH):
+// se espera este margen antes de tratarlo como ESC aislado (V-07).
+export const ESC_WAIT_MS = 50;
+
+// Bracketed paste: la terminal envuelve lo pegado entre estos marcadores (screen.mjs lo activa).
+const PASTE_START = '\x1b[200~';
+const PASTE_END = '\x1b[201~';
+
 // MODO LECTURA: rueda del mouse y teclas de página funcionan SIEMPRE (también con chooser activo o
 // mientras el agente piensa) — releer la conversación no interrumpe nada y la caja sigue fija.
 function scrollKey(st, str) {
@@ -71,22 +79,29 @@ function editKey(st, str) {
   return false;
 }
 
-// Envía la línea escrita: entra al historial y va a la shell, que decide el eco.
-function submit(st) {
+// Envía la línea escrita: entra al historial y va a la shell, que decide el eco. `pasted` viaja con
+// ella: una línea que contiene texto pegado nunca responde a una aprobación (V-07).
+function submit(st, pastedChunk = false) {
   const v = st.buf;
-  st.buf = ''; st.cur = 0; st.histIdx = -1;
+  const pasted = st.pasted || pastedChunk;
+  st.buf = ''; st.cur = 0; st.histIdx = -1; st.pasted = false;
   if (!v.trim()) return;
   st.hist.push(v);
   if (st.hist.length > 100) st.hist.shift();
-  st.onLine?.(v);
+  st.onLine?.(v, { pasted });
 }
+
+// Respaldo sin bracketed paste: teclear no produce varias líneas en un mismo chunk, así que un salto
+// de línea seguido de otro carácter que no sea un salto delata un pegado (un `\r\n` final es un Enter).
+const isMultiLineChunk = (str) => /[\r\n]./.test(str);
 
 // Texto tecleado (o pegado): carácter a carácter, con Enter, Backspace y Tab (completa el comando).
 function typeChars(st, str) {
+  const pastedChunk = isMultiLineChunk(str);
   for (let i = 0; i < str.length; i++) {
     const ch = str[i];
     if (ch === '\x03') { st.onExit?.(); return; }                                       // Ctrl+C, siempre
-    if (ch === '\r' || ch === '\n') { submit(st); continue; }
+    if (ch === '\r' || ch === '\n') { submit(st, pastedChunk); continue; }
     if (ch === '\x7f' || ch === '\b') {                                                 // Backspace: borra ANTES del cursor
       if (st.cur > 0) { st.buf = st.buf.slice(0, st.cur - 1) + st.buf.slice(st.cur); st.cur--; }
       continue;
@@ -103,11 +118,49 @@ function typeChars(st, str) {
   updateInput(st);
 }
 
-export function handleData(st, chunk) {
-  const str = String(chunk);
+// Texto pegado: se acumula hasta el marcador de cierre (que puede llegar en otro chunk) y entra a la
+// caja como UNA línea —saltos a espacio, sin controles— que NO se envía sola. Devuelve lo que llegó
+// detrás del cierre, para procesarlo como teclas normales.
+function pasteKey(st, str) {
+  st.pasteBuf = (st.pasteBuf ?? '') + str;
+  const end = st.pasteBuf.indexOf(PASTE_END);
+  if (end < 0) return '';
+  // eslint-disable-next-line no-control-regex
+  const text = st.pasteBuf.slice(0, end).replace(/\r\n|\r|\n/g, ' ').replace(/[\x00-\x1f\x7f]/g, '');
+  const rest = st.pasteBuf.slice(end + PASTE_END.length);
+  st.pasteBuf = null;
+  st.buf = st.buf.slice(0, st.cur) + text + st.buf.slice(st.cur);
+  st.cur += text.length;
+  st.pasted = true;
+  updateStatus(st);
+  updateInput(st);
+  return rest;
+}
+
+function dispatch(st, str) {
+  const inPaste = st.pasteBuf != null;
+  if (inPaste || str.startsWith(PASTE_START)) {
+    const rest = pasteKey(st, inPaste ? str : str.slice(PASTE_START.length));
+    if (rest) dispatch(st, rest);
+    return;
+  }
   if (scrollKey(st, str)) return;
   if (st.chooser) { chooserKey(st, str); return; }
   if (str === '\x1b') { escapeKey(st); return; }
   if (editKey(st, str)) return;
   typeChars(st, str);
+}
+
+// Punto de entrada del teclado. Un ESC suelto se aplaza ESC_WAIT_MS: si en ese margen llega el resto
+// de la secuencia (`[D` de una flecha partida), se procesan juntos y no se interrumpe nada. Durante un
+// pegado el ESC aplazado acaba igualmente dentro del bloque.
+export function handleData(st, chunk) {
+  let str = String(chunk);
+  if (st.escTimer) { clearTimeout(st.escTimer); st.escTimer = null; str = '\x1b' + str; }
+  if (str === '\x1b') {
+    st.escTimer = setTimeout(() => { st.escTimer = null; dispatch(st, '\x1b'); }, ESC_WAIT_MS);
+    st.escTimer.unref?.();
+    return;
+  }
+  dispatch(st, str);
 }

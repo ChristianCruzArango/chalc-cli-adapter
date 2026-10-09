@@ -4,30 +4,31 @@
 // los abre con la tool `read` bajo demanda — el "CCR de skills". Las obligatorias (clean-code, SOLID…) entran
 // siempre. Lee de la carpeta equipada real (project.paths.skillsDir), no del catálogo global.
 
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { readForPrompt } from '../tools/saferead.mjs';
 import { MANDATORY_SKILLS } from '../../lib/targetkit.mjs';
 import { frame } from '../prompts/text.mjs';
 
 // Lee name + description del frontmatter de un SKILL.md equipado. Best-effort: usa el id si falta el frontmatter.
-async function readSkillMeta(skillsDir, id) {
+// root: raíz de confinamiento (V-03). Un SKILL.md que enlaza fuera no se lee: queda con id como name.
+async function readSkillMeta(root, skillsDir, id) {
   const path = join(skillsDir, id, 'SKILL.md');
   let name = id;
   let description = '';
-  try {
-    const fm = (await readFile(path, 'utf8')).match(/^---\r?\n([\s\S]*?)\r?\n---/);
-    if (fm) {
-      const n = fm[1].match(/^name:\s*([^\r\n]+)/m); if (n) name = n[1].trim();
-      const d = fm[1].match(/^description:\s*([^\r\n]+)/m); if (d) description = d[1].trim();
-    }
-  } catch { /* skill sin SKILL.md legible: queda con id como name */ }
-  return { id, name, description, path };
+  const fm = (await readForPrompt(root, path))?.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (fm) {
+    const n = fm[1].match(/^name:\s*([^\r\n]+)/m); if (n) name = n[1].trim();
+    const d = fm[1].match(/^description:\s*([^\r\n]+)/m); if (d) description = d[1].trim();
+  }
+  return { id, name, description, path, root };
 }
 
-// Metadatos de todas las skills equipadas del proyecto. [] si no está equipado.
+// Metadatos de todas las skills equipadas del proyecto. [] si no está equipado. Se confina a la raíz
+// del proyecto (o, sin ella, a la carpeta de skills).
 export async function loadSkillMetas(project) {
   if (!project?.equipped || !project.paths?.skillsDir) return [];
-  return Promise.all((project.detected?.skills || []).map((id) => readSkillMeta(project.paths.skillsDir, id)));
+  const root = project.projectPath || project.paths.skillsDir;
+  return Promise.all((project.detected?.skills || []).map((id) => readSkillMeta(root, project.paths.skillsDir, id)));
 }
 
 // Sinónimos tarea→skill: las tareas llegan en el idioma del usuario (español) pero los ids/descripciones
@@ -109,10 +110,9 @@ export async function buildSkillSections(metas, { task, stacks = [], language, m
   };
   const full = [];
   for (const m of selectRelevant(metas, { task, stacks, max })) {
-    try {
-      const body = (await readFile(m.path, 'utf8')).trim();
-      if (body) full.push({ key: `skill:${m.id}`, required: false, text: `${f.skillFull(m.name)}\n${body}` });
-    } catch { /* SKILL.md ilegible: se omite el contenido completo (el índice ya lo nombra) */ }
+    // SKILL.md ilegible o fuera de la raíz: se omite el contenido completo (el índice ya lo nombra).
+    const body = (await readForPrompt(m.root, m.path))?.trim();
+    if (body) full.push({ key: `skill:${m.id}`, required: false, text: `${f.skillFull(m.name)}\n${body}` });
   }
   return [index, ...full];
 }

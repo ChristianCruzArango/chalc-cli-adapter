@@ -54,6 +54,7 @@ test('connectMcpServers conecta cada servidor del proyecto y omite los que falla
   const warned = [];
   const conns = await connectMcpServers(servers, {
     connect: (cfg, id) => (id === 'roto' ? (() => { throw new Error('no arranca'); })() : fakeClient([{ name: 'query', description: 'SQL', inputSchema: { type: 'object' } }])),
+    approveServer: async () => true,   // V-08: aprobación explícita
     onWarn: (id, msg) => warned.push([id, msg])
   });
   assert.equal(conns.length, 1);
@@ -65,6 +66,7 @@ test('connectMcpServers detiene el cliente si el handshake falla (sin fugas de p
   const events = [];
   const conns = await connectMcpServers({ s: { command: 'x' } }, {
     connect: () => ({ start: async () => { throw new Error('timeout initialize'); }, stop: async () => events.push('stop') }),
+    approveServer: async () => true,   // V-08: aprobación explícita
     onWarn: (_id, msg) => events.push(`warn:${msg}`)
   });
   assert.equal(conns.length, 0);

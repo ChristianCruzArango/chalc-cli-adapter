@@ -25,11 +25,8 @@ function extractJsonObject(text) {
       }
       if (ch === '"') inStr = true;
       else if (ch === '{') depth++;
-      else if (ch === '}') {
-        depth--;
-        if (depth === 0) {
-          try { return JSON.parse(text.slice(start, i + 1)); } catch { break; }   // candidato inválido: probar el siguiente '{'
-        }
+      else if (ch === '}' && --depth === 0) {
+        try { return JSON.parse(text.slice(start, i + 1)); } catch { break; }   // candidato inválido: probar el siguiente '{'
       }
     }
   }

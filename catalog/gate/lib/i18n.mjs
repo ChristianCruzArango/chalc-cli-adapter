@@ -29,7 +29,8 @@ export const FRAME = {
       passed: 'pasó', failed: 'no pasa', blocked: 'bloqueada',
       skippedFast: 'omitida por --fast', skippedDependency: 'no ejecutada: los tests fallaron',
       notApplicable: 'no aplica en este repo', skippedDisabled: 'desactivada en .chalc/gate.json',
-      skippedNoSource: 'no aplica: la tarea no cambió código de producción'
+      skippedNoSource: 'no aplica: la tarea no cambió código de producción',
+      capped: 'recorrido acotado por maxFiles: puede haber más'
     },
     mutation: {
       title: 'Mutación',
@@ -61,6 +62,7 @@ export const FRAME = {
     configChanged: '`.chalc/gate.json` cambió desde el cierre de la tarea anterior en claves que deciden el veredicto',
     configMissing: (rel) => `falta ${rel}: vuelve a equipar el repo con chalc`,
     configInvalid: (rel, why) => `${rel} no es JSON válido: ${why}`,
+    configThresholdInvalid: (rel, value) => `${rel}: mutation.threshold debe ser un número entre 0 y 100 (ahora vale ${value})`,
     invalidKept: (file, why, copy) => `${file} no es JSON válido (${why}); se guardó una copia en ${copy} y se sigue sin él.`,
     reportProblems: {
       notJson: 'el archivo no es JSON válido',
@@ -88,7 +90,8 @@ export const FRAME = {
       passed: 'passed', failed: 'failed', blocked: 'blocked',
       skippedFast: 'skipped by --fast', skippedDependency: 'not run: the tests failed',
       notApplicable: 'not applicable in this repo', skippedDisabled: 'disabled in .chalc/gate.json',
-      skippedNoSource: 'not applicable: the task changed no production code'
+      skippedNoSource: 'not applicable: the task changed no production code',
+      capped: 'scan capped by maxFiles: there may be more'
     },
     mutation: {
       title: 'Mutation',
@@ -117,6 +120,7 @@ export const FRAME = {
     configChanged: '`.chalc/gate.json` changed since the previous task was closed, in keys that decide the verdict',
     configMissing: (rel) => `${rel} is missing: equip the repo with chalc again`,
     configInvalid: (rel, why) => `${rel} is not valid JSON: ${why}`,
+    configThresholdInvalid: (rel, value) => `${rel}: mutation.threshold must be a number between 0 and 100 (it is ${value})`,
     invalidKept: (file, why, copy) => `${file} is not valid JSON (${why}); a copy was kept at ${copy} and it is ignored.`,
     reportProblems: {
       notJson: 'the file is not valid JSON',
@@ -156,6 +160,7 @@ export const MESSAGES = {
     [RULES.typeInService]: (d) => `"${d.name}" se declara dentro de un servicio o componente: va en su propio archivo`,
     [RULES.fileTooLong]: (d) => `${d.lines} líneas (límite ${d.limit}): el archivo hace más de una cosa`,
     [RULES.functionTooLong]: (d) => `"${d.name}" tiene ${d.lines} líneas (límite ${d.limit})`,
+    [RULES.oversizedGrew]: (d) => `${d.kind === 'file' ? 'el archivo' : `"${d.name}"`} ya superaba el límite (${d.limit}) y la tarea lo hizo crecer de ${d.before} a ${d.after} líneas: pártelo en vez de ampliarlo`,
     [RULES.tooManyParams]: (d) => `"${d.name}" recibe ${d.params} parámetros (límite ${d.limit}): agrúpalos en un objeto`,
     [RULES.deepNesting]: (d) => `anidamiento de ${d.depth} en "${d.name}" (límite ${d.limit}): extrae o invierte la condición`,
     [RULES.emptyCatch]: () => 'catch vacío: el error se traga sin registrarlo ni propagarlo',
@@ -199,6 +204,7 @@ export const MESSAGES = {
     [RULES.typeInService]: (d) => `"${d.name}" is declared inside a service or component: it belongs in its own file`,
     [RULES.fileTooLong]: (d) => `${d.lines} lines (limit ${d.limit}): the file does more than one thing`,
     [RULES.functionTooLong]: (d) => `"${d.name}" is ${d.lines} lines long (limit ${d.limit})`,
+    [RULES.oversizedGrew]: (d) => `${d.kind === 'file' ? 'the file' : `"${d.name}"`} was already over the limit (${d.limit}) and the task grew it from ${d.before} to ${d.after} lines: split it instead of extending it`,
     [RULES.tooManyParams]: (d) => `"${d.name}" takes ${d.params} parameters (limit ${d.limit}): group them into an object`,
     [RULES.deepNesting]: (d) => `nesting of ${d.depth} in "${d.name}" (limit ${d.limit}): extract it or invert the condition`,
     [RULES.emptyCatch]: () => 'empty catch: the error is swallowed without logging or rethrowing it',

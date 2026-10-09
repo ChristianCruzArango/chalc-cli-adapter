@@ -34,15 +34,29 @@ function initialState({ onExit, onEsc, commands }) {
     lines: [],           // la conversación en memoria, para el modo lectura
     scrollOff: 0,        // filas envueltas desplazadas desde el final (0 = en vivo)
     pendingNew: 0,       // mensajes llegados MIENTRAS se lee (para el aviso "↓ N mensajes nuevos")
-    entryCount: null     // cuántas líneas había al ENTRAR al modo lectura (para restaurar sin huecos)
+    entryCount: null,    // cuántas líneas había al ENTRAR al modo lectura (para restaurar sin huecos)
+    pasted: false,       // ¿la caja contiene texto pegado? (una línea pegada no responde aprobaciones)
+    pasteBuf: null,      // pegado en curso (bracketed paste), hasta su marcador de cierre
+    escTimer: null       // ESC suelto en espera: puede ser el inicio de una secuencia partida
   };
 }
 
 // Mouse en modo SGR: la rueda controla el modo lectura con la caja fija (sin esto, la rueda movería el
 // viewport nativo y la caja se iría de pantalla). Seleccionar texto: Shift+arrastre. El banner se
 // imprime al buffer normal (y a `lines`): queda arriba en el historial, como una línea más.
+// Bracketed paste (`?2004`): lo pegado llega marcado y se trata como un bloque (screenkeys, V-07).
+// Lo que deja la terminal como estaba: mouse y bracketed paste apagados, cursor visible y sin raw mode.
+// Síncrono: también corre en `process.on('exit')`, donde nada asíncrono llega a completarse (O-03).
+function restoreTerminal() {
+  out('\x1b[?1000l\x1b[?1006l\x1b[?2004l\x1b[?25h');
+  try { if (process.stdin.isTTY) process.stdin.setRawMode(false); } catch { /* ya restaurado */ }
+}
+
 function open(st, header, listeners) {
-  out('\x1b[?1000h\x1b[?1006h');
+  out('\x1b[?1000h\x1b[?1006h\x1b[?2004h');
+  // Una excepción en un timer o una señal terminan el proceso sin pasar por close(): sin esto la
+  // terminal quedaba en raw mode, con el ratón capturado y el cursor oculto.
+  process.on('exit', restoreTerminal);
   for (const line of header) { st.lines.push(line); out(line + '\n'); }
   const sep = c.gray('─'.repeat(Math.max(2, cols() - 1)));
   st.lines.push(sep);
@@ -57,15 +71,15 @@ function open(st, header, listeners) {
 
 function close(st, listeners) {
   if (st.timer) { clearInterval(st.timer); st.timer = null; }
+  if (st.escTimer) { clearTimeout(st.escTimer); st.escTimer = null; }
   process.stdin.off('data', listeners.data);
   process.stdout.off('resize', listeners.resize);
-  out('\x1b[?1000l\x1b[?1006l');      // mouse apagado ANTES de salir: no dejar la terminal capturando
+  process.off('exit', restoreTerminal);
   if (st.scrollOff > 0) exitScroll(st); // salir leyendo no pierde lo pendiente: se imprime al flujo
   // Se borra SOLO la franja viva: la transcripción ya vive en el buffer normal de la terminal,
   // así que la conversación completa queda en el scroll nativo después de salir.
   eraseUI(st);
-  out('\x1b[?25h');
-  try { if (process.stdin.isTTY) process.stdin.setRawMode(false); } catch { /* ya restaurado */ }
+  restoreTerminal();
   process.stdin.pause();
 }
 

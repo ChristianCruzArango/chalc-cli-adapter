@@ -18,12 +18,14 @@ const APPROVAL_ANSWER = /^(y|yes|s|si|sí|n|no|a|all|todo)$/i;
 
 // Input SIEMPRE vivo: cada línea se enruta según el momento —respuesta de aprobación pendiente,
 // siguiente tarea esperada, o COLA (escrita mientras el agente trabaja; se procesa al terminar el turno).
-function tuiInput(screen, session) {
+// Una línea PEGADA nunca responde a una aprobación (V-07): una `a` dentro de lo pegado aprobaba todo
+// el turno. Se trata como tarea o cola. Exportado para probar el enrutado.
+export function tuiInput(screen, session) {
   const inbox = { queue: [], taskWaiter: null, approvalWaiter: null };
-  screen.setOnLine((line) => {
+  screen.setOnLine((line, { pasted = false } = {}) => {
     const txt = line.trim();
     if (!txt) return;
-    if (inbox.approvalWaiter && APPROVAL_ANSWER.test(txt)) { const w = inbox.approvalWaiter; inbox.approvalWaiter = null; w(txt.toLowerCase()); return; }
+    if (inbox.approvalWaiter && !pasted && APPROVAL_ANSWER.test(txt)) { const w = inbox.approvalWaiter; inbox.approvalWaiter = null; w(txt.toLowerCase()); return; }
     // Comando de observación FUERA DE BANDA: se responde de inmediato aunque un agente esté
     // trabajando o esperando aprobación. No interrumpe, no pausa y no entra a la cola.
     if (txt === '/agents') { screen.print(agentsText(session)); return; }

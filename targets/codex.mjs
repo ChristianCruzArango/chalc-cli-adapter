@@ -13,7 +13,7 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   const plan = [];
   for (const s of skills) plan.push(`skill     .chalc/skills/${s}`);
   for (const m of mcps) plan.push(`mcp       .codex/config.toml  ::  ${m.id}`);
-  for (const me of methods) plan.push(`método    ${me.id}${me.mode && me.mode !== 'default' ? ` (${me.mode})` : ''}`);
+  for (const me of methods) plan.push(kit.methodPlanLine(me));
   plan.push('rules     AGENTS.md');
   plan.push('manifest  .chalc.json');
   if (dryRun) return { plan, written: false };
@@ -33,6 +33,6 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
     await kit.writeManagedBlock(join(projectPath, '.codex', 'config.toml'), block, { start: kit.TOML_START, end: kit.TOML_END });
   }
 
-  await kit.writeManifest(projectPath, 'codex', stacks, skills, mcps, methods);
+  await kit.writeManifest(projectPath, 'codex', { stacks, skills, mcps, methods });
   return { plan, written: true };
 }

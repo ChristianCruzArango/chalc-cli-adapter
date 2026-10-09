@@ -27,10 +27,14 @@ export async function scopeHash(root, files = []) {
 
 // Las claves de `gate.json` que deciden si una tarea puede cerrarse. Cambiarlas no está prohibido
 // —el usuario ajusta su portón—, pero la evidencia tiene que decirlo: con `mutation.required: false`
-// o `test.command: "true"` el portón aprueba sin medir nada.
+// o `test.command: "true"` el portón aprueba sin medir nada. También las que vacían o desvían etapas
+// sin apagarlas (G-05): `spec.dir` hacia una carpeta inexistente deja trazabilidad y contrato en vacío,
+// y `scopeFlag`/`probe`/`scopeJoin` cambian qué mide la mutación.
 const GUARDED = [
   ['test', 'command'],
   ['mutation', 'command'], ['mutation', 'required'], ['mutation', 'threshold'], ['mutation', 'format'], ['mutation', 'report'],
+  ['mutation', 'scopeFlag'], ['mutation', 'probe'], ['mutation', 'scopeJoin'],
+  ['spec', 'dir'],
   ['security', 'enabled'],
   ['lint'],
   ['flow', 'roles']

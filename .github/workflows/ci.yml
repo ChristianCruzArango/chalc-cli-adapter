@@ -13,7 +13,8 @@ permissions:
 # Las acciones van fijadas por SHA de commit (con su versión en el comentario): una etiqueta como `@v4`
 # se puede mover y ejecutaría código nuevo sin revisar.
 
-# chalc no tiene dependencias de runtime ni de dev: no se ejecuta `npm install`.
+# chalc no tiene dependencias de runtime; la única de dev (StrykerJS) solo la usa `npm run test:mutation`,
+# que CI no corre: no se ejecuta `npm install`.
 # Solo verificamos que la suite pase en los 3 SO (esto es lo que atrapa los bugs de portabilidad).
 jobs:
   test:

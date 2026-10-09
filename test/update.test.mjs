@@ -14,13 +14,18 @@ const makeTmp = (p) => mkdtemp(join(tmpdir(), p));
 
 // e2e del comando real, SIN red: las skills instaladas del catálogo vienen de skills.sh y sin
 // --allow-exec (y sin TTY) deben quedar en error needs-exec — nada se descarga, exit 0 (R1, R7).
+// Hermético (spec 016): un CHALC_HOME temporal con la skill instalada. Antes dependía de que el
+// checkout tuviera `.git` (modo desarrollo de lib/userstore.mjs) y de la config real del usuario.
 test('R7 e2e: chalc update --check sin --allow-exec reporta needs-exec y sale 0 sin ejecutar npx', async () => {
   const { execFile } = await import('node:child_process');
   const { fileURLToPath } = await import('node:url');
   const { dirname, resolve } = await import('node:path');
+  const { cp } = await import('node:fs/promises');
   const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const chalcHome = await makeTmp('chalc-update-home-');
+  await cp(join(ROOT, 'catalog', 'skills', 'angular-developer'), join(chalcHome, 'catalog', 'skills', 'angular-developer'), { recursive: true });
   const r = await new Promise((resolveRun) => {
-    execFile(process.execPath, [resolve(ROOT, 'bin/chalc.mjs'), 'update', '--check'], { cwd: ROOT, encoding: 'utf8' }, (error, stdout, stderr) => {
+    execFile(process.execPath, [resolve(ROOT, 'bin/chalc.mjs'), 'update', '--check'], { cwd: ROOT, encoding: 'utf8', env: { ...process.env, CHALC_HOME: chalcHome } }, (error, stdout, stderr) => {
       resolveRun({ code: error?.code ?? 0, output: `${stdout}${stderr}` });
     });
   });

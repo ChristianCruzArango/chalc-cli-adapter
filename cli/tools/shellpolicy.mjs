@@ -1,9 +1,10 @@
 // cli/tools/shellpolicy.mjs — capas 1-4 de la herramienta de shell (ver cli/tools/shell.mjs): qué
-// comandos se aceptan antes de pedir la aprobación humana. Pura salvo `existsOutsideRoot`, que mira
-// el disco para distinguir un dato de un archivo ajeno.
+// comandos se aceptan antes de pedir la aprobación humana. Pura salvo `landsOutsideRoot` y `inGitDir`,
+// que miran el disco para distinguir un dato de un archivo ajeno o de `.git/`.
 
 import { realpathSync } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { relative, resolve, parse } from 'node:path';
+import { deepestExistingRealpath, escapes, GIT_DIR } from './fsconfine.mjs';
 
 const FORBIDDEN = /[;&|`$><\n\r]/;   // encadenado, redirección y sustitución: prohibidos
 // Caracteres de control (ESC incluido): un `\x1b[2K` en el comando haría que el aviso de aprobación
@@ -117,16 +118,39 @@ function isAbsolutePath(token) {
   return !!value && /^(?:[a-zA-Z]:[\\/]|[/\\]{1,2})/.test(value);
 }
 
-// Un argumento que nombra algo que EXISTE fuera del proyecto, se escriba como se escriba: posicional,
-// valor de una opción (`cat --number /etc/passwd`) o un enlace interno que apunta fuera (`cat link`).
-// Mirar el disco es lo que separa un dato (`--base-href /app/`, que no existe) de un archivo ajeno.
-function existsOutsideRoot(root, token) {
+// Un argumento que cae FUERA del proyecto, exista o no (V-05): posicional, valor de una opción
+// (`--output=/tmp/nuevo/x`) o un enlace interno que apunta fuera. Se mira el ancestro EXISTENTE más
+// profundo, como resolveInRoot: una ruta nueva bajo una carpeta ajena (`/tmp/nuevo-dir/x`) escapa igual.
+// Lo que separa un dato de un archivo: si de un valor absoluto solo existe la raíz del sistema de
+// archivos (`--base-href /app/`), no nombra ningún lugar real y se trata como dato. Una URL nunca
+// cae fuera: resuelta como ruta queda dentro de la raíz (igual que un valor vacío, que es la raíz).
+function landsOutsideRoot(root, token) {
+  const real = deepestExistingRealpath(resolve(root, pathValue(token)));
+  if (real === null) return true;   // enlace colgante o en bucle: su destino puede estar fuera
+  return real !== parse(real).root && escapes(realpathSync(root), real);
+}
+
+// Un argumento que apunta dentro de `.git/` (V-05): por lo escrito (`.git/config`, `x/../.git`) o por
+// la ruta real (un enlace interno hacia `.git`). Un `.git/config` con core.fsmonitor o un hook se
+// ejecutan solos en el siguiente `git status` o commit.
+function inGitDir(root, token) {
   const value = pathValue(token);
-  if (!value || /^[a-z][a-z0-9+.-]*:\/\//i.test(value)) return false;   // URL, no ruta
-  let real;
-  try { real = realpathSync(resolve(root, value)); } catch { return false; }
-  const rel = relative(realpathSync(root), real);
-  return rel.split(/[\\/]/)[0] === '..' || isAbsolute(rel);
+  if (GIT_DIR.test(value)) return true;
+  const real = deepestExistingRealpath(resolve(root, value));
+  return !!real && GIT_DIR.test(relative(realpathSync(root), real));
+}
+
+// Opciones de git que escriben archivos donde digan (`--output`, `--output-directory`, `-o` de
+// format-patch) o cambian lo que git ejecuta (`--template` copia hooks, `--exec-path`). git acepta
+// abreviaturas de opciones largas (`--outp`), así que se compara por prefijo (sin contar `--`, fin de opciones).
+const GIT_WRITE_OPTIONS = ['--output', '--output-directory', '--template'];
+function gitUnsafeOption(args) {
+  return args.find((tk) => {
+    const name = tk.split('=')[0];
+    if (name === '--exec-path') return true;
+    if (name === '-o') return args.includes('format-patch');
+    return name.length > 2 && GIT_WRITE_OPTIONS.some((opt) => opt.startsWith(name));
+  });
 }
 
 // El primer argumento con una ruta que escapa del proyecto: traversal/home siempre; absoluta solo si
@@ -160,6 +184,8 @@ export function checkCommand(cmd, { root, allow }) {
   if (base === 'git' && gitConfigWrite(tokens.slice(1))) {
     return { command: cmd, error: 'git config writes are not allowed: they can run commands later (core.fsmonitor, core.hooksPath, alias.x=!cmd). Reading with --get/--list is fine; ask the user to change git config.' };
   }
+  const gitOption = base === 'git' && gitUnsafeOption(tokens.slice(1));
+  if (gitOption) return { command: cmd, error: `git option not allowed: ${gitOption}. It writes files or changes what git runs; use write for files.` };
   // Traversal/home (.. ~) se bloquea SIEMPRE (posicional o valor de opción: `npm --prefix=..` escapa).
   // La ruta ABSOLUTA solo si es POSICIONAL: como valor de una opción larga (`--base-href /app/`,
   // `--base-href=/app/`), asignación (`make PREFIX=/usr/local`) o switch MSBuild (`/t:Build`) es dato,
@@ -172,7 +198,9 @@ export function checkCommand(cmd, { root, allow }) {
   // Las asignaciones (`make PREFIX=/usr/local`) y los switches MSBuild (`/t:Build`) son datos de la
   // herramienta, no lecturas: quedan fuera de esta comprobación, como en la de arriba.
   const isData = (tk) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(tk) || /^\/[A-Za-z][A-Za-z0-9]*:/.test(tk);
-  const outside = args.find((tk) => !isData(tk) && existsOutsideRoot(root, tk));
-  if (outside) return { command: cmd, error: `path argument outside the project is not allowed: ${outside}` };
+  const escaped = args.find((tk) => !isData(tk) && landsOutsideRoot(root, tk));
+  if (escaped) return { command: cmd, error: `path argument outside the project is not allowed: ${escaped}` };
+  const gitDir = args.find((tk) => inGitDir(root, tk));
+  if (gitDir) return { command: cmd, error: `paths inside .git/ are not allowed: ${gitDir}` };
   return { tokens, args };
 }

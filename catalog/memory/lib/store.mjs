@@ -9,7 +9,7 @@
 // línea de cada clave es la vigente. Compactar es lo único que reescribe, y solo cuando sobra la mitad.
 
 import { createHash } from 'node:crypto';
-import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 export const MEMORY_REL = '.chalc/memory/memory.jsonl';
@@ -37,12 +37,15 @@ const parseLines = (text) => text.split('\n')
 // La versión vigente de cada clave. `seen` se SUMA: cada `remember` añade una línea con `inc: 1` en vez
 // de un total, porque dos procesos que leían el mismo total y escribían total+1 perdían una cuenta.
 // Una línea sin `inc` (las antiguas, o la que deja la compactación) trae el total absoluto.
+// `files` se UNE por la misma razón (C-03): dos procesos que leían la misma versión escribían cada uno
+// su archivo, y quedarse con la última línea perdía el del otro aunque el contador cuadrase.
 const latest = (entries) => {
   const byKey = new Map();
   for (const e of entries) {
-    const seen = typeof e.inc === 'number' ? (byKey.get(e.key)?.seen ?? 0) + e.inc : (e.seen ?? 0);
+    const prev = byKey.get(e.key);
+    const seen = typeof e.inc === 'number' ? (prev?.seen ?? 0) + e.inc : (e.seen ?? 0);
     const { inc, ...rest } = e;
-    byKey.set(e.key, { ...byKey.get(e.key), ...rest, seen });
+    byKey.set(e.key, { ...prev, ...rest, seen, files: union(prev?.files, e.files) });
   }
   return [...byKey.values()];
 };
@@ -82,14 +85,21 @@ export async function remember(root, entry, { now = new Date() } = {}) {
 
 // Reescribe el archivo con solo las versiones vigentes cuando las líneas superan el doble de las
 // entradas. Devuelve si compactó. Se escribe aparte y se renombra: o queda el archivo viejo o el
-// nuevo, nunca uno a medias.
-export async function compactIfNeeded(root) {
-  const { entries, lines } = await readMemory(root);
-  if (!lines || lines <= entries.length * 2) return false;
+// nuevo, nunca uno a medias. Si alguien añadió una línea mientras se compactaba, el rename la
+// borraría (C-03): se relee justo antes y, si cambió, se aborta (la próxima corrida compactará).
+// `onWritten` es un punto de inyección para probar ese entrelazado.
+export async function compactIfNeeded(root, { onWritten } = {}) {
+  // Sin archivo (o vacío) no hay líneas: la condición de abajo ya devuelve false.
+  const before = await readFile(pathOf(root), 'utf8').catch(() => '');
+  const all = parseLines(before);
+  const entries = latest(all);
+  if (all.length <= entries.length * 2) return false;
 
   // Nombre único: con uno fijo, dos procesos compactando a la vez escribían el mismo temporal.
   const tmp = `${pathOf(root)}.${process.pid}.${Date.now()}.tmp`;
   await writeFile(tmp, entries.map((e) => JSON.stringify(e)).join('\n') + '\n', 'utf8');
+  await onWritten?.();
+  if ((await readFile(pathOf(root), 'utf8')) !== before) { await rm(tmp, { force: true }); return false; }
   await rename(tmp, pathOf(root));
   return true;
 }

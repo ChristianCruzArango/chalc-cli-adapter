@@ -29,6 +29,7 @@ const MODEL_TEXT = {
   hTask: '## Task',
   hSteps: '## Previous steps',
   noSteps: '(no steps yet)',
+  stepsOmitted: (n) => `(${n} earlier steps omitted to fit the context; use recall on a CCR ref if you need one)`,
   step: 'Step', action: 'action', obs: 'obs',
   lastStep: 'LAST STEP: do not run more actions; finish now with {"done":true,"summary":"..."}.',
   stepsLeft: (n) => `You have ${n} steps left. As soon as the task is done, finish with done.`,

@@ -31,7 +31,7 @@ const jest = () => project({
 
 const equipped = async (target, specLang = 'español') => {
   const proj = await jest();
-  await equipForSpec(proj, 'lite', target, specLang);
+  await equipForSpec(proj, 'lite', target, { specLang });
   return proj;
 };
 

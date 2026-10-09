@@ -7,6 +7,7 @@ import { createStdioClient } from './client.mjs';
 import { createHttpClient } from './httpclient.mjs';
 import { frame } from '../prompts/text.mjs';
 import { redactSensitiveText } from '../../lib/redact.mjs';
+import { t } from '../../lib/i18n.mjs';
 import { mcpServerRisks } from './approval.mjs';
 import { MCP_CONNECT_TIMEOUT_MS } from './clientinfo.mjs';
 
@@ -14,7 +15,8 @@ import { MCP_CONNECT_TIMEOUT_MS } from './clientinfo.mjs';
 // sesión: si uno no arranca (o tarda más que timeoutMs), se avisa y se sigue con los demás.
 // onConnect(id) se dispara antes de cada intento (para mostrar progreso: npx puede tardar en arrancar).
 // approveServer(id, cfg): el .mcp.json viene DEL PROYECTO — abrir un repo ajeno no debe ejecutar sus comandos
-// sin que el usuario los vea y apruebe. Si devuelve false, ese servidor se omite.
+// sin que el usuario los vea y apruebe. Si devuelve false, ese servidor se omite. Sin aprobador se DENIEGA
+// (V-08): fallar en abierto convertía cualquier uso programático sin aprobador en ejecución sin preguntar.
 // cwd: directorio de trabajo por defecto para los servers (el del proyecto); la config propia puede sobreescribirlo.
 export async function connectMcpServers(servers = {}, { connect, onConnect, onWarn, approveServer, cwd, timeoutMs = MCP_CONNECT_TIMEOUT_MS, allowPrivateHttp = false } = {}) {
   // Transporte por config: { url } → servidor REMOTO (Streamable HTTP); { command } → proceso local (stdio).
@@ -30,7 +32,11 @@ export async function connectMcpServers(servers = {}, { connect, onConnect, onWa
       if (onWarn) onWarn(id, `bloqueado: ${blocked.join('; ')}`);
       continue;
     }
-    if (approveServer && !(await approveServer(id, cfg))) {
+    if (!approveServer) {
+      if (onWarn) onWarn(id, t('cliMcpNoApprover'));
+      continue;
+    }
+    if (!(await approveServer(id, cfg))) {
       if (onWarn) onWarn(id, 'omitido: el usuario no aprobó ejecutar este servidor');
       continue;
     }
@@ -67,6 +73,18 @@ const ARG_ERROR = /invalid|validation|expected|required|argument/i;
 // corta — el modelo local no necesita el volcado, necesita la pista de usar describe.
 const compactError = (t) => String(t).replace(/\s+/g, ' ').trim().slice(0, 280);
 
+// La respuesta de una tool MCP, o un rechazo en cuanto se aborta el turno (O-02): el servidor puede
+// seguir con su trabajo, pero el agente deja de esperarlo y el usuario recupera el control.
+function untilAborted(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new Error('interrupted by the user'));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(new Error('interrupted by the user'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
 // Una tool MCP como herramienta del agente. Los args van en el ÍNDICE (con * los obligatorios): sin
 // esto, el modelo local llama a ciegas, el server le devuelve un error de validación y se pierde un
 // paso (o entra en bucle).
@@ -77,11 +95,11 @@ function agentTool({ id, client, tool: t, name, approve, f }) {
   return {
     argHints: props,   // para que el loop desambigüe nombres truncados por las claves de args
     summary: `[MCP ${id}] ${t.description || t.name}${argsNote}`,
-    run: async (args) => {
+    run: async (args, { signal } = {}) => {
       if (!(await approve({ tool: name, args }))) return { error: 'MCP action not approved by the user' };
       let out;
       try {
-        out = unwrapMcpResult(await client.callTool(t.name, args));
+        out = unwrapMcpResult(await untilAborted(client.callTool(t.name, args), signal));
       } catch (e) {
         out = { error: redactSensitiveText(e?.message || String(e)) };   // JSON-RPC error (p. ej. -32602 args inválidos)
       }

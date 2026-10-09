@@ -62,10 +62,15 @@
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm test && npm run doctor -- --yes && npm run eval-ia && npm run pack:check",
     "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=test/** --test-coverage-lines=85 --test-coverage-branches=80 --test-coverage-functions=60",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=bin/** --test-coverage-include=cli/** --test-coverage-include=lib/** --test-coverage-include=targets/** --test-coverage-include=catalog/gate/** --test-coverage-include=catalog/next/** --test-coverage-include=catalog/memory/** --test-coverage-include=catalog/mail/** --test-coverage-exclude=test/** --test-coverage-lines=85 --test-coverage-branches=80 --test-coverage-functions=60",
+    "test:mutation": "stryker run",
     "lock-skills": "node -e \"import('./lib/update.mjs').then((m) => m.writeSkillsLock('.', 'catalog'))\""
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/tap-runner": "10.0.0"
   }
 }

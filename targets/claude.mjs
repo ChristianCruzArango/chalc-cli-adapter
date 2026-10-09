@@ -17,10 +17,10 @@ function planOf({ skills, mcps, methods, roles }) {
   const plan = [];
   for (const s of skills) plan.push(`skill     .claude/skills/${s}`);
   for (const role of roles) plan.push(`agent     .claude/agents/${role.id}.md`);
-  plan.push('doc       .chalc/gate-hook.md  (hook opcional, para pegar a mano)');
+  plan.push(`doc       .chalc/gate-hook.md  ${kit.planNote('planHookOptional')}`);
   for (const m of mcps) plan.push(`mcp       .mcp.json  ::  ${m.id}`);
-  for (const me of methods) plan.push(`método    ${me.id}${me.mode && me.mode !== 'default' ? ` (${me.mode})` : ''}  (scaffold + reglas)`);
-  plan.push('rules     CLAUDE.md  (bloque chalc)');
+  for (const me of methods) plan.push(kit.methodPlanLine(me, kit.planNote('planScaffoldRules')));
+  plan.push(`rules     CLAUDE.md  ${kit.planNote('planChalcBlock')}`);
   plan.push('manifest  .chalc.json');
   return plan;
 }
@@ -61,7 +61,7 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   await kit.writeManagedBlock(join(projectPath, 'CLAUDE.md'), managedBlock({ projectPath, skills, mcps, methods, architecture, specLang }));
 
   // 5) Manifiesto
-  await kit.writeManifest(projectPath, 'claude', stacks, skills, mcps, methods);
+  await kit.writeManifest(projectPath, 'claude', { stacks, skills, mcps, methods });
 
   return { plan, written: true };
 }

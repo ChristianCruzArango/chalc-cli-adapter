@@ -93,7 +93,7 @@ test('R15 — sigue prohibido tocar cualquier OTRO archivo', async () => {
 for (const target of ['claude', 'codex', 'copilot', 'cursor', 'gemini']) {
   test(`R15 — con el target ${target}, el repo equipado lleva la instrucción de anotar`, async () => {
     const proj = await jest();
-    await equipForSpec(proj, 'lite', target, 'español');
+    await equipForSpec(proj, 'lite', target, { specLang: 'español' });
 
     assert.match(await equippedText(proj), /\.chalc\/review\.md/, `${target}: el revisor no dejaría rastro`);
   });
@@ -103,7 +103,7 @@ test('R15 — en Claude Code el revisor puede escribir ese archivo, no solo se l
   // En el subagente el permiso es una herramienta concedida: sin Write, la instrucción es papel
   // mojado y el advisor se quedaría clavado en `call_reviewer` para siempre.
   const proj = await jest();
-  await equipForSpec(proj, 'lite', 'claude', 'español');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   const agent = await readFile(join(proj, '.claude', 'agents', 'revisor.md'), 'utf8');
   const tools = /^tools:\s*(.+)$/m.exec(agent);

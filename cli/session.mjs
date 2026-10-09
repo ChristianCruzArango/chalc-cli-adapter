@@ -13,6 +13,7 @@ import { loadSkillMetas } from './skills/loader.mjs';
 import { connectMcpServers, mcpToolsForAgent, stopMcpConnections } from './mcp/astools.mjs';
 import { buildProjectSections } from './sessioncontext.mjs';
 import { askTurn, planTurn, reviewTurn, roleMeta } from './sessionturns.mjs';
+import { userFlag } from '../lib/userpref.mjs';
 
 export { buildProjectSections } from './sessioncontext.mjs';
 
@@ -33,7 +34,7 @@ async function connectProjectMcp(project, { projectPath, cfg, mcpConnect, onMcpC
     // cwd: los servers deben operar sobre el PROYECTO, no sobre el directorio desde donde se lanzó el CLI.
     cwd: projectPath,
     // Solo una preferencia local (~/.chalc/config.json), nunca un campo del proyecto, abre esta excepción.
-    allowPrivateHttp: cfg?.cli?.allowPrivateMcpHttp === true
+    allowPrivateHttp: userFlag(cfg, 'allowPrivateMcpHttp')
   });
 }
 
@@ -72,13 +73,17 @@ function publicSession(s, { allow, mcpConnections }) {
   };
 }
 
+// Espera base entre reintentos tras un error del MODELO (R33): crece con cada intento y el aborto la corta.
+// Con un `chatImpl` inyectado (tests, modelos simulados) no hay a quién dar respiro: 0, salvo que se pida.
+const RETRY_BACKOFF_MS = 1000;
+
 // Sesión persistente: carga el proyecto UNA vez y mantiene conversación + store CCR entre mensajes,
 // como un CLI interactivo tipo Claude Code. `ask(task)` corre el loop conservando el contexto acumulado.
 // `chatImpl` es inyectable (tests sin Ollama). La aprobación se fija por-turno vía una referencia mutable,
 // para crear las tools una sola vez sin acoplarlas a la terminal.
 export async function createSession({
   projectPath, cfg, allow = [], numCtx, budgetTokens = 6000, maxSteps = 12, language, chatImpl,
-  mcpConnect, onMcpConnect, onMcpWarn, approveMcpServer
+  mcpConnect, onMcpConnect, onMcpWarn, approveMcpServer, retryDelayMs = chatImpl ? 0 : RETRY_BACKOFF_MS
 } = {}) {
   const project = await inspectProject(projectPath);
   const baseSections = await buildProjectSections(project, language);
@@ -89,7 +94,7 @@ export async function createSession({
   // maxTokens de la salida por turno: configurable en cfg.cli (default 2048 en createChatImpl).
   const implOpts = { numCtx, ...(cfg?.cli?.maxTokens ? { maxTokens: cfg.cli.maxTokens } : {}) };
   const s = {
-    project, projectPath, cfg, language, baseSections, state, tools, chatImpl, implOpts, budgetTokens, maxSteps,
+    project, projectPath, cfg, language, baseSections, state, tools, chatImpl, implOpts, budgetTokens, maxSteps, retryDelayMs,
     skillMetas: await loadSkillMetas(project),   // una vez; la SELECCIÓN por relevancia es por-tarea
     conversation: [],
     impl: chatImpl || createChatImpl(cfg || {}, implOpts),
@@ -102,9 +107,15 @@ export async function createSession({
 }
 
 // Atajo sin estado: una sesión + una tarea. Se mantiene para uso programático y tests.
-export async function runTask({ projectPath, cfg, task, approve, allow, numCtx, budgetTokens, maxSteps, language, onStep, chatImpl } = {}) {
+// approveMcpServer: sin él no arranca ningún MCP del proyecto (V-08); quien los necesite lo pasa.
+// La sesión se cierra SIEMPRE al terminar (R33): con un aprobador que acepta, los servidores MCP quedaban vivos.
+export async function runTask({ projectPath, cfg, task, approve, approveMcpServer, mcpConnect, allow, numCtx, budgetTokens, maxSteps, language, onStep, chatImpl } = {}) {
   if (!task || !String(task).trim()) throw new Error('runTask requiere una tarea.');
-  const session = await createSession({ projectPath, cfg, allow, numCtx, budgetTokens, maxSteps, language, chatImpl });
-  const result = await session.ask(task, { approve, onStep });
-  return { project: session.project, result };
+  const session = await createSession({ projectPath, cfg, allow, numCtx, budgetTokens, maxSteps, language, chatImpl, approveMcpServer, mcpConnect });
+  try {
+    const result = await session.ask(task, { approve, onStep });
+    return { project: session.project, result };
+  } finally {
+    await session.close();
+  }
 }

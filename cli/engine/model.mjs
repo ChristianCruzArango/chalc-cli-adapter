@@ -24,24 +24,26 @@ export function isOllama(cfg) {
 }
 
 // ¿El modelo declara la capability "thinking"? (/api/show, cacheado por proceso: una sonda por modelo).
-// Sin señal (endpoint ausente, error) se asume clásico → conserva format:'json' como siempre.
+// Sin señal se asume clásico → conserva format:'json' como siempre. Solo se cachea una RESPUESTA
+// (también un 404 de un Ollama sin el endpoint): una sonda que falla o expira —Ollama aún arrancando—
+// se repite en el turno siguiente; cachearla dejaba a un razonador con format:'json' toda la sesión (C-06).
 const capsCache = new Map();
 async function modelThinks(baseURL, model, fetchImpl) {
   const key = `${baseURL}|${model}`;
-  if (!capsCache.has(key)) {
-    let thinks = false;
-    try {
-      const res = await fetchImpl(`${baseURL}/api/show`, {
-        method: 'POST',
-        timeoutMs: 10000,
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ model })
-      });
-      if (res.ok) thinks = ((await res.json()).capabilities || []).includes('thinking');
-    } catch { /* sin señal → clásico */ }
+  if (capsCache.has(key)) return capsCache.get(key);
+  try {
+    const res = await fetchImpl(`${baseURL}/api/show`, {
+      method: 'POST',
+      timeoutMs: 10000,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model })
+    });
+    const thinks = res.ok && ((await res.json()).capabilities || []).includes('thinking');
     capsCache.set(key, thinks);
+    return thinks;
+  } catch {
+    return false;   // sin señal → clásico, sin cachear
   }
-  return capsCache.get(key);
 }
 
 // Texto de la respuesta de Ollama según lo que el modelo haya emitido.
@@ -62,7 +64,7 @@ function ollamaReply(msg) {
 
 // Llamada nativa a Ollama. Fija num_ctx (imposible por la ruta OpenAI-compatible) y pide salida JSON.
 // fetchImpl es inyectable para testear sin red.
-export async function chatOllama(cfg, { system, user, numCtx = OLLAMA_DEFAULT_CTX, maxTokens = 2048, fetchImpl = fetchWithTimeout }) {
+export async function chatOllama(cfg, { system, user, numCtx = OLLAMA_DEFAULT_CTX, maxTokens = 2048, fetchImpl = fetchWithTimeout, signal }) {
   const baseURL = (cfg.baseURL || 'http://localhost:11434').replace(/\/v1\/?$/, '').replace(/\/$/, '');
   const thinks = await modelThinks(baseURL, cfg.model, fetchImpl);
   const body = {
@@ -79,7 +81,8 @@ export async function chatOllama(cfg, { system, user, numCtx = OLLAMA_DEFAULT_CT
     method: 'POST',
     timeoutMs: cfg?.cli?.timeoutMs || AI_TIMEOUT_MS,
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal   // el del turno: ESC aborta la petición en curso (O-02)
   });
   if (!res.ok) throw new Error(`Ollama ${res.status}: ${await readLimitedText(res)}`);
   const j = await res.json();
@@ -96,7 +99,7 @@ export async function chatOllama(cfg, { system, user, numCtx = OLLAMA_DEFAULT_CT
 // json:true (fuerza el contrato JSON). maxTokens acotado: el protocolo pide UN objeto JSON por turno, no prosa.
 export function createChatImpl(cfg, { numCtx, maxTokens = 2048 } = {}) {
   if (isOllama(cfg)) {
-    return ({ system, user }) => chatOllama(cfg, { system, user, numCtx, maxTokens });
+    return ({ system, user, signal }) => chatOllama(cfg, { system, user, numCtx, maxTokens, signal });
   }
-  return ({ system, user }) => chat(cfg, { system, user, maxTokens, json: true });
+  return ({ system, user, signal }) => chat(cfg, { system, user, maxTokens, json: true, signal });
 }

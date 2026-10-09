@@ -30,6 +30,10 @@ const TARGET_LAYOUT = {
 const TOML_TABLE = /^\[\s*mcp_servers\.("(?:[^"\\]|\\.)*"|[A-Za-z0-9_-]+)(?:\.("(?:[^"\\]|\\.)*"|[A-Za-z0-9_-]+))?\s*\]\s*$/;
 const TOML_PAIR = /^("(?:[^"\\]|\\.)*"|[A-Za-z0-9_-]+)\s*=\s*(.+)$/;
 const tomlKeyText = (k) => (k.startsWith('"') ? JSON.parse(k) : k);
+// Claves que, usadas como índice de un objeto normal, alcanzan el prototipo compartido (V-01): un
+// config.toml del proyecto podría heredar autoApprove a TODOS los objetos. Se ignoran en cada nivel.
+const RESERVED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const safeKey = (k) => { const key = tomlKeyText(k); return RESERVED_KEYS.has(key) ? null : key; };
 
 export function parseTomlMcpServers(text) {
   const servers = {};
@@ -40,20 +44,23 @@ export function parseTomlMcpServers(text) {
     if (line.startsWith('[')) {
       const m = TOML_TABLE.exec(line);
       if (!m) { target = null; continue; }
-      const id = tomlKeyText(m[1]);
+      const id = safeKey(m[1]);
+      const sub = m[2] ? safeKey(m[2]) : '';
+      if (id === null || sub === null) { target = null; continue; }
       servers[id] = servers[id] || {};
-      target = m[2] ? (servers[id][tomlKeyText(m[2])] = servers[id][tomlKeyText(m[2])] || {}) : servers[id];
+      target = sub ? (servers[id][sub] = servers[id][sub] || {}) : servers[id];
       continue;
     }
     const pair = target && TOML_PAIR.exec(line);
-    if (!pair) continue;
+    const key = pair && safeKey(pair[1]);
+    if (!key) continue;
     let value;
     try { value = JSON.parse(pair[2]); } catch {
       const literal = /^'([^']*)'$/.exec(pair[2]);
       if (!literal) continue;
       value = literal[1];
     }
-    target[tomlKeyText(pair[1])] = value;
+    target[key] = value;
   }
   return servers;
 }

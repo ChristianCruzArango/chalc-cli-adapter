@@ -1,9 +1,10 @@
 // cli/sessioncontext.mjs — las secciones de contexto del proyecto que viajan en el harness: stack y
 // generadores, reglas del asistente, arquitectura, notas de carpetas y la conversación previa.
 
-import { readFile, readdir } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { projectTree } from './project.mjs';
+import { readForPrompt } from './tools/saferead.mjs';
 import { frame } from './prompts/text.mjs';
 
 // Cómo se GENERA código en cada stack: la instrucción concreta que evita que el modelo invente
@@ -32,16 +33,13 @@ function contextSection(project, language) {
 
 // key: identificador estable (independiente del idioma); title: encabezado visible (inglés: va al modelo).
 // maxChars acota archivos largos (un README de 30k no debe desplazar al resto del contexto).
-export async function readSection(file, key, title, required, maxChars = Infinity) {
+// root: raíz del proyecto; el archivo se lee confinado y redactado (V-03), nunca siguiendo un enlace fuera.
+export async function readSection(root, file, { key, title, required = false, maxChars = Infinity } = {}) {
   if (!file) return null;
-  try {
-    let text = (await readFile(file, 'utf8')).trim();
-    if (!text) return null;
-    if (text.length > maxChars) text = text.slice(0, maxChars) + '\n[…truncated]';
-    return { key, text: `### ${title}\n${text}`, required };
-  } catch {
-    return null;
-  }
+  let text = (await readForPrompt(root, file))?.trim();
+  if (!text) return null;
+  if (text.length > maxChars) text = text.slice(0, maxChars) + '\n[…truncated]';
+  return { key, text: `### ${title}\n${text}`, required };
 }
 
 // README internos de carpetas (src/app/features/README.md, core, shared…): documentan la convención
@@ -64,12 +62,10 @@ async function folderNotesSection(projectPath, title) {
   await walk(projectPath, 0);
   const parts = [];
   for (const file of found) {
-    try {
-      let text = (await readFile(file, 'utf8')).trim();
-      if (!text) continue;
-      if (text.length > 1500) text = text.slice(0, 1500) + '\n[…truncated]';
-      parts.push(`#### ${relative(projectPath, file).replace(/\\/g, '/')}\n${text}`);
-    } catch { /* ilegible: se omite */ }
+    let text = (await readForPrompt(projectPath, file))?.trim();   // ilegible o fuera de la raíz: se omite
+    if (!text) continue;
+    if (text.length > 1500) text = text.slice(0, 1500) + '\n[…truncated]';
+    parts.push(`#### ${relative(projectPath, file).replace(/\\/g, '/')}\n${text}`);
   }
   if (!parts.length) return null;
   return { key: 'folder-notes', required: false, text: `### ${title}\n${parts.join('\n\n')}` };
@@ -87,17 +83,18 @@ export async function buildProjectSections(project, language) {
   if (tree) sections.push({ key: 'tree', required: true, text: `### project tree (the REAL files — do not guess paths)\n${tree}` });
   // Instrucciones del proyecto (CLAUDE.md / copilot-instructions.md / GEMINI.md según target): el
   // documento rector que el usuario mantiene para SUS agentes — obligatorio, no opcional.
+  const root = project.projectPath;
   if (project.equipped && project.paths.rulesFile) {
-    const rules = await readSection(project.paths.rulesFile, 'instrucciones', f.rulesTitle, true, 3000);
+    const rules = await readSection(root, project.paths.rulesFile, { key: 'instrucciones', title: f.rulesTitle, required: true, maxChars: 3000 });
     if (rules) sections.push(rules);
   }
   // README: la orientación que el propio proyecto trae — se lee SIEMPRE que exista (equipado o no).
-  const readme = await readSection(join(project.projectPath, 'README.md'), 'readme', f.readmeTitle, false, 2500);
+  const readme = await readSection(root, join(root, 'README.md'), { key: 'readme', title: f.readmeTitle, maxChars: 2500 });
   if (readme) sections.push(readme);
   if (project.equipped) {
     for (const s of [
-      await readSection(project.paths.constitution, 'constitución', f.constitutionTitle, true),
-      await readSection(project.paths.architecture, 'arquitectura', f.architectureTitle, false)
+      await readSection(root, project.paths.constitution, { key: 'constitución', title: f.constitutionTitle, required: true }),
+      await readSection(root, project.paths.architecture, { key: 'arquitectura', title: f.architectureTitle })
     ]) if (s) sections.push(s);
   }
   const notes = await folderNotesSection(project.projectPath, f.folderNotesTitle);

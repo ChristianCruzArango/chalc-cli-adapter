@@ -39,10 +39,11 @@ test('openAllScript for other platforms writes an open-all.sh listing the worksp
 });
 
 // R12 — lanza wt UNA vez, desacoplado (detached) y sin ejecutar ningún agente en las pestañas.
-test('launchTerminals spawns wt once with the tab args (spawn injectable)', () => {
+test('launchTerminals spawns wt once with the tab args (spawn injectable)', async () => {
   const calls = [];
-  const fakeSpawn = (cmd, args, opts) => { calls.push({ cmd, args, opts }); return { unref() {}, on() {} }; };
-  const res = launchTerminals(WS, { platform: 'win32', spawnImpl: fakeSpawn });
+  // Emite `spawn` como Node: desde R34 (spec 016) launchTerminals espera a saber si wt arrancó.
+  const fakeSpawn = (cmd, args, opts) => { calls.push({ cmd, args, opts }); const handlers = {}; setImmediate(() => handlers.spawn?.()); return { unref() {}, once(ev, fn) { handlers[ev] = fn; } }; };
+  const res = await launchTerminals(WS, { platform: 'win32', spawnImpl: fakeSpawn });
   assert.equal(res.ok, true);
   assert.equal(res.launched, 2);
   assert.equal(calls.length, 1);
@@ -88,19 +89,19 @@ test('dashboardWindowArgs opens one wt window with a single pane running the das
 });
 
 // R12 — sin workspaces no hay nada que abrir: no se lanza wt.
-test('launchTerminals with an empty list does not spawn anything', () => {
+test('launchTerminals with an empty list does not spawn anything', async () => {
   const calls = [];
   const fakeSpawn = (...a) => { calls.push(a); return { unref() {}, on() {} }; };
-  const res = launchTerminals([], { platform: 'win32', spawnImpl: fakeSpawn });
+  const res = await launchTerminals([], { platform: 'win32', spawnImpl: fakeSpawn });
   assert.equal(res.ok, false);
   assert.equal(calls.length, 0);
 });
 
 // R13 — en SO sin Windows Terminal no se intenta lanzar nada: solo queda el script.
-test('launchTerminals on non-win platforms does not spawn and reports ok:false', () => {
+test('launchTerminals on non-win platforms does not spawn and reports ok:false', async () => {
   const calls = [];
   const fakeSpawn = (...a) => { calls.push(a); return { unref() {}, on() {} }; };
-  const res = launchTerminals(WS, { platform: 'linux', spawnImpl: fakeSpawn });
+  const res = await launchTerminals(WS, { platform: 'linux', spawnImpl: fakeSpawn });
   assert.equal(res.ok, false);
   assert.equal(res.launched, 0);
   assert.equal(calls.length, 0);

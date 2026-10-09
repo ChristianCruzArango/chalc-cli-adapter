@@ -104,10 +104,20 @@ Idioma: sigue `chalc lang` (es/en). Todo el prompt del agente es bilingüe.
 - `write`/`edit`/`bash` piden **aprobación** por acción.
 - MCP pide aprobación por servidor al conectar y por acción según `cli.mcpApproval`: `always` pregunta por toda llamada (default); `mutating` se reserva para servidores confiables. No hay llamadas MCP automáticas al abrir el proyecto.
 - `bash`: perfil de confianza + allowlist + ejecución sin shell en POSIX (argv estructurado) + guard
-  léxico de rutas (bloquea `..`, `~`/`~usuario` y rutas absolutas posicionales, también tras `--`).
-- `/auto` (auto-aprobación) tiene una **excepción deliberada**: los comandos capaces de ejecutar código
-  arbitrario (`node`/`python`/`npx`/`ruby`/`php` y `npm|pnpm|yarn|bun run·exec·dlx·x`) piden
-  confirmación SIEMPRE — sin ese freno, `/auto` + perfil `dev` anularía la única defensa real del shell.
+  de rutas: bloquea `..`, `~`/`~usuario`, rutas absolutas posicionales (también tras `--`) y todo
+  argumento o valor de opción que caiga fuera del proyecto **exista o no** (se mira el ancestro
+  existente más profundo; `--base-href /app/`, que no nombra ningún lugar real, sigue siendo dato).
+- `bash` no toca `.git/`: se rechaza cualquier argumento que apunte dentro (por lo escrito o por un
+  enlace interno), y en `git` las opciones que escriben archivos o cambian lo que ejecuta
+  (`--output`, `--output-directory`, `-o` de `format-patch`, `--template`, `--exec-path`, también abreviadas).
+- `/auto` (auto-aprobación) solo aprueba sin preguntar una **allowlist positiva** de lectura/compilación
+  (`ls`, `cat`, `echo`, `mkdir`, `git status|log|diff|show|add|…`, `ng build|generate`, `dotnet build|new`,
+  `flutter analyze|build|create`, `dart analyze|format`, `go build|vet|fmt`, `cargo build|check|fmt`,
+  `npm|pnpm|yarn ls|view|outdated|audit`). **Todo lo demás** —`npm test`, `go run`, `pytest`, `make`,
+  `node`, `git commit`…— pide confirmación SIEMPRE: una lista negativa de "ejecutores" siempre se queda corta.
+- `write`/`edit` bajo `/auto` piden confirmación igualmente si el archivo lo ejecuta otra herramienta sola
+  (`.claude/**`, `.vscode/**`, `.github/workflows/**`, `.chalc/gate.json`, `.chalc/gate/**`,
+  `package.json`, `Makefile`, `conftest.py`), mirando la ruta pedida y la real (enlaces internos).
 
 ## Módulos
 

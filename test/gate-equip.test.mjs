@@ -32,7 +32,7 @@ const jest = () => project({
 test('equipForSpec leaves a runnable gate in the equipped repo', async () => {
   const proj = await jest();
 
-  await equipForSpec(proj, 'lite', 'claude', 'español');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   assert.ok(existsSync(join(proj, '.chalc', 'gate.mjs')), 'falta la entrada del portón');
   assert.ok(existsSync(join(proj, '.chalc', 'gate', 'gate.mjs')));
@@ -43,7 +43,7 @@ test('equipForSpec leaves a runnable gate in the equipped repo', async () => {
 test('equipForSpec configures the gate from the real signals of the repo', async () => {
   const proj = await jest();
 
-  await equipForSpec(proj, 'lite', 'claude', 'español');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   const cfg = JSON.parse(await readFile(join(proj, '.chalc', 'gate.json'), 'utf8'));
   assert.equal(cfg.test.command, 'npm test');
@@ -55,7 +55,7 @@ test('equipForSpec configures the gate from the real signals of the repo', async
 test('equipForSpec records the spec language and the role of the repo', async () => {
   const proj = await jest();
 
-  await equipForSpec(proj, 'lite', 'claude', 'español', { role: 'back' });
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español', role: 'back' });
 
   const cfg = JSON.parse(await readFile(join(proj, '.chalc', 'gate.json'), 'utf8'));
   assert.equal(cfg.language, 'es');
@@ -65,7 +65,7 @@ test('equipForSpec records the spec language and the role of the repo', async ()
 test('equipForSpec leaves no role when the repo is not a side of a full-stack feature', async () => {
   const proj = await jest();
 
-  await equipForSpec(proj, 'lite', 'claude', 'english');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'english' });
 
   const cfg = JSON.parse(await readFile(join(proj, '.chalc', 'gate.json'), 'utf8'));
   assert.equal(cfg.role, '');
@@ -77,7 +77,7 @@ test('equipping a worktree writes the gate inside it and nothing in the main rep
   const main = await jest();
   const worktree = await jest();
 
-  await equipForSpec(worktree, 'lite', 'claude', 'español', { role: 'front' });
+  await equipForSpec(worktree, 'lite', 'claude', { specLang: 'español', role: 'front' });
 
   assert.ok(existsSync(join(worktree, '.chalc', 'gate.mjs')));
   assert.ok(!existsSync(join(main, '.chalc')), 'el repo principal no puede recibir nada');
@@ -86,7 +86,7 @@ test('equipping a worktree writes the gate inside it and nothing in the main rep
 // Re-equipar es lo normal: cada `spec-ia` vuelve a pasar por aquí. La config del usuario aguanta.
 test('re-equipping keeps what the user configured in gate.json', async () => {
   const proj = await jest();
-  await equipForSpec(proj, 'lite', 'claude', 'español');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   const path = join(proj, '.chalc', 'gate.json');
   const cfg = JSON.parse(await readFile(path, 'utf8'));
@@ -94,7 +94,7 @@ test('re-equipping keeps what the user configured in gate.json', async () => {
   cfg.test.command = 'npm run test:ci';
   await writeFile(path, JSON.stringify(cfg, null, 2), 'utf8');
 
-  await equipForSpec(proj, 'lite', 'claude', 'español');
+  await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   const after = JSON.parse(await readFile(path, 'utf8'));
   assert.equal(after.mutation.threshold, 65);

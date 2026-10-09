@@ -46,8 +46,10 @@ const DEFAULT_TIMEOUT_MS = 300000;   // un build de front en CPU modesta toma mi
 // Corre el chequeo del stack en la raíz del proyecto.
 // → { skipped:true, ok:null } sin comando —NO es un «ok»: no se verificó nada— · { ok, command, output, timedOut? } si corrió.
 // En fallo el output se recorta por el FINAL: ahí concentran los errores casi todas las toolchains.
-export async function runVerify({ projectPath, stacks, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-  const command = verifyCommand(stacks, { projectPath });
+// `command`: la instantánea YA aprobada (V-02). Se ejecuta tal cual, sin releer gate.json: entre la
+// aprobación y la ejecución el archivo puede cambiar y lo ejecutado dejaría de ser lo aprobado.
+export async function runVerify({ projectPath, stacks, command: approved, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  const command = approved ?? verifyCommand(stacks, { projectPath });
   if (!command) return { skipped: true, ok: null };
   const r = await execBounded(command, { cwd: projectPath, timeoutMs, maxBuffer: MAX_CHILD_OUTPUT });
   const raw = `${r.stdout || ''}\n${r.stderr || ''}`.trim();

@@ -16,8 +16,16 @@ const NOT_FUNCTIONS = new Set([
   'await', 'yield', 'super', 'throw', 'using', 'lock', 'foreach', 'when', 'with'
 ]);
 
-// Firma de función/método: modificadores, tipo de retorno opcional, nombre y paréntesis.
-const FUNCTION = /^\s*(?:(?:export|default|public|private|protected|internal|static|async|override|final|abstract|virtual|sealed|suspend|fun|def|external|inline)\s+)*(?:function\s*\*?\s*)?(?:[\w<>[\],.?]+\s+)?([A-Za-z_$][\w$]*)\s*(?:<[^<>()]*>)?\s*\(/;
+// Firma de función/método: modificadores, tipo de retorno opcional, nombre y paréntesis. El «tipo» se
+// captura para descartar palabras clave: en `return join(a, b)` o `await f(x)` no hay ninguna firma.
+const FUNCTION = /^\s*(?:(?:export|default|public|private|protected|internal|static|async|override|final|abstract|virtual|sealed|suspend|fun|def|external|inline)\s+)*(?:function\s*\*?\s*)?(?:([\w<>[\],.?]+)\s+)?([A-Za-z_$][\w$]*)\s*(?:<[^<>()]*>)?\s*\(/;
+
+// Palabras que, delante de `nombre(`, indican una expresión y no una declaración (R38).
+// (`void` NO: en Dart, Java y C# es un tipo de retorno —`void main()`—.)
+const EXPRESSION_KEYWORDS = new Set(['return', 'await', 'yield', 'throw', 'new', 'typeof', 'else', 'case', 'delete']);
+
+// Tras el paréntesis de cierre, `;`, `,`, `)` o `.` delatan una LLAMADA (`foo(a);`, `f(x).then(…)`),
+// nunca una declaración: medirla como función daba `too-many-params` falsos (R38).
 
 // Función asignada a una constante: `const total = (a, b) => …`.
 const ASSIGNED = /^\s*(?:export\s+)?(?:const|let|var|final|val)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?:async\s+)?\(/;
@@ -130,12 +138,14 @@ export function linesOf(text) {
 // Firma que abre en la línea `i`, o null. Devuelve el nombre y dónde está su paréntesis.
 // `ignore` son nombres que en ESTE archivo no abren una función que revisar.
 function headerAt(lines, i, ignore) {
-  for (const re of [FUNCTION, ASSIGNED]) {
-    const m = re.exec(lines[i]);
-    if (m && !NOT_FUNCTIONS.has(m[1]) && !ignore.has(m[1])) return { name: m[1], paren: m.index + m[0].length - 1 };
-  }
-  return null;
+  const fn = FUNCTION.exec(lines[i]);
+  if (fn && !EXPRESSION_KEYWORDS.has(fn[1])) return named(fn[2], fn, ignore);
+  const assigned = ASSIGNED.exec(lines[i]);
+  return assigned ? named(assigned[1], assigned, ignore) : null;
 }
+
+const named = (name, m, ignore) => (NOT_FUNCTIONS.has(name) || ignore.has(name) ? null : { name, paren: m.index + m[0].length - 1 });
+const CALL_AFTER = /^[;,).]/;
 
 // La firma que empieza en `lines[i]` con `(` en `paren`: cuántos parámetros tiene y qué viene justo
 // después del paréntesis que la cierra, en esa misma línea. Recorre las líneas que hagan falta: una
@@ -206,7 +216,7 @@ export function analyze(lines, { maxDepth = 3, ignore = [], requireBody = false 
   for (let i = 0; i < lines.length; i++) {
     const header = headerAt(lines, i, skip);
     const signature = header && signatureFrom(lines, i, header.paren);
-    if (header && (!requireBody || DART_BODY.test(signature.after))) {
+    if (header && !CALL_AFTER.test(signature.after) && (!requireBody || DART_BODY.test(signature.after))) {
       open.push({ line: i + 1, name: header.name, start: depth, opened: false, deep: false });
       functions.push({ line: i + 1, name: header.name, params: signature.params, length: 0 });
     }

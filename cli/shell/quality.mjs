@@ -85,15 +85,23 @@ async function verifyCommandToRun(shell, io, projectPath) {
   return cmd;
 }
 
+// Tras la ronda de corrección el coder (o cualquiera) pudo cambiar `verify.command`: si el comando ya
+// no es el aprobado, se revalida contra el perfil y se vuelve a pedir aprobación (V-02).
+async function reapproveIfChanged(shell, io, approved) {
+  const { projectPath, stacks = [] } = shell.session.project;
+  if (verifyCommand(stacks, { projectPath }) === approved) return approved;
+  return verifyCommandToRun(shell, io, projectPath);
+}
+
 // Portón de VERIFICACIÓN (compila con la toolchain real del stack): el reviewer solo LEE — el compilador
 // no perdona. Si falla, el usuario decide si los errores van al coder como ronda de corrección.
+// Se ejecuta SIEMPRE la instantánea aprobada (`cmd`), nunca lo que diga gate.json en ese momento.
 export async function runVerifyTurn(shell, io) {
   const { project } = shell.session;
-  const cmd = await verifyCommandToRun(shell, io, project?.projectPath);
-  if (!cmd) return;
-  for (let round = 1; round <= 2; round++) {
+  let cmd = await verifyCommandToRun(shell, io, project?.projectPath);
+  for (let round = 1; cmd && round <= 2; round++) {
     io.startThinking(t('cliVerifying', cmd));
-    const v = await runVerify({ projectPath: project.projectPath, stacks: project?.stacks || [] });
+    const v = await runVerify({ projectPath: project.projectPath, stacks: project?.stacks || [], command: cmd });
     io.stopThinking();
     logVerify(project.projectPath, round, v);
     if (v.ok) { io.print(c.green(t('cliVerifyOk', cmd))); return; }
@@ -106,5 +114,6 @@ export async function runVerifyTurn(shell, io) {
     logFixOrder(project.projectPath, order);
     const fix = await runTurn(shell, io, order);
     logFixResult(project.projectPath, fix || {});
+    cmd = await reapproveIfChanged(shell, io, cmd);
   }
 }

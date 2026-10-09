@@ -30,9 +30,9 @@ const lastMutationIndex = (history) => {
   return -1;
 };
 
-async function runTool(tool, args) {
+async function runTool(tool, args, signal) {
   try {
-    return redactStrings(await tool.run(args || {}));
+    return redactStrings(await tool.run(args || {}, { signal }));
   } catch (e) {
     return { error: redactStrings(String(e?.message || e)) };
   }
@@ -46,20 +46,38 @@ const sameFailing = (r, turn) => r.observation?.error && r.action?.tool === turn
 //  - respuesta malformada → se reintenta devolviendo el error concreto para que corrija (retryMessage).
 //  - error al llamar al modelo (red / servidor ocupado) → se reintenta sin nota (no hubo respuesta que corregir).
 // Devuelve { turn } o { error }.
+// Espera antes de reintentar tras un error del MODELO (R33): `retryDelayMs × (intento + 1)`, para no
+// mandar tres peticiones seguidas a un servidor saturado. Un aborto la corta; el intento siguiente ve la
+// señal abortada y termina el turno.
+function backoff(a, attempt) {
+  const ms = (a.retryDelayMs || 0) * (attempt + 1);
+  if (!ms) return Promise.resolve();   // (con el turno ya abortado no se llega aquí: el catch sale antes)
+  return new Promise((resolve) => {
+    const done = () => { clearTimeout(timer); a.signal?.removeEventListener('abort', done); resolve(); };
+    const timer = setTimeout(done, ms);
+    timer.unref?.();
+    a.signal?.addEventListener('abort', done, { once: true });
+  });
+}
+
+// Con el turno abortado no se reintenta: cada intento podía ser otro timeout completo (O-02).
 async function readValidTurn(a, step, stepsLeft) {
   let lastError = '';
   let retryNote = '';
   for (let attempt = 0; attempt <= a.maxRetries; attempt++) {
+    if (a.signal?.aborted) return { interrupted: true };
     const { system, user } = a.renderPrompt({ history: a.history, step, stepsLeft, retry: retryNote });
     let raw;
     try {
-      raw = await a.chatImpl({ system, user });
+      raw = await a.chatImpl({ system, user, signal: a.signal });
     } catch (e) {
+      if (a.signal?.aborted) return { interrupted: true };
       lastError = t('cliLoopModelError', e?.message || e);
       retryNote = '';
       // Reintento VISIBLE: sin este aviso, 3 timeouts consecutivos de 5 min dejan la UI muda un cuarto
       // de hora y parece un cuelgue. Evento solo para la UI (NO entra a history: el modelo no lo ve).
       a.onStep?.({ action: { tool: 'modelo' }, observation: { error: t('cliLoopRetry', lastError, attempt + 1, a.maxRetries + 1) } });
+      if (attempt < a.maxRetries) await backoff(a, attempt);   // tras el último intento no se espera
       continue;
     }
     const parsed = readTurn(raw);
@@ -71,13 +89,24 @@ async function readValidTurn(a, step, stepsLeft) {
 }
 
 // recall: meta-herramienta del propio loop. Expande una referencia CCR desde la caché, sin ejecutar
-// nada externo. Se guarda SIN comprimir: es una expansión deliberada que el modelo pidió ver.
+// nada externo. Se guarda SIN comprimir: es una expansión deliberada que el modelo pidió ver. Pero por
+// TRAMOS (O-01): un recall de la salida de `npm test` (hasta 1 MB) eran ~250k tokens en cada turno
+// siguiente. Si no cabe, se entrega el tramo con `offset`/`next`/`total` y el modelo pide el resto.
+export const MAX_RECALL_CHARS = 12000;
+
+function recalled(ref, content, offset) {
+  if (content.length <= MAX_RECALL_CHARS && !offset) return { recall: ref, content };
+  const start = Math.max(0, Number(offset) || 0);
+  const end = start + MAX_RECALL_CHARS;
+  return { recall: ref, content: content.slice(start, end), offset: start, total: content.length, ...(end < content.length ? { next: end } : {}) };
+}
+
 function recallRecord(store, step, turn) {
   const ref = turn.args?.ref;
   const content = store ? store.recall(ref) : null;
   return {
     step, thought: turn.thought, action: { tool: 'recall', args: turn.args },
-    observation: content != null ? { recall: ref, content } : { recall: ref, error: 'CCR reference expired or unknown' }
+    observation: content != null ? recalled(ref, content, turn.args?.offset) : { recall: ref, error: 'CCR reference expired or unknown' }
   };
 }
 
@@ -124,7 +153,9 @@ function nearTools(tools, turn) {
 // modelo INVENTÓ la tool (p. ej. mcp__angular-cli__generate) — se redirige SOLO a alternativas que
 // EXISTEN aquí: en los roles de solo lectura (planner/reviewer) no hay write/edit/bash, y pedir write
 // en ellos significa que el modelo intenta EJECUTAR cuando su entregable es el done.summary.
-function unknownToolRecord(tools, turn, near, history, step) {
+// `a`: el estado del loop (sus `tools` y su `history`).
+function unknownToolRecord(a, turn, { near, step }) {
+  const { tools, history } = a;
   const names = Object.keys(tools);
   const basics = ['write', 'edit', 'bash'].filter((n) => n in tools);
   const wantsMutation = ['write', 'edit', 'bash'].includes(turn.tool);
@@ -159,7 +190,7 @@ function priorSuccess(history, signature) {
   return sinceChange.find((r) => r.signature === signature && succeeded(r.observation));
 }
 
-function repeatedRecord(step, turn, toolName, signature, prior) {
+function repeatedRecord(step, turn, { toolName, signature, prior }) {
   return {
     step, thought: turn.thought, action: { tool: toolName, args: turn.args }, signature,
     observation: {
@@ -188,16 +219,16 @@ async function act(a, step, turn) {
   let toolName = turn.tool;
   if (!a.tools[toolName]) {
     const near = nearTools(a.tools, turn);
-    if (near.length !== 1) { a.push(unknownToolRecord(a.tools, turn, near, a.history, step)); return null; }
+    if (near.length !== 1) { a.push(unknownToolRecord(a, turn, { near, step })); return null; }
     toolName = near[0];
   }
   const signature = toolName + '\u0000' + JSON.stringify(turn.args || {});
   const prior = priorSuccess(a.history, signature);
   if (prior) {
-    a.push(repeatedRecord(step, turn, toolName, signature, prior));
+    a.push(repeatedRecord(step, turn, { toolName, signature, prior }));
     return orbitingOutcome(a.history);
   }
-  const observation = await runTool(a.tools[toolName], turn.args);
+  const observation = await runTool(a.tools[toolName], turn.args, a.signal);
   // Las observaciones de tools SÍ se comprimen: pueden ser archivos enteros o salidas de shell largas.
   a.push({
     step, thought: turn.thought, action: { tool: toolName, args: turn.args }, signature,
@@ -211,20 +242,24 @@ async function act(a, step, turn) {
 // chatImpl({ system, user }) -> texto crudo del modelo.
 // ccr: store de createCcrStore() (por defecto), o false para desactivar la compresión.
 // shouldStop(): interrupción cooperativa del usuario (ESC/Ctrl+C) — se consulta al inicio de cada paso y
-// tras la respuesta del modelo (para no EJECUTAR una acción pedida mientras el usuario ya canceló).
+// tras la respuesta del modelo (para no EJECUTAR una acción pedida mientras el usuario ya canceló). Si trae
+// `shouldStop.signal` (la shell lo pone), esa señal llega al modelo y a las tools y corta lo que esté EN
+// CURSO (O-02); sin ella, todo funciona como antes.
 // Devuelve { steps, done, summary?, error?, interrupted?, ccr }.
-export async function runAgent({ chatImpl, tools = {}, renderPrompt, ccr, maxSteps = 12, maxRetries = 2, onStep, shouldStop } = {}) {
+export async function runAgent({ chatImpl, tools = {}, renderPrompt, ccr, maxSteps = 12, maxRetries = 2, onStep, shouldStop, retryDelayMs = 0 } = {}) {
   if (typeof chatImpl !== 'function') throw new Error('runAgent requiere chatImpl.');
   if (typeof renderPrompt !== 'function') throw new Error('runAgent requiere renderPrompt.');
   const store = ccr === false ? null : (ccr && typeof ccr.compact === 'function' ? ccr : createCcrStore());
   const history = [];
-  const a = { chatImpl, tools, renderPrompt, store, history, maxRetries, onStep, push: (record) => { history.push(record); if (onStep) onStep(record); } };
+  const signal = shouldStop?.signal;
+  const a = { chatImpl, tools, renderPrompt, store, history, maxRetries, onStep, signal, retryDelayMs, push: (record) => { history.push(record); if (onStep) onStep(record); } };
   const finish = (extra) => ({ steps: history, ccr: store?.stats() || null, ...extra });
   const interrupted = () => finish({ done: false, interrupted: true, error: t('cliLoopInterrupted') });
 
   for (let step = 1; step <= maxSteps; step++) {
     if (shouldStop?.()) return interrupted();
-    const { turn, error } = await readValidTurn(a, step, maxSteps - step);
+    const { turn, error, interrupted: stopped } = await readValidTurn(a, step, maxSteps - step);
+    if (stopped) return interrupted();
     if (!turn) return finish({ done: false, error });
     if (turn.kind === 'done') return finish({ done: true, summary: turn.summary });
     // El usuario canceló MIENTRAS el modelo generaba: no se ejecuta la acción que acaba de proponer.

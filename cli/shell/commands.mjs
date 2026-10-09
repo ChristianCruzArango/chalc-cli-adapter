@@ -86,7 +86,7 @@ async function runResumeTurn(shell, io) {
   );
   if (pick !== 0) { io.print(c.dim(t('cliPlanIntact', PLAN_REL))); return { task: '', paths: [] }; }
   const plan = saved.items.map((it) => it.text).join('\n');
-  const paths = await executePlan(shell, io, saved.goal, plan, { completed: saved.items.map((it) => it.done) });
+  const paths = await executePlan(shell, io, { goal: saved.goal, plan, completed: saved.items.map((it) => it.done) });
   if (paths.length) await runReviewTurn(shell, io, saved.goal, paths);
   return { task: saved.goal, paths };
 }
@@ -107,7 +107,7 @@ async function planCommand(shell, io, task) {
   if (p.plan && savePlan(projectPath, goal, p.plan, { leader: modelOf(shell, 'planner'), spec: p.spec })) {
     io.print(c.dim(t('cliPlanSaved', PLAN_REL, specInfo(projectPath).rel)));
   }
-  const paths = p.plan ? await executePlan(shell, io, goal, p.plan) : touchedPaths(await runTurn(shell, io, goal, {}));
+  const paths = p.plan ? await executePlan(shell, io, { goal, plan: p.plan }) : touchedPaths(await runTurn(shell, io, goal, {}));
   shell.lastRun = { task: goal, paths };
   if (paths.length) await runReviewTurn(shell, io, goal, paths);
 }

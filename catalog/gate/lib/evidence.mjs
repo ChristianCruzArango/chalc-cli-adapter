@@ -49,6 +49,9 @@ function statusOf(stage, frame) {
   return stage.ok ? frame.status.passed : frame.status.failed;
 }
 
+// El resultado de la etapa, con el aviso de recorrido acotado (G-04) aunque no haya hallazgos.
+const statusCell = (stage, frame) => (stage.capped ? `${statusOf(stage, frame)} · ${frame.status.capped}` : statusOf(stage, frame));
+
 // El veredicto de la corrida. Un BLOQUEO pesa más que un fallo: "no pude comprobarlo" y "lo comprobé
 // y está mal" se arreglan de formas distintas, y quien lea el informe necesita saber cuál de las dos
 // tiene delante. Lo exporta este módulo para que el código de salida del portón y el titular del
@@ -168,7 +171,7 @@ export function renderEvidence({ stages, meta, lang = 'en' }) {
     [frame.stages.name, frame.stages.result, frame.stages.command, frame.stages.code, frame.stages.duration],
     stages.map((s) => [
       frame.stages[s.stage] || s.stage,
-      statusOf(s, frame),
+      statusCell(s, frame),
       s.command ? `\`${s.command}\`` : '—',
       s.code === null || s.code === undefined ? '—' : s.code,
       duration(s.ms)
@@ -223,7 +226,8 @@ export function renderState({ stages, meta, fast }) {
       skipped: !!s.skipped,
       reason: s.reason || '',
       findings: (s.findings || []).length,
-      allowed: (s.allowed || []).length
+      allowed: (s.allowed || []).length,
+      capped: !!s.capped
     }))
   };
 }

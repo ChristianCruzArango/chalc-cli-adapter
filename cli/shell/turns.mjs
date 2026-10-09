@@ -18,10 +18,20 @@ export const modelOf = (shell, role) => shell.session.modelFor?.(role) || shell.
 
 // io.setTurn (opcional) recibe { interrupt } al empezar y null al terminar: el front-end lo conecta a
 // ESC (TUI) o Ctrl+C (scroll) para cancelar el turno sin matar la sesión. Devuelve `shouldStop`.
+// Devuelve `shouldStop()` con su `signal`: el AbortSignal del turno (O-02). ESC/Ctrl+C lo aborta y
+// corta EN CURSO la llamada al modelo, la shell y MCP, no solo entre pasos.
 export function interruptible(io, message) {
-  let interrupted = false;
-  io.setTurn?.({ interrupt: () => { if (interrupted) return; interrupted = true; io.print(c.yellow(message)); } });
-  return () => interrupted;
+  const controller = new AbortController();
+  io.setTurn?.({
+    interrupt: () => {
+      if (controller.signal.aborted) return;
+      controller.abort();
+      io.print(c.yellow(message));
+    }
+  });
+  const shouldStop = () => controller.signal.aborted;
+  shouldStop.signal = controller.signal;
+  return shouldStop;
 }
 
 // Suma un turno al consumo de la SESIÓN (para /tokens): el medidor se resetea por turno.
@@ -172,10 +182,9 @@ async function runPlanStep(shell, io, { goal, items, i, spec, plan }) {
 // Ejecuta un plan aprobado PASO A PASO: un turno por ítem, con el orquestador (este código) avanzando
 // la lista — así ningún paso se salta ni se declara hecho sin ejecutarse. Si un paso falla, el usuario
 // decide si continuar. Devuelve las rutas tocadas en total (para la revisión final).
-// opts.completed: pasos ya marcados [x] en .chalc/plan.md (modo retomar).
-export async function executePlan(shell, io, goal, plan, opts = {}) {
+// completed: pasos ya marcados [x] en .chalc/plan.md (modo retomar).
+export async function executePlan(shell, io, { goal, plan, completed = [] }) {
   const items = planItems(plan);
-  const completed = opts.completed || [];
   const projectPath = shell.session.project?.projectPath;
   // Spec del líder desde disco (el que ENLAZA plan.md — en specs/ del proyecto o .chalc): cada orden
   // viaja con SU sección — funciona igual en un plan recién aprobado y al RETOMAR.

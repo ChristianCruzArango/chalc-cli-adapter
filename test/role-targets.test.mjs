@@ -153,7 +153,7 @@ test('R12 — equipar un worktree deja los roles DENTRO y no toca el repo princi
   await writeFile(join(worktree, 'package.json'), JSON.stringify({ name: 'wt' }), 'utf8');
 
   const before = (await list(main)).sort();
-  await equipForSpec(worktree, 'lite', 'claude', 'español');
+  await equipForSpec(worktree, 'lite', 'claude', { specLang: 'español' });
 
   assert.deepEqual((await list(main)).sort(), before, 'el repo principal quedó intacto');
   for (const role of roles) {

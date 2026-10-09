@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEV_ALLOW, TRUSTED_ALLOW, normalizeTrustProfile, resolveShellPolicy, isEvalCapableCommand, requiresExplicitApproval } from '../cli/tools/trust.mjs';
+import { DEV_ALLOW, TRUSTED_ALLOW, normalizeTrustProfile, resolveShellPolicy, requiresExplicitApproval } from '../cli/tools/trust.mjs';
 
 test('normalizeTrustProfile: alias seguros, dev solo para vacío/explícito, y typo → safe (fail-safe)', () => {
   assert.equal(normalizeTrustProfile('safe'), 'safe');
@@ -29,21 +29,24 @@ test('trusted amplía dev pero no elimina comandos existentes', () => {
   assert.ok(TRUSTED_ALLOW.includes('make'));
 });
 
-test('isEvalCapableCommand: intérpretes y runners de paquetes ejecutan código arbitrario', () => {
+test('requiresExplicitApproval: intérpretes y runners de paquetes ejecutan código arbitrario', () => {
   // intérpretes: corren cualquier script (node x.js) — con /auto no puede aprobarlos nadie
   for (const cmd of ['node script.js', 'node --experimental-vm-modules x.mjs', 'python malicia.py', 'python3 x.py', 'ruby x.rb', 'php x.php']) {
-    assert.equal(isEvalCapableCommand(cmd), true, `${cmd} debe pedir aprobación explícita`);
+    assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: cmd } }), true, `${cmd} debe pedir aprobación explícita`);
   }
   // runners de paquetes: npx/dlx descargan y ejecutan código REMOTO; run/exec corren scripts arbitrarios
   for (const cmd of ['npx create-cosa', 'npm run build', 'npm exec pkg', 'npm x pkg', 'pnpm dlx pkg', 'pnpm exec tsc', 'pnpm run dev', 'yarn dlx pkg', 'yarn run dev', 'bun x pkg', 'bun run dev']) {
-    assert.equal(isEvalCapableCommand(cmd), true, `${cmd} debe pedir aprobación explícita`);
+    assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: cmd } }), true, `${cmd} debe pedir aprobación explícita`);
   }
 });
 
-test('isEvalCapableCommand: los comandos no-eval siguen siendo auto-aprobables', () => {
-  // el flujo central del agente (instalar, compilar, correr los tests del propio proyecto) no gana fricción
-  for (const cmd of ['git status', 'ls -la', 'npm install', 'npm test', 'npm ci', 'dotnet build', 'cargo build', 'flutter pub get', 'mkdir src', '', null]) {
-    assert.equal(isEvalCapableCommand(cmd), false, `${cmd} no debe exigir aprobación explícita`);
+test('requiresExplicitApproval: con /auto solo la allowlist de lectura/compilación queda sin preguntar (spec 016, R7)', () => {
+  for (const cmd of ['git status', 'ls -la', 'dotnet build', 'cargo build', 'mkdir src', '', null]) {
+    assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: cmd } }), false, `${cmd} no debe exigir aprobación explícita`);
+  }
+  // Instalar y correr tests ejecutan código del proyecto (scripts de npm, conftest.py…): desde R7 preguntan.
+  for (const cmd of ['npm install', 'npm test', 'npm ci', 'flutter pub get']) {
+    assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: cmd } }), true, `${cmd} debe exigir aprobación explícita`);
   }
 });
 

@@ -1097,7 +1097,7 @@ chalc spec-ia /ruta/proyecto --lang es --doc mi-hu.docx
 
 Flujo:
 1. **Ruta del proyecto.** Si no tiene SDD, Chalc **lo monta al vuelo** (`specs/` con constitución + plantillas).
-2. **Idioma del spec** (independiente del idioma del CLI): `--lang es` o lo eliges en el menú.
+2. **Idioma del spec**: `--lang es` (fija también el idioma de la interfaz) o lo eliges en el menú (independiente del idioma del CLI).
 3. **Fuente de la HU** (de dónde sale la historia de usuario):
 
    | Fuente | Qué te pide |
@@ -1405,8 +1405,8 @@ falta la herramienta, el portón imprime el comando exacto y se detiene.
 - **CLI bilingüe (es/en)**: toda la salida al usuario pasa por `lib/i18n.mjs` y sale en el idioma elegido.
 - **Fijar el idioma una sola vez**: `chalc lang es` o `chalc lang en` lo guarda en `~/.chalc/config.json`
   y se aplica a todos tus proyectos. `chalc lang` sin argumento abre el menú interactivo.
-- **Precedencia del idioma de la interfaz**: `CHALC_LANG` > config guardada (`chalc lang`) > `LANG`/`LC_*` del SO > `en`. La flag `--lang` no cambia la interfaz: en `spec-ia` y `feature` es el idioma de la spec.
-- **Idioma del spec**: `chalc spec-ia --lang es|en|pt|…` (o el menú) — independiente del idioma del CLI.
+- **Precedencia del idioma de la interfaz**: `--lang` > `CHALC_LANG` > config guardada (`chalc lang`) > `LANG`/`LC_*` del SO > `en`. `--lang` acepta código o nombre (`es`, `en`, `español`, `English`); en `spec-ia`, `feature` e `init` es además el idioma de la spec y del contenido generado.
+- **Idioma del spec**: `chalc spec-ia --lang es|en|pt|…` (o el menú). Elegido en el menú es independiente del idioma del CLI; con `--lang` fija también el de la interfaz.
 - El método SDD (constitución, plantillas, reglas, gráfico explicativo) está en **es y en**.
 
 ## Seguridad
@@ -1448,6 +1448,15 @@ npm test
 npm run doctor -- --yes
 node bin/chalc.mjs eval-ia --yes
 ```
+
+El mutation testing del propio chalc usa StrykerJS (dependencias solo de desarrollo: nada se añade en runtime):
+
+```bash
+npm run test:mutation
+```
+
+`stryker.config.mjs` muta solo los tramos de líneas cambiados y falla por debajo del 80 %; los reportes
+van a `output/mutation/` (ignorado por git).
 
 ## Targets (asistentes) soportados
 

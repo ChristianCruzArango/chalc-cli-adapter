@@ -45,31 +45,48 @@ const normalise = (path) => String(path ?? '').replace(/\\/g, '/').trim();
 // La ruta destino de una cabecera `+++ b/ruta`, sin la cita ni el prefijo `b/` del diff.
 const headerPath = (raw) => normalise(unquote(raw).replace(/^b\//, ''));
 
-// Líneas nuevas por archivo, a partir de un diff unificado con `-U0`.
-// Devuelve Map<archivo, Set<línea>>.
-export function parseHunks(diffText) {
-  const byFile = new Map();
+// Recorre un diff unificado y entrega cada bloque con su archivo destino: { file, hunk }.
+//
+// Las líneas de CONTENIDO también pueden empezar por `+++` (añadir `++ counter;`) o `---` (borrar
+// `-- comentario`). Tomarlas por cabecera desviaba el resto del archivo a uno inexistente, y el
+// portón dejaba de revisar esos bloques (G-01). Por eso, tras cada `@@` se descuentan las líneas del
+// lado NUEVO (añadidas y de contexto) según la cuenta de la cabecera, y mientras quede alguna nada se
+// interpreta como cabecera (spec 016, R6). Las borradas no hace falta contarlas: empiezan por `-`, y
+// ni `+++ ` ni `@@` pueden confundirse con ellas.
+function* walkDiff(diffText) {
   let current = null;
+  let pendingNew = 0;
 
   for (const raw of String(diffText ?? '').split(/\r?\n/)) {
+    if (pendingNew > 0 && (raw.startsWith('+') || raw.startsWith(' '))) { pendingNew--; continue; }
+
     const file = FILE.exec(raw);
     if (file) {
       current = headerPath(file[1]);
-      if (current === '/dev/null') { current = null; continue; }
-      if (!byFile.has(current)) byFile.set(current, new Set());
+      if (current === '/dev/null') current = null;
+      else yield { file: current };
       continue;
     }
 
     const hunk = HUNK.exec(raw);
-    if (!hunk || !current) continue;
+    if (!hunk) continue;
+    pendingNew = sizeOf(hunk[4]);
+    if (current) yield { file: current, hunk };
+  }
+}
 
+// Líneas nuevas por archivo, a partir de un diff unificado con `-U0`.
+// Devuelve Map<archivo, Set<línea>>.
+export function parseHunks(diffText) {
+  const byFile = new Map();
+  for (const { file, hunk } of walkDiff(diffText)) {
+    if (!byFile.has(file)) byFile.set(file, new Set());
+    if (!hunk) continue;
     const start = Number(hunk[3]);
     // Con `0` no hay ninguna línea nueva: el bloque solo borró.
-    const count = sizeOf(hunk[4]);
-    const lines = byFile.get(current);
-    for (let i = 0; i < count; i++) lines.add(start + i);
+    const lines = byFile.get(file);
+    for (let i = 0; i < sizeOf(hunk[4]); i++) lines.add(start + i);
   }
-
   return byFile;
 }
 
@@ -80,22 +97,10 @@ export function parseHunks(diffText) {
 // medía 300 —justo el límite—, y la deuda vieja se le cobra a quien pasaba por ahí.
 export function removedByFile(diffText) {
   const byFile = new Map();
-  let current = null;
-
-  for (const raw of String(diffText ?? '').split(/\r?\n/)) {
-    const file = FILE.exec(raw);
-    if (file) {
-      current = headerPath(file[1]);
-      if (current === '/dev/null') { current = null; continue; }
-      if (!byFile.has(current)) byFile.set(current, 0);
-      continue;
-    }
-
-    const hunk = HUNK.exec(raw);
-    if (!hunk || !current) continue;
-    byFile.set(current, byFile.get(current) + sizeOf(hunk[2]));
+  for (const { file, hunk } of walkDiff(diffText)) {
+    if (!byFile.has(file)) byFile.set(file, 0);
+    if (hunk) byFile.set(file, byFile.get(file) + sizeOf(hunk[2]));
   }
-
   return byFile;
 }
 

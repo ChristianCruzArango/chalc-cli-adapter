@@ -1094,7 +1094,7 @@ chalc spec-ia /path/to/project --lang es --doc my-story.docx
 
 Flow:
 1. **Project path.** If it has no SDD, Chalc **sets it up on the fly** (`specs/` with constitution + templates).
-2. **Spec language** (independent of the CLI language): `--lang es` or you pick it in the menu.
+2. **Spec language**: `--lang es` (also sets the interface language) or you pick it in the menu (independent of the CLI language).
 3. **User story source** (where the user story comes from):
 
    | Source | What it asks for |
@@ -1403,8 +1403,8 @@ tool is missing the gate prints the exact command and stops.
 - **Bilingual CLI (es/en)**: all user-facing output goes through `lib/i18n.mjs` and comes out in the chosen language.
 - **Set the language once**: `chalc lang es` or `chalc lang en` saves it in `~/.chalc/config.json`
   and applies to all your projects. `chalc lang` with no argument opens the interactive menu.
-- **Interface language precedence**: `CHALC_LANG` > saved config (`chalc lang`) > `LANG`/`LC_*` of the OS > `en`. The `--lang` flag does not change the interface: in `spec-ia` and `feature` it is the spec language.
-- **Spec language**: `chalc spec-ia --lang es|en|pt|…` (or the menu) — independent of the CLI language.
+- **Interface language precedence**: `--lang` > `CHALC_LANG` > saved config (`chalc lang`) > `LANG`/`LC_*` of the OS > `en`. `--lang` accepts a code or a name (`es`, `en`, `español`, `English`); in `spec-ia`, `feature` and `init` it is also the language of the spec and of the generated content.
+- **Spec language**: `chalc spec-ia --lang es|en|pt|…` (or the menu). Picked in the menu it is independent of the CLI language; with `--lang` it also sets the interface language.
 - The SDD method (constitution, templates, rules, explanatory diagram) is in **es and en**.
 
 ## Security
@@ -1446,6 +1446,15 @@ npm test
 npm run doctor -- --yes
 node bin/chalc.mjs eval-ia --yes
 ```
+
+Mutation testing of chalc itself uses StrykerJS (dev-only dependencies: nothing is added at runtime):
+
+```bash
+npm run test:mutation
+```
+
+`stryker.config.mjs` mutates only the changed line ranges and fails below 80%; reports go to
+`output/mutation/` (ignored by git).
 
 ## Supported targets (assistants)
 

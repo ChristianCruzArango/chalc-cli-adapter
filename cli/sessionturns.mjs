@@ -59,7 +59,7 @@ async function sectionsFor(s, task, { focus = false } = {}) {
 
 // Un turno queda registrado como run de su rol: `fn(id, onStep)` lo ejecuta (y lo cierra con
 // agents.finish); si lanza, el run queda fallido y el error sigue su camino.
-async function tracked(s, role, task, onStep, fn) {
+async function tracked(s, { role, task, onStep }, fn) {
   const id = s.agents.begin({ role, task, ...roleMeta(s.cfg, role) });
   try {
     return await fn(id, (step) => { s.agents.step(id, step); onStep?.(step); });
@@ -75,13 +75,14 @@ const closeRun = (s, id, result) => s.agents.finish(id, { done: !result?.interru
 // que a él se le ocurra. Solo el planner la recibe: el coder consume specs, nunca los escribe.
 export async function planTurn(s, task, { onStep, shouldStop } = {}) {
   if (!task || !String(task).trim()) throw new Error('plan requiere una tarea.');
-  return tracked(s, 'planner', task, onStep, async (id, step) => {
+  return tracked(s, { role: 'planner', task, onStep }, async (id, step) => {
     const sections = await sectionsFor(s, task);
-    const tpl = await readSection(join(s.project.projectPath, 'specs', '_template', 'spec.md'), 'spec-template', frame(s.language).specTemplateTitle, true, 2500);
+    const root = s.project.projectPath;
+    const tpl = await readSection(root, join(root, 'specs', '_template', 'spec.md'), { key: 'spec-template', title: frame(s.language).specTemplateTitle, required: true, maxChars: 2500 });
     if (tpl) sections.push(tpl);
     const result = await runPlanner({
       chatImpl: roleImpl(s, 'planner'), tools: s.tools, projectSections: sections,
-      task, budgetTokens: budgetFor(s, 'planner'), language: s.language, onStep: step, shouldStop, ccr: s.ccr
+      task, budgetTokens: budgetFor(s, 'planner'), language: s.language, onStep: step, shouldStop, ccr: s.ccr, retryDelayMs: s.retryDelayMs
     });
     closeRun(s, id, result);
     return result;
@@ -116,12 +117,12 @@ async function reviewSections(s, task) {
 // para archivos nuevos) en solo lectura. Devuelve { ok, findings } — la shell decide si se corrige.
 export async function reviewTurn(s, task, { paths = [], onStep, shouldStop } = {}) {
   if (!task || !String(task).trim()) throw new Error('review requiere la tarea revisada.');
-  return tracked(s, 'reviewer', task, onStep, async (id, step) => {
+  return tracked(s, { role: 'reviewer', task, onStep }, async (id, step) => {
     const changes = await collectChanges(s.projectPath, paths);
     if (!changes) { s.agents.finish(id, { done: true }); return { ok: true, findings: '', steps: [], empty: true }; }
     const result = await runReviewer({
       chatImpl: roleImpl(s, 'reviewer'), tools: s.tools, projectSections: await reviewSections(s, task),
-      task, changes, budgetTokens: budgetFor(s, 'reviewer'), language: s.language, onStep: step, shouldStop, ccr: s.ccr
+      task, changes, budgetTokens: budgetFor(s, 'reviewer'), language: s.language, onStep: step, shouldStop, ccr: s.ccr, retryDelayMs: s.retryDelayMs
     });
     closeRun(s, id, result);
     return result;
@@ -136,14 +137,14 @@ export async function reviewTurn(s, task, { paths = [], onStep, shouldStop } = {
 // redacta los documentos que gobiernan su propio trabajo. El rol define modelo Y presupuesto.
 export async function askTurn(s, task, { approve, onStep, shouldStop, plan: approvedPlan, focus = false, role = 'coder' } = {}) {
   if (!task || !String(task).trim()) throw new Error('ask requiere una tarea.');
-  return tracked(s, role, task, onStep, async (id, step) => {
+  return tracked(s, { role, task, onStep }, async (id, step) => {
     // Sin `approve` explícito se DENIEGA: quien usa la sesión por programa y olvida pasarlo no debe
     // conceder escrituras ni comandos sin que nadie los vea (antes el defecto aprobaba todo).
     s.state.approve = approve || (async () => false);
     const sections = await sectionsFor(s, task, { focus });
     if (approvedPlan) sections.push(planSection(approvedPlan, s.language));
     const renderPrompt = createRenderPrompt({ task, tools: s.tools, projectSections: sections, budgetTokens: budgetFor(s, role), language: s.language });
-    const result = await runAgent({ chatImpl: roleImpl(s, role), tools: s.tools, renderPrompt, ccr: s.ccr, maxSteps: s.maxSteps, onStep: step, shouldStop });
+    const result = await runAgent({ chatImpl: roleImpl(s, role), tools: s.tools, renderPrompt, ccr: s.ccr, maxSteps: s.maxSteps, onStep: step, shouldStop, retryDelayMs: s.retryDelayMs });
     s.conversation.push({ role: 'user', content: String(task).trim() });
     s.conversation.push({ role: 'assistant', content: result.done ? (result.summary || '(sin resumen)') : (result.error || 'sin resultado') });
     // Lo que este turno escribió queda anotado para la tarea (spec 013, R10). Se anota AQUÍ y no

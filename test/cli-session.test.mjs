@@ -123,7 +123,7 @@ test('createSession toma los MCP del proyecto (.mcp.json) y expone sus tools al 
     };
     let system = '';
     const chatImpl = async (m) => { system = m.system; return '{"done":true,"summary":"ok"}'; };
-    const session = await createSession({ projectPath: dir, chatImpl, language: 'es', mcpConnect });
+    const session = await createSession({ projectPath: dir, chatImpl, language: 'es', mcpConnect, approveMcpServer: async () => true });   // V-08: aprobación explícita
 
     assert.deepEqual(started, [{ id: 'postgres', command: 'server-postgres' }]);  // config tomada del proyecto
     assert.deepEqual(session.mcp, ['postgres']);
@@ -199,7 +199,7 @@ test('la sesión nunca invoca best practices MCP automáticamente; la tool queda
     const calls = [];
     let system = '';
     const session = await createSession({
-      projectPath: dirA, mcpConnect: mkConnect(calls), language: 'es',
+      projectPath: dirA, mcpConnect: mkConnect(calls), approveMcpServer: async () => true, language: 'es',
       chatImpl: async (m) => { system = m.system; return '{"done":true,"summary":"ok"}'; }
     });
     assert.deepEqual(calls, []);                       // ninguna llamada automática al abrir el proyecto
@@ -215,7 +215,7 @@ test('la sesión nunca invoca best practices MCP automáticamente; la tool queda
     const calls = [];
     let system = '';
     const session = await createSession({
-      projectPath: dirB, mcpConnect: mkConnect(calls), language: 'es',
+      projectPath: dirB, mcpConnect: mkConnect(calls), approveMcpServer: async () => true, language: 'es',
       chatImpl: async (m) => { system = m.system; return '{"done":true,"summary":"ok"}'; }
     });
     assert.deepEqual(calls, []);

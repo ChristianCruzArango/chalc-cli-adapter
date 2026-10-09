@@ -6,8 +6,8 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, relative, join } from 'node:path';
 import { lineMatcher, RegexTimeoutError } from '../../lib/saferegex.mjs';
-import { isSecretFile, redactSensitiveText } from '../../lib/redact.mjs';
-import { resolveInRoot, assertNotGitDir, writeConfined } from './fsconfine.mjs';
+import { redactSecretFile } from '../../lib/redact.mjs';
+import { resolveInRoot, assertNotGitDir, writeConfined, realRelative, pathAndReal } from './fsconfine.mjs';
 import { writeHints } from './fshints.mjs';
 
 export { resolveInRoot } from './fsconfine.mjs';
@@ -38,6 +38,14 @@ const listEntries = async (abs) => (await readdir(abs, { withFileTypes: true }))
   .filter((e) => !IGNORE_DIRS.has(e.name))
   .map((e) => ({ name: e.name, type: e.isDirectory() ? 'dir' : 'file' }));
 
+// read sobre un DIRECTORIO: la intención es inequívoca (quiere el listado) — se auto-delega a list
+// en vez de devolver un error que los modelos chicos repiten en bucle hasta el cortacircuito.
+async function autoListed(abs, path) {
+  try {
+    return { path, note: 'this is a directory (auto-listed); use list for directories', entries: await listEntries(abs) };
+  } catch { return { path, error: 'not a readable directory' }; }
+}
+
 function readTool(root) {
   return {
     summary: 'Reads a text file. args: { path }',
@@ -47,19 +55,13 @@ function readTool(root) {
       const abs = resolveInRoot(root, path);
       let st;
       try { st = await stat(abs); } catch { return { path, error: 'does not exist' }; }
-      // read sobre un DIRECTORIO: la intención es inequívoca (quiere el listado) — se auto-delega a list
-      // en vez de devolver un error que los modelos chicos repiten en bucle hasta el cortacircuito.
-      if (st.isDirectory()) {
-        try {
-          return { path, note: 'this is a directory (auto-listed); use list for directories', entries: await listEntries(abs) };
-        } catch { return { path, error: 'not a readable directory' }; }
-      }
+      if (st.isDirectory()) return autoListed(abs, path);
       if (st.size > MAX_READ) return { path, size: st.size, error: `large file (${st.size} bytes); use grep to search inside` };
       const buf = await readFile(abs);
       if (isBinary(buf)) return { path, error: 'binary; not text' };
-      // Un `.env`, una clave o un archivo de credenciales ES una lista de secretos: se ve su forma, no sus valores.
-      const content = buf.toString('utf8');
-      return { path, content: isSecretFile(path) ? redactSensitiveText(content) : content };
+      // Un `.env`, una clave o un archivo de credenciales ES una lista de secretos: se ve su forma, no sus
+      // valores. Se mira la ruta pedida Y la real: un enlace `notes.txt -> .env` es un `.env` (V-04).
+      return { path, content: redactSecretFile(buf.toString('utf8'), pathAndReal(root, path)) };
     }
   };
 }
@@ -88,10 +90,11 @@ function grepRun(root, match) {
     } catch { return; }
     if (isBinary(buf)) return;
     const rel = relative(root, abs);
+    const paths = pathAndReal(root, rel);
     const lines = buf.toString('utf8').split(/\r?\n/);
     const hits = match(lines);
     for (let i = 0; i < lines.length && g.matches.length < MAX_GREP_MATCHES; i++) {
-      if (hits[i]) g.matches.push({ file: rel, line: i + 1, text: (isSecretFile(rel) ? redactSensitiveText(lines[i]) : lines[i]).slice(0, 240) });
+      if (hits[i]) g.matches.push({ file: rel, line: i + 1, text: redactSecretFile(lines[i], paths).slice(0, 240) });
     }
     if (Date.now() > g.deadline) g.outOfTime = true;
   };
@@ -174,7 +177,7 @@ function writeTool(root, approve, layoutRoots) {
         const refusal = await emptyWriteRefusal(abs, path);
         if (refusal) return refusal;
       }
-      if (!(await approve({ tool: 'write', args: { path, content, append } }))) return { path, error: 'action not approved by the user' };
+      if (!(await approve({ tool: 'write', args: { path, content, append, realPath: realRelative(root, abs) } }))) return { path, error: 'action not approved by the user' };
       const shrankNote = append ? null : await shrinkNote(abs, path, content);
       const target = await writeConfined(root, path, content, { append });
       // En append los avisos se calculan sobre el archivo COMPLETO (el trozo solo puede estar cortado).
@@ -202,7 +205,15 @@ function editTool(root, approve, layoutRoots) {
       const occurrences = text.split(oldStr).length - 1;
       if (occurrences === 0) return { path, error: '"old" was not found in the file' };
       if (occurrences > 1) return { path, error: `"old" appears ${occurrences} times; add context to make it unique` };
-      if (!(await approve({ tool: 'edit', args: { path, old: oldStr, new: newStr } }))) return { path, error: 'action not approved by the user' };
+      if (!(await approve({ tool: 'edit', args: { path, old: oldStr, new: newStr, realPath: realRelative(root, abs) } }))) return { path, error: 'action not approved by the user' };
+      // Mientras se esperaba la aprobación, alguien pudo cambiar (o borrar) el archivo: escribir la copia
+      // vieja transformada borraría su cambio sin decirlo (C-01). Se relee y, si difiere, no se escribe.
+      // Antes de releer se vuelve a confinar: si lo cambiaron por un enlace hacia fuera, se rechaza como
+      // siempre (y no se lee el archivo ajeno).
+      resolveInRoot(root, path);
+      if ((await readFile(abs, 'utf8').catch(() => null)) !== text) {
+        return { path, conflict: true, error: 'the file changed while waiting for approval; read it again and redo the edit' };
+      }
       // Función de reemplazo: con un string, `$&`, `$$`, `` $` `` y `$'` se interpretarían como patrones.
       const finalText = text.replace(oldStr, () => newStr);
       await writeConfined(root, path, finalText);

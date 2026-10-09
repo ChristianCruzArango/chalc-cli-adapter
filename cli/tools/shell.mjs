@@ -16,7 +16,8 @@ import { childEnv } from '../../lib/childenv.mjs';
 import { killTree, windowsCommand } from '../../lib/proc.mjs';
 
 export { killTree };
-import { isSecretFile, redactSensitiveText } from '../../lib/redact.mjs';
+import { redactSecretFile } from '../../lib/redact.mjs';
+import { pathAndReal } from './fsconfine.mjs';
 import { checkCommand, commandTokens, pathValue } from './shellpolicy.mjs';
 
 export { commandTokens };
@@ -79,25 +80,40 @@ function terminate(run, note) {
   hard.unref?.();
 }
 
+// `chunk` llega ya decodificado por flujo (`setEncoding`): `toString()` por trozo rompía un carácter
+// UTF-8 partido entre dos (O-03). El tope se sigue midiendo en bytes.
 function collect(run, which, chunk, maxBuffer) {
   if (run.terminating) return;
-  run.bytes += chunk.length;
-  run[which] += chunk.toString();
+  run.bytes += Buffer.byteLength(chunk);
+  run[which] += chunk;
   if (run.bytes > maxBuffer) terminate(run, '\noutput exceeded limit');
 }
 
+// Interrupción del usuario (O-02): se mata el árbol YA (SIGKILL) y se resuelve en el acto, sin esperar
+// a que los pipes se cierren —eso podía tardar segundos con un nieto que los retiene—.
+function interrupt(run) {
+  if (run.settled) return;
+  run.terminating = true;
+  killTree(run.child, 'SIGKILL');
+  run.finish({ ...outcome(run, -1), stderr: run.stderr + '\ninterrupted by the user' });
+}
+
 // Runner sin shell con timeout y salida acotada. Exportado: el portón de verificación reutiliza la misma ruta.
-export function execBounded(cmd, { cwd, timeoutMs = DEFAULT_TIMEOUT_MS, maxBuffer = MAX_BUFFER }) {
+// `signal` (opcional): el del turno; abortarlo interrumpe el comando en curso.
+export function execBounded(cmd, { cwd, timeoutMs = DEFAULT_TIMEOUT_MS, maxBuffer = MAX_BUFFER, signal }) {
   let tokens;
   try { tokens = commandTokens(cmd); }
   catch (e) { return Promise.resolve(startError(String(e.message || e))); }
   if (!tokens.length) return Promise.resolve(startError('empty command'));
+  if (signal?.aborted) return Promise.resolve(startError('interrupted by the user'));
   return new Promise((resolve) => {
     const run = { stdout: '', stderr: '', timedOut: false, terminating: false, bytes: 0, child: null, timer: null, settled: false };
+    const onAbort = () => interrupt(run);
     run.finish = (result) => {
       if (run.settled) return;
       run.settled = true;
       if (run.timer) clearTimeout(run.timer);
+      signal?.removeEventListener('abort', onAbort);
       resolve(result);
     };
     try {
@@ -108,12 +124,15 @@ export function execBounded(cmd, { cwd, timeoutMs = DEFAULT_TIMEOUT_MS, maxBuffe
         stdio: ['ignore', 'pipe', 'pipe']
       });
     } catch (e) { run.finish(startError(String(e.message || e))); return; }
+    run.child.stdout?.setEncoding('utf8');
+    run.child.stderr?.setEncoding('utf8');
     run.child.stdout?.on('data', (chunk) => collect(run, 'stdout', chunk, maxBuffer));
     run.child.stderr?.on('data', (chunk) => collect(run, 'stderr', chunk, maxBuffer));
     run.child.on('error', (err) => run.finish({ ...outcome(run, -1), stderr: run.stderr || String(err.message || err) }));
     run.child.on('close', (code) => run.finish(outcome(run, code ?? -1)));
     run.timer = setTimeout(() => { run.timedOut = true; terminate(run, ''); }, timeoutMs);
     run.timer.unref?.();
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 
@@ -124,18 +143,18 @@ export function createShellTool({ root, allow = [], approve = async () => true, 
 
   const bash = {
     summary: `Runs ONE single command at the project root (requires approval). NO && ; | nor redirections: one action per command. Allowed: ${allowed}. args: { command }`,
-    run: async ({ command } = {}) => {
+    run: async ({ command } = {}, { signal } = {}) => {
       const cmd = String(command || '').trim();
       const checked = checkCommand(cmd, { root, allow });
       if (checked.error) return checked;
       const { args } = checked;
       if (!(await approve({ tool: 'bash', args: { command: cmd } }))) return { command: cmd, error: 'action not approved by the user' };
-      const result = await execBounded(cmd, { cwd: root, timeoutMs, maxBuffer: MAX_BUFFER });
-      // `cat .env` y similares: la salida de un comando que nombra un archivo de secretos se redacta entera.
-      if (args.some((tk) => isSecretFile(pathValue(tk)))) {
-        result.stdout = redactSensitiveText(result.stdout);
-        result.stderr = redactSensitiveText(result.stderr);
-      }
+      const result = await execBounded(cmd, { cwd: root, timeoutMs, maxBuffer: MAX_BUFFER, signal });
+      // `cat .env` y similares: la salida de un comando que nombra un archivo de secretos —por su ruta o
+      // por la real de un enlace interno (V-04)— se redacta entera, en el formato de ese archivo.
+      const paths = args.flatMap((tk) => pathAndReal(root, pathValue(tk)));
+      result.stdout = redactSecretFile(result.stdout, paths);
+      result.stderr = redactSecretFile(result.stderr, paths);
       return { command: cmd, ...result };
     }
   };

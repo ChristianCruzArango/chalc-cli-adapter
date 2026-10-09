@@ -70,10 +70,20 @@ export async function loadConfig(root) {
     return { config: merge(DEFAULTS, { language }), error: frameOf(language).configMissing(CONFIG_REL) };
   }
 
+  let config;
   try {
-    return { config: merge(DEFAULTS, JSON.parse(text)), error: '' };
+    config = merge(DEFAULTS, JSON.parse(text));
   } catch (err) {
     const language = envLanguage();
     return { config: merge(DEFAULTS, { language }), error: frameOf(language).configInvalid(CONFIG_REL, err.message) };
   }
+  return { config, error: thresholdError(config) };
+}
+
+// `mutation.threshold` debe ser un número en [0, 100] (G-05): `-1` aprobaba cualquier score y un
+// string caía a 80 en silencio en mutation.mjs. Un umbral inválido bloquea, como una config ilegible.
+function thresholdError(config) {
+  const value = config.mutation?.threshold;
+  if (typeof value === 'number' && value >= 0 && value <= 100) return '';
+  return frameOf(config.language || envLanguage()).configThresholdInvalid(CONFIG_REL, JSON.stringify(value) ?? String(value));
 }

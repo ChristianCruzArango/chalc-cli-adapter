@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isEvalCapableCommand, requiresExplicitApproval, DEV_ALLOW } from '../cli/tools/trust.mjs';
+import { requiresExplicitApproval, DEV_ALLOW } from '../cli/tools/trust.mjs';
 import { createShellTool } from '../cli/tools/shell.mjs';
 
 const BYPASSES = [
@@ -34,9 +34,12 @@ test('every reproduced bypass now requires explicit approval', () => {
   }
 });
 
-test('project build and test commands stay under /auto', () => {
-  for (const cmd of ['npm test', 'npm install', 'npm ci --silent', 'dotnet build', 'git status', 'ls src']) {
-    assert.equal(isEvalCapableCommand(cmd), false, cmd);
+test('read/build commands stay under /auto; install and test commands ask (spec 016, R7)', () => {
+  for (const cmd of ['dotnet build', 'git status', 'ls src']) {
+    assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: cmd } }), false, cmd);
+  }
+  for (const cmd of ['npm test', 'npm install', 'npm ci --silent']) {
+    assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: cmd } }), true, cmd);
   }
 });
 

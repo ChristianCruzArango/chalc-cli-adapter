@@ -49,7 +49,7 @@ test('R9: grep through an internal link to .env does not expose the value', asyn
     await symlink('../.env', join(root, 'src', 'config.txt'));
     const { grep } = createFsTools({ root });
     const seen = toModel(await grep.run({ pattern: 'DB_PASSWORD', path: 'src/config.txt' }));
-    assert.ok(seen.includes('src/config.txt'), seen);
+    assert.match(seen, /src(\/|\\\\)config\.txt/);   // separador nativo: `src\\config.txt` en Windows
     assert.ok(!seen.includes(FAKE), seen);
   } finally { await cleanup(); }
 });

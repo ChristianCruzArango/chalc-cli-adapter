@@ -8,6 +8,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildArchitectureDecision, renderArchitectureDecisionMarkdown, mandatoryPrinciples, MANDATORY_DESIGN_PRINCIPLES } from '../lib/init.mjs';
 import { renderFolderReadme } from '../lib/init-folders.mjs';
 import { applyArchitectureFolders } from '../lib/init-scaffold.mjs';
@@ -55,7 +56,7 @@ test('R36: chalc init reads --lang and passes it to the decision and to the equi
 test('R36/R39: with --lang the console summary follows it, above CHALC_LANG', { timeout: 30000 }, async () => {
   const { spawnSync } = await import('node:child_process');
   const dir = await mkdtemp(join(tmpdir(), 'chalc-t36c-'));
-  const run = (contentFlag) => spawnSync(process.execPath, [new URL('../bin/chalc.mjs', import.meta.url).pathname, 'init', '--stack', 'angular', '--name', 'demo', '--dir', dir, '--dry-run', '--yes', '--lang', contentFlag], { encoding: 'utf8', env: { ...process.env, CHALC_LANG: 'es' }, input: '' });
+  const run = (contentFlag) => spawnSync(process.execPath, [fileURLToPath(new URL('../bin/chalc.mjs', import.meta.url)), 'init', '--stack', 'angular', '--name', 'demo', '--dir', dir, '--dry-run', '--yes', '--lang', contentFlag], { encoding: 'utf8', env: { ...process.env, CHALC_LANG: 'es' }, input: '' });
   const en = run('en').stdout;
   assert.match(en, /minimal implementation/);
   assert.doesNotMatch(en, /implementación mínima/);

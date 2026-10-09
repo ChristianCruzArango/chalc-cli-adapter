@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { runTask } from '../cli/session.mjs';
 import { runAgent } from '../cli/engine/loop.mjs';
 
@@ -73,4 +74,16 @@ test('R33: after the LAST failed attempt there is no wait before giving up', { t
   const r = await runAgent({ chatImpl: async () => { throw new Error('down'); }, renderPrompt, maxRetries: 0, retryDelayMs: 5000 });
   assert.equal(r.done, false);
   assert.ok(Date.now() - started < 1000);
+});
+
+test('R33: the backoff keeps the process alive until the retry (no early exit without a TUI)', { timeout: 20000 }, () => {
+  // Proceso aparte sin nada más vivo que la espera: con un temporizador `unref` salía antes de reintentar
+  // (y en Node 20/22 el runner de tests cancelaba los casos de backoff).
+  const script = `import { runAgent } from ${JSON.stringify(new URL('../cli/engine/loop.mjs', import.meta.url).href)};
+let calls = 0;
+const r = await runAgent({ chatImpl: async () => { if (++calls < 2) throw new Error('busy'); return '{"done":true,"summary":"ok"}'; }, renderPrompt: () => ({ system: 's', user: 'u' }), maxRetries: 2, retryDelayMs: 50 });
+console.log(JSON.stringify({ done: r.done, calls }));`;
+  const out = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 15000 });
+  assert.equal(out.status, 0, out.stderr);
+  assert.deepEqual(JSON.parse(out.stdout.trim()), { done: true, calls: 2 });
 });

@@ -48,14 +48,14 @@ const sameFailing = (r, turn) => r.observation?.error && r.action?.tool === turn
 // Devuelve { turn } o { error }.
 // Espera antes de reintentar tras un error del MODELO (R33): `retryDelayMs × (intento + 1)`, para no
 // mandar tres peticiones seguidas a un servidor saturado. Un aborto la corta; el intento siguiente ve la
-// señal abortada y termina el turno.
+// señal abortada y termina el turno. El temporizador NO es `unref`: la espera debe mantener vivo el
+// proceso (sin TUI no hay nada más que lo haga y saldría antes de reintentar); es acotada y el aborto la corta.
 function backoff(a, attempt) {
   const ms = (a.retryDelayMs || 0) * (attempt + 1);
   if (!ms) return Promise.resolve();   // (con el turno ya abortado no se llega aquí: el catch sale antes)
   return new Promise((resolve) => {
     const done = () => { clearTimeout(timer); a.signal?.removeEventListener('abort', done); resolve(); };
     const timer = setTimeout(done, ms);
-    timer.unref?.();
     a.signal?.addEventListener('abort', done, { once: true });
   });
 }

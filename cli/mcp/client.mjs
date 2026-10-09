@@ -54,7 +54,9 @@ function spawnServer({ command, args, env, cwd }) {
 }
 
 // Lector del stdout del servidor: parte en líneas JSON y se las pasa al dispatcher. Una línea sin fin
-// que supera el tope cierra la conexión y mata al servidor. Recibe texto ya decodificado por flujo
+// que supera el tope cierra la conexión y mata al servidor, con su ÁRBOL: en Windows el hijo es el
+// envoltorio cmd.exe y matar solo ese dejaba al servidor real vivo, inundando la tubería heredada (el
+// proceso nunca terminaba; CI de Windows colgado). Recibe texto ya decodificado por flujo
 // (`setEncoding`): `chunk.toString()` por trozo rompía un carácter UTF-8 partido entre dos (O-03).
 function lineReader(child, rpc) {
   let buffer = '';
@@ -63,7 +65,7 @@ function lineReader(child, rpc) {
     if (buffer.length > MAX_LINE_BYTES && buffer.indexOf('\n') < 0) {
       buffer = '';
       rpc.close(new Error(t('mcpLineTooLong', MAX_LINE_BYTES)));
-      try { child.kill('SIGKILL'); } catch { /* ya terminó */ }
+      killTree(child, 'SIGKILL');
       return;
     }
     let nl;

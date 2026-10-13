@@ -70,6 +70,8 @@ made once: not repeating them is part of your review.
   that concept and that the list lacks (a "shipment" is not money even if it costs some). A rule
   that only holds for this line of code is not project memory: it is a finding.
 
+{{FOLLOWUPS}}
+
 ## What you return
 
 - If there are no real problems: **`OK`** and nothing else.
@@ -99,7 +101,7 @@ The heading has a **fixed, untranslated format** — a script reads it, not a pe
 2. …
 ```
 
-- The date is UTC in `YYYY-MM-DDTHH:MM:SSZ` format.
+- The date is UTC in `YYYY-MM-DDTHH:MM:SSZ` format. Get it with `node -e "console.log(new Date().toISOString().slice(0, 19) + 'Z')"` and copy it as is: do not write local time with a `Z` at the end. The advisor discards an entry older than the gate evidence, and would call you again.
 - The commit is the one you reviewed, in hex (`git rev-parse --short=10 HEAD`).
 - The third field is your role: **`endurecedor`**. Without it, the advisor would consider another
   role covered.

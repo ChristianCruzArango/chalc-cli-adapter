@@ -12,7 +12,9 @@
 // Devuelve la acción y los HECHOS que la produjeron, que es lo que R10 necesita para que el motivo
 // cite un dato y no repita el nombre del estado.
 
-import { checklistProblems, confirmationProblems } from './checklist.mjs';
+import { checklistProblems, confirmationProblems, followupProblems } from './checklist.mjs';
+import { priorFindings } from './prior.mjs';
+import { requirementsOf } from './tasks.mjs';
 
 // Una corrida rápida omite la mutación a propósito, así que su verde no dice nada de la calidad de
 // las pruebas: para el advisor equivale a no tener evidencia (R14).
@@ -72,6 +74,19 @@ function pendingRole(s, cadence) {
   return null;
 }
 
+// Con todas las tareas marcadas, un rol de cadencia `task` que YA revisó pero cuya última entrada es
+// anterior a la evidencia vigente (spec 018, R10): el código cambió después de cerrar la última tarea y
+// el portón lo re-midió, así que su revisión ya no cubre lo que hay. Uno que nunca revisó no retiene la
+// feature (spec 009, R15): su momento era el cierre de cada tarea.
+function reviewAgain(s) {
+  for (const role of rolesOf(s).filter((r) => r.cadence === 'task')) {
+    const entry = entryOf(s, role);
+    if (entry && !entry.ok) return { role, entry };
+    if (!entry && s.review.entries.some((e) => e.role === role.id)) return { role, entry: null };
+  }
+  return null;
+}
+
 // Hay una tarea sin marcar en la que trabajar.
 const hasPendingTask = (s) => !!s.tasks.current;
 
@@ -93,16 +108,24 @@ function unreadable(s) {
 // por encima de la revisión: el control vuelve a una persona.
 //
 // Lo mismo con las reglas que la memoria le entregó (spec 015, R17): una regla entregada y no
-// confirmada es una regla que nadie verificó.
+// confirmada es una regla que nadie verificó. Y con los hallazgos de su pasada anterior (spec 017,
+// R10): uno sin respuesta es un hallazgo que desapareció sin que nadie lo cerrara.
+//
+// El alcance contra el que se valida es el que MIDIÓ la evidencia mientras siga vigente (spec 018, R9): es
+// el que el portón escribió en «Alcance de la tarea» y el que el rol recibió. El vivo puede ser otro —el
+// portón re-sella la base al aprobar—, y validar contra él castigaba al rol por citar lo que se le dio.
+const reviewScope = (s) => (evidenceIsCurrent(s) && s.gate.scopeFiles?.length ? s.gate.scopeFiles : s.changed.files || []);
+
 function checklistIssues(s) {
-  const facts = { mobile: !!s.platform?.mobile, scope: s.changed.files || [] };
+  const facts = { mobile: !!s.platform?.mobile, scope: reviewScope(s), requirements: requirementsOf(s.tasks.current) };
   const delivered = s.memory?.entries || [];
   return rolesOf(s).flatMap((role) => {
     const entry = entryOf(s, role);
     if (!entry) return [];
     const found = [
       ...(role.checklist ? checklistProblems(entry, { kind: role.checklist, ...facts }) : []),
-      ...confirmationProblems(entry, delivered)
+      ...confirmationProblems(entry, delivered),
+      ...followupProblems(entry, priorFindings(s.review.entries, entry))
     ];
     return found.length ? [`${role.id}: ${found.join('; ')}`] : [];
   });
@@ -179,7 +202,18 @@ const TABLE = [
     when: hasPendingTask,
     facts: (s) => ({ task: s.tasks.current, done: s.tasks.done, total: s.tasks.total, memory: s.memory?.entries || [] })
   },
-  // Sin tareas pendientes: los roles de feature, y solo entonces, `done`.
+  // Sin tareas pendientes: primero los roles de tarea que tienen código nuevo que mirar (R10), luego los de
+  // feature, y solo entonces, `done`.
+  {
+    action: 'call_role',
+    when: (s) => s.gate.exists && reviewAgain(s)?.entry === null,
+    facts: (s) => roleFacts(s, reviewAgain(s))
+  },
+  {
+    action: 'fix_review',
+    when: (s) => s.gate.exists && !!reviewAgain(s)?.entry,
+    facts: (s) => roleFacts(s, reviewAgain(s))
+  },
   {
     action: 'call_role',
     when: (s) => s.gate.exists && pendingRole(s, 'feature')?.entry === null,
@@ -197,14 +231,19 @@ const TABLE = [
   }
 ];
 
-// Los hechos de una acción de rol: quién falta, desde cuándo y con cuántos hallazgos.
+// Los hechos de una acción de rol: quién falta, desde cuándo, con cuántos hallazgos, y los de su última
+// pasada que la PRÓXIMA entrada tendrá que responder (spec 017, R9). Esa próxima entrada aún no existe:
+// se pregunta como si llegara ahora, después de todas las que hay.
 const roleFacts = (s, pending) => ({
   role: pending.role.id,
   cadence: pending.role.cadence,
   evidenceDate: s.gate.date,
   reviewDate: pending.entry?.date ?? null,
   findings: pending.entry?.findings ?? 0,
-  memory: s.memory?.entries || []
+  memory: s.memory?.entries || [],
+  prior: priorFindings(s.review.entries, { role: pending.role.id, date: Infinity }),
+  // Los requisitos de la tarea en curso, para el rol que tiene que responderlos uno por uno (spec 019, R4).
+  requirements: pending.role.checklist === 'requirements' ? requirementsOf(s.tasks.current) : []
 });
 
 // La acción siguiente. Devuelve { action, facts }.

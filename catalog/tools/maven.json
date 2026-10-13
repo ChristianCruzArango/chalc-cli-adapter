@@ -4,6 +4,7 @@
   "priority": 50,
   "detect": { "files": ["pom.xml"] },
   "test": { "rule": "fixed", "value": "mvn test" },
+  "build": { "rule": "fixed", "value": { "command": "mvn -q compile" } },
   "mutation": {
     "rule": "fixed",
     "value": {

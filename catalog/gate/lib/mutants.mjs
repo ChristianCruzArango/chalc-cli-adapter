@@ -24,14 +24,18 @@ export function summarize(mutants, { within = null } = {}) {
   const counts = { Killed: 0, Timeout: 0, Survived: 0, NoCoverage: 0 };
   const survivors = [];
 
+  // Los mutantes de la tarea en CUALQUIER estado, también los que no se pudieron evaluar (spec 019): que
+  // la herramienta generara alguno prueba que había algo que mutar, aunque no diera score.
+  let inScope = 0;
   for (const m of mutants) {
     const status = m?.status;
-    if (!DETECTED.has(status) && !UNDETECTED.has(status)) continue;
     // Fuera del alcance de la tarea, el mutante no cuenta ni a favor ni en contra. Mutar el archivo
     // entero mete en el denominador la deuda que ya estaba, y entonces el umbral deja de hablar de
     // lo que se escribió hoy: premia añadir pruebas sobre código ajeno y castiga tocar un archivo
     // grande. Los dos incentivos equivocados.
     if (within && !within(m.file || '', m.line ?? 0)) continue;
+    inScope += 1;
+    if (!DETECTED.has(status) && !UNDETECTED.has(status)) continue;
     counts[status] += 1;
     if (UNDETECTED.has(status)) {
       survivors.push({ file: m.file || '', line: m.line ?? 0, mutator: m.mutator || '', status });
@@ -50,6 +54,7 @@ export function summarize(mutants, { within = null } = {}) {
     survived: counts.Survived,
     noCoverage: counts.NoCoverage,
     total,
+    inScope,
     survivors
   };
 }

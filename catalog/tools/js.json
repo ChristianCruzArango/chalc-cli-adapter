@@ -14,6 +14,37 @@
     "reject": "no test specified",
     "value": "npm test"
   },
+  "build": {
+    "rule": "firstOf",
+    "rules": [
+      {
+        "rule": "jsonField",
+        "file": "package.json",
+        "path": "scripts.build",
+        "value": {
+          "command": "npm run build"
+        }
+      },
+      {
+        "rule": "byLookup",
+        "base": {
+          "command": "npx --no-install tsc --noEmit -p tsconfig.json",
+          "probe": "node_modules/.bin/tsc",
+          "install": "npm i -D typescript"
+        },
+        "variants": [
+          {
+            "id": "tsconfig",
+            "label": "TypeScript (tsconfig.json)",
+            "files": "^tsconfig\\.json$"
+          }
+        ]
+      }
+    ],
+    "default": {
+      "command": ""
+    }
+  },
   "mutation": {
     "rule": "byLookup",
     "base": {

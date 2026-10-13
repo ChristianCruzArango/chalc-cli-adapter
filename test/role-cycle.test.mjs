@@ -200,3 +200,42 @@ test('R15 — sin tareas pendientes, un rol de cadencia `task` NO retiene la fea
   assert.equal(result.action, 'call_role');
   assert.equal(result.facts.role, 'endurecedor', 'toca el de feature, no el de tarea');
 });
+
+// ── T2 (spec 018, R10): un cambio después de la última tarea también lo revisa el rol de tarea ────
+//
+// Encontrado en el E2E de la spec 017: con todo marcado se tocó código, el portón re-midió y el
+// advisor solo pidió al endurecedor. El revisor —que ya había revisado esa tarea— no volvió a mirar lo
+// nuevo. Un rol de tarea que NUNCA revisó sigue sin retener la feature (R15 de arriba).
+
+const ALL_TICKED = { done: 3, total: 3, current: '', mtime: GATE - 1 };
+const before = (id, over = {}) => at(id, { date: GATE - 500, ...over });
+
+test('R10 (018) — with everything ticked, a task role that reviewed before the new evidence is asked again', () => {
+  const result = decideOn({ tasks: ALL_TICKED, review: { entries: [before('revisor')] } });
+  assert.deepEqual([result.action, result.facts.role], ['call_role', 'revisor']);
+});
+
+test('R10 (018) — it goes before the feature role', () => {
+  const result = decideOn({ tasks: ALL_TICKED, review: { entries: [before('revisor'), before('endurecedor')] } });
+  assert.equal(result.facts.role, 'revisor');
+});
+
+test('R10 (018) — once it reviews the new evidence, the feature role comes next', () => {
+  const result = decideOn({ tasks: ALL_TICKED, review: { entries: [before('revisor'), at('revisor')] } });
+  assert.deepEqual([result.action, result.facts.role], ['call_role', 'endurecedor']);
+});
+
+test('R10 (018) — if it leaves findings on the new evidence, they are fixed before going on', () => {
+  const result = decideOn({ tasks: ALL_TICKED, review: { entries: [before('revisor'), at('revisor', { ok: false, findings: 1 })] } });
+  assert.deepEqual([result.action, result.facts.role], ['fix_review', 'revisor']);
+});
+
+test('R10 (018) — without evidence nothing is asked again', () => {
+  const result = decideOn({ tasks: ALL_TICKED, gate: { exists: false }, review: { entries: [before('revisor')] } });
+  assert.notEqual(result.action, 'call_role');
+});
+
+test('R10 (018) — only the role\'s OWN past entries count: another role reviewing does not pull it in', () => {
+  const result = decideOn({ tasks: ALL_TICKED, review: { entries: [before('endurecedor')] } });
+  assert.deepEqual([result.action, result.facts.role], ['call_role', 'endurecedor']);
+});

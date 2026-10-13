@@ -33,6 +33,6 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
     await kit.writeManagedBlock(join(projectPath, '.codex', 'config.toml'), block, { start: kit.TOML_START, end: kit.TOML_END });
   }
 
-  await kit.writeManifest(projectPath, 'codex', { stacks, skills, mcps, methods });
+  await kit.writeManifest(projectPath, 'codex', { stacks, skills, mcps, methods, specLang, architecture });
   return { plan, written: true };
 }

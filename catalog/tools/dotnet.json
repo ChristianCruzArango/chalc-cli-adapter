@@ -4,6 +4,7 @@
   "priority": 20,
   "detect": { "globs": ["*.csproj", "*.fsproj", "*.sln"] },
   "test": { "rule": "fixed", "value": "dotnet test" },
+  "build": { "rule": "fixed", "value": { "command": "dotnet build --nologo" } },
   "mutation": {
     "rule": "fixed",
     "value": {

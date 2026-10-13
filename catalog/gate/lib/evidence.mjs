@@ -42,8 +42,10 @@ function statusOf(stage, frame) {
   if (stage.skipped) {
     if (stage.reason === 'fast') return frame.status.skippedFast;
     if (stage.reason === 'tests-failed') return frame.status.skippedDependency;
+    if (stage.reason === 'build-failed') return frame.status.skippedBuild;
     if (stage.reason === 'disabled') return frame.status.skippedDisabled;
     if (stage.reason === 'no-source') return frame.status.skippedNoSource;
+    if (stage.reason === 'no-code') return frame.status.skippedNoCode;
     return frame.status.notApplicable;
   }
   return stage.ok ? frame.status.passed : frame.status.failed;

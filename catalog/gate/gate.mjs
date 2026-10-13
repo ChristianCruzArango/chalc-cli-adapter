@@ -28,6 +28,7 @@ import { RULES } from './lib/rules.mjs';
 import { runCommand } from './lib/run.mjs';
 import { runMutation } from './lib/mutation.mjs';
 import { runTests } from './lib/tests.mjs';
+import { runBuild } from './lib/build.mjs';
 
 // Una etapa estática: no ejecuta comandos, solo mira archivos. Pasa si no encontró nada.
 const staticStage = (stage, findings, ms) => ({
@@ -90,17 +91,22 @@ const noConfigStage = (error) => ({
   findings: [{ file: '', line: 0, rule: RULES.noTestCommand, data: { detail: error } }]
 });
 
-// Las etapas que ejecutan herramientas del repo: tests y mutación.
+// Las etapas que ejecutan herramientas del repo: tests, compilación y mutación.
 async function executedStages(config, { root, files, scope, run, fast }) {
   // 1. Tests. Todo lo demás depende de esto: mutar o revisar estilo sobre una suite en rojo es
   //    gastar minutos en un informe que nadie va a leer.
   const tests = await runTests(config, { root, run });
 
-  // 2. Mutación. Se omite por `--fast` (R11) o porque los tests fallaron (R10), y en ambos casos el
-  //    informe dice CUÁL de los dos fue.
-  if (fast) return [tests, skipped('mutation', 'fast')];
-  if (!tests.ok) return [tests, skipped('mutation', 'tests-failed')];
-  return [tests, await runMutation(config, { root, changed: files, lines: scope.lines, run })];
+  // 2. Compilación (spec 018, R1). Corre también con `--fast` y con los tests en rojo: es barata, y
+  //    «no compila» es justo lo que un runner tolerante esconde.
+  const build = await runBuild(config, { root, run });
+
+  // 3. Mutación. Se omite por `--fast` (R11), porque los tests fallaron (R10) o porque no compila, y el
+  //    informe dice CUÁL fue.
+  if (fast) return [tests, build, skipped('mutation', 'fast')];
+  if (!tests.ok) return [tests, build, skipped('mutation', 'tests-failed')];
+  if (!build.ok) return [tests, build, skipped('mutation', 'build-failed')];
+  return [tests, build, await runMutation(config, { root, changed: files, lines: scope.lines, run })];
 }
 
 // 3. Etapas estáticas: baratas, siempre corren, y son las que dan hallazgos accionables aunque todo

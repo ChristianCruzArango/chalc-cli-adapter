@@ -1,0 +1,28 @@
+{
+  "id": "frontend",
+  "name": "Frontend UI",
+  "detect": {
+    "anyDependency": [
+      "@angular/core",
+      "react-dom",
+      "next",
+      "vue",
+      "nuxt",
+      "svelte",
+      "@sveltejs/kit",
+      "solid-js",
+      "astro",
+      "preact",
+      "lit"
+    ],
+    "anyFile": [
+      "angular.json"
+    ]
+  },
+  "skills": [
+    "frontend-design",
+    "high-end-visual-design"
+  ],
+  "mcp": [],
+  "optionalMcp": []
+}

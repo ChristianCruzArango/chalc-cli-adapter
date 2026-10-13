@@ -150,5 +150,6 @@ test('R29: a repo with an android/ or ios/ folder is mobile', async () => {
 test('R29: equipping writes the checklist the security role declares into gate.json', async () => {
   const { flow } = await detectGateConfig(await mkdtemp(join(tmpdir(), 'chalc-checklist-')));
   assert.equal(flow.roles.find((r) => r.id === 'seguridad').checklist, 'owasp');
-  assert.equal(flow.roles.find((r) => r.id === 'revisor').checklist, undefined);
+  // El revisor declara la suya desde la spec 019 (R4): un requisito por línea, no la de seguridad.
+  assert.equal(flow.roles.find((r) => r.id === 'revisor').checklist, 'requirements');
 });

@@ -48,18 +48,23 @@ test('R1 — las prioridades son únicas: el orden no puede depender de readdir'
   assert.equal(new Set(priorities).size, priorities.length);
 });
 
+// Las reglas de un campo, también las que van dentro de un `firstOf` (spec 018, R3).
+const rulesIn = (rule) => (!rule ? [] : [rule, ...(rule.rule === 'firstOf' ? (rule.rules || []).flatMap(rulesIn) : [])]);
+const FIELDS = (stack) => [['test', stack.test], ['build', stack.build], ['mutation', stack.mutation]];
+
 test('R1 — toda regla declarada existe de verdad', async () => {
   for (const stack of await loadToolTable()) {
-    for (const [field, rule] of [['test', stack.test], ['mutation', stack.mutation]]) {
-      if (!rule) continue;
-      assert.ok(RULE_NAMES.includes(rule.rule), `${stack.id}.${field}: regla desconocida "${rule.rule}"`);
+    for (const [field, top] of FIELDS(stack)) {
+      for (const rule of rulesIn(top)) {
+        assert.ok(RULE_NAMES.includes(rule.rule), `${stack.id}.${field}: regla desconocida "${rule.rule}"`);
+      }
     }
   }
 });
 
 test('R1 — toda señal usada por una regla está declarada en el stack', async () => {
   for (const stack of await loadToolTable()) {
-    for (const rule of [stack.test, stack.mutation]) {
+    for (const rule of FIELDS(stack).flatMap(([, top]) => rulesIn(top))) {
       if (rule?.rule !== 'bySignal') continue;
       assert.ok(stack.signals?.[rule.signal], `${stack.id}: usa la señal "${rule.signal}" sin declarar sus archivos`);
     }

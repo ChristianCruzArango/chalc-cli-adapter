@@ -52,6 +52,54 @@ const LEARNED = /^\s*[-*]?\s*(?:regla aprendida|learned rule)\s*\(([^);]+)(?:;\s
 const CONFIRMED = /^\s*[-*]\s*(?:regla|rule)\s+([0-9a-f]{8})\s*:\s*(no cumple|cumple|no aplica|complies|violates|n\/a)\s*(?:—|--|-)?\s*(.*)$/i;
 const NA = /^(?:no aplica|n\/a)$/i;
 
+// La respuesta a un hallazgo de la pasada anterior del mismo rol (spec 017, R10):
+// `- Hallazgo <n>: corregido | no corregido — archivo:línea` o `no aplica — <motivo>`, en los dos
+// idiomas del spec. «no corregido» va ANTES que «corregido» en la alternativa: si no, se leería como
+// corregido justo el hallazgo que sigue abierto.
+const FOLLOWUP = /^\s*[-*]\s*(?:hallazgo|finding)\s+(\d+)\s*:\s*(no corregido|not fixed|corregido|fixed|no aplica|n\/a)\s*(?:—|--|-)?\s*(.*)$/i;
+const FOLLOWUP_STATUS = { 'no corregido': 'not-fixed', 'not fixed': 'not-fixed', corregido: 'fixed', fixed: 'fixed' };
+
+const followupOf = (line) => {
+  const m = FOLLOWUP.exec(line);
+  if (!m) return null;
+  const [, n, word, rest] = m;
+  const status = FOLLOWUP_STATUS[word.toLowerCase()];
+  return [Number(n), status ? { status, refs: rest.match(/[\w./\\-]+:\d+/g) || [] } : { status: 'na', reason: rest.trim() }];
+};
+
+// Lo que el revisor dice de un requisito de la tarea (spec 019, R4): `- R<n>: cumple | no cumple —
+// archivo:línea` o `no aplica — <motivo>`, en los dos idiomas. «no cumple» va antes que «cumple».
+const REQUIREMENT = /^\s*[-*]\s*(R\d+)\s*:\s*(no cumple|cumple|complies|violates|no aplica|n\/a)\s*(?:—|--|-)?\s*(.*?)\s*$/i;
+const REQUIREMENT_STATUS = { 'no cumple': 'violates', violates: 'violates', cumple: 'complies', complies: 'complies' };
+
+const requirementOf = (line) => {
+  const m = REQUIREMENT.exec(line);
+  if (!m) return null;
+  const [, id, word, rest] = m;
+  const status = REQUIREMENT_STATUS[word.toLowerCase()];
+  return [id.toUpperCase(), status ? { status, refs: rest.match(/[\w./\\-]+:\d+/g) || [] } : { status: 'na', reason: rest }];
+};
+
+// Un hallazgo numerado: `1. archivo:línea — problema`. Solo al principio de la línea.
+const ITEM = /^\s*(\d+)\.\s+(.*?)\s*$/;
+// Su continuación (spec 018, R12): una línea sangrada que no es una viñeta. Un modelo parte los hallazgos
+// largos así, y quedarse con la primera línea dejaba al rol sin saber qué volver a mirar.
+const CONTINUATION = /^\s+(?![-*])(\S.*?)\s*$/;
+
+// Los hallazgos de un cuerpo, con sus continuaciones. Una línea en blanco o cualquier otra cosa los cierra.
+function itemsOf(body) {
+  const items = [];
+  let open = null;
+  for (const line of body) {
+    const item = ITEM.exec(line);
+    const more = open && CONTINUATION.exec(line);
+    if (item) items.push(open = { n: Number(item[1]), text: item[2] });
+    else if (more) open.text += ` ${more[1]}`;
+    else open = null;
+  }
+  return items;
+}
+
 const confirmationOf = (line) => {
   const m = CONFIRMED.exec(line);
   if (!m) return null;
@@ -68,15 +116,17 @@ const learnedOf = (line) => {
   return { concept: m[1].trim(), synonyms, text: m[3].trim() };
 };
 
-// Lo que dice el cuerpo de una entrada: su checklist, cuántos puntos numerados trae y las reglas que
-// enseñó. Lo lee todo rol; quién DEBE traer checklist lo decide su contrato, no este lector.
+// Lo que dice el cuerpo de una entrada: su checklist, sus hallazgos numerados, las reglas que enseñó y
+// lo que responde a los hallazgos anteriores. Lo lee todo rol; quién DEBE traer qué lo decide su
+// contrato, no este lector.
 function bodyFacts(body) {
   const checklist = {};
   const learned = body.map(learnedOf).filter(Boolean);
   const confirmations = Object.fromEntries(body.map(confirmationOf).filter(Boolean).map((c) => [c.id, c]));
-  let numbered = 0;
+  const items = itemsOf(body);
+  const followups = Object.fromEntries(body.map(followupOf).filter(Boolean));
+  const requirements = Object.fromEntries(body.map(requirementOf).filter(Boolean));
   for (const line of body) {
-    if (/^\s*\d+\.\s/.test(line)) numbered += 1;
     const m = CHECK.exec(line);
     if (!m) continue;
     const [, id, word, rest] = m;
@@ -84,7 +134,7 @@ function bodyFacts(body) {
       ? { status: 'reviewed', refs: rest.match(/[\w./\\-]+:\d+/g) || [] }
       : { status: 'na', reason: rest.trim() };
   }
-  return { checklist, numbered, learned, confirmations };
+  return { checklist, numbered: items.length, items, learned, confirmations, followups, requirements };
 }
 
 // Cada encabezado `##` con las líneas que tiene debajo, hasta el siguiente.

@@ -86,6 +86,23 @@ const roleMemory = (f, lang) => {
   return MEMORY_NOTE[lang].role(f.memory.filter((e) => e.kind !== 'decision'), decisions);
 };
 
+// Los hallazgos de la pasada anterior del rol (spec 017, R9): con número y texto, y la forma exacta de
+// responder a cada uno, que es la que el advisor exige después (R10). El formato de la respuesta no se
+// traduce más allá de sus palabras: lo lee un script.
+const PRIOR_NOTE = {
+  es: (items) => ` Hallazgos de su pasada anterior; responde a cada uno con una línea «- Hallazgo <n>: corregido | no corregido | no aplica — archivo:línea o motivo»: ${items}.`,
+  en: (items) => ` Findings from its previous pass; answer each with a line "- Finding <n>: fixed | not fixed | n/a — file:line or reason": ${items}.`
+};
+const priorNote = (f, lang) => (f.prior?.length ? PRIOR_NOTE[lang](f.prior.map((p) => `${p.n}. ${shorten(p.text, 200)}`).join('; ')) : '');
+
+// Los requisitos que el rol tiene que responder uno por uno (spec 019, R4), con la forma exacta de la
+// línea, que es la que el advisor exige después.
+const REQUIREMENTS_NOTE = {
+  es: (ids) => ` Revisa requisito por requisito (${ids}): una línea «- R<n>: cumple | no cumple | no aplica — archivo:línea o motivo» por cada uno.`,
+  en: (ids) => ` Review requirement by requirement (${ids}): one line "- R<n>: complies | violates | n/a — file:line or reason" for each.`
+};
+const requirementsNote = (f, lang) => (f.requirements?.length ? REQUIREMENTS_NOTE[lang](f.requirements.join(', ')) : '');
+
 // Marco del advisor. Paridad exacta de claves entre es y en: el test la exige.
 export const FRAME = {
   es: {
@@ -104,9 +121,9 @@ export const FRAME = {
       fix_gate: (f) => `La evidencia de las ${at(f.evidenceDate)} salió con veredicto \`${f.verdict}\`. Arregla lo que reporta .chalc/gate.md.`
         + (isSecurity(f) ? SECURITY_FIX.es : ''),
       call_role: (f) => `El portón aprobó a las ${at(f.evidenceDate)} y falta que pase el agente \`${f.role}\``
-        + (f.cadence === 'feature' ? ' antes de dar la feature por terminada.' : ' por esta tarea.') + roleMemory(f, 'es'),
+        + (f.cadence === 'feature' ? ' antes de dar la feature por terminada.' : ' por esta tarea.') + roleMemory(f, 'es') + requirementsNote(f, 'es') + priorNote(f, 'es'),
       fix_review: (f) => `El agente \`${f.role}\` dejó ${f.findings} hallazgo(s) a las ${at(f.reviewDate)} en .chalc/review.md.`
-        + (isSecurity(f) ? SECURITY_FIX.es : ''),
+        + (isSecurity(f) ? SECURITY_FIX.es : '') + requirementsNote(f, 'es') + priorNote(f, 'es'),
       tick_task: (f) => `Portón verde y revisión limpia: primero corre el COMMAND (guarda en la memoria lo que enseñó la tarea) y después marca «${f.task}» en tasks.md (${f.done + 1}/${f.total}).`
         + (f.waitForApproval ? ' Después PARA y espera mi OK antes de seguir.' : ''),
       work_task: (f) => `Toca «${f.task}» (${f.done}/${f.total} hechas). TDD estricto: test que falla, código mínimo, refactor.` + workMemory(f, 'es'),
@@ -130,9 +147,9 @@ export const FRAME = {
       fix_gate: (f) => `The evidence from ${at(f.evidenceDate)} came out \`${f.verdict}\`. Fix what .chalc/gate.md reports.`
         + (isSecurity(f) ? SECURITY_FIX.en : ''),
       call_role: (f) => `The gate passed at ${at(f.evidenceDate)} and the \`${f.role}\` agent still has to run`
-        + (f.cadence === 'feature' ? ' before the feature can be called done.' : ' for this task.') + roleMemory(f, 'en'),
+        + (f.cadence === 'feature' ? ' before the feature can be called done.' : ' for this task.') + roleMemory(f, 'en') + requirementsNote(f, 'en') + priorNote(f, 'en'),
       fix_review: (f) => `The \`${f.role}\` agent left ${f.findings} finding(s) at ${at(f.reviewDate)} in .chalc/review.md.`
-        + (isSecurity(f) ? SECURITY_FIX.en : ''),
+        + (isSecurity(f) ? SECURITY_FIX.en : '') + requirementsNote(f, 'en') + priorNote(f, 'en'),
       tick_task: (f) => `Gate green and review clean: first run the COMMAND (it stores what the task taught in the memory), then tick "${f.task}" in tasks.md (${f.done + 1}/${f.total}).`
         + (f.waitForApproval ? ' Then STOP and wait for my OK before moving on.' : ''),
       work_task: (f) => `Next up: "${f.task}" (${f.done}/${f.total} done). Strict TDD: failing test, minimum code, refactor.` + workMemory(f, 'en'),

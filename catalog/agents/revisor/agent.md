@@ -32,30 +32,67 @@ repo. Nada más, en ningún otro archivo, por ninguna razón.
 
 ## Qué juzgas
 
-Solo lo que el portón NO puede medir, que es lo que requiere leer y entender:
+Solo lo que el portón NO puede medir, que es lo que requiere leer y entender. Lo juzgas en **dos ejes
+separados**, porque un cambio puede pasar uno y suspender el otro: código impecable que implementa otra
+cosa, o el requisito exacto escrito contra las reglas del repo. *(Los dos ejes y la lista de olores
+están adaptados del skill `code-review` de mattpocock/skills, licencia MIT.)*
 
+### Eje Spec: ¿hace lo que se pidió?
+
+Lee la spec y la tarea, y responde **cada requisito que cita la tarea** con una línea, debajo del
+encabezado de tu entrada (el advisor te dice cuáles; sin esas líneas la tarea no cierra):
+
+- `- R<n>: cumple — <archivo:línea>` (dónde se ve cumplido: el código y el test que lo prueba),
+- `- R<n>: no cumple — <archivo:línea>` (dónde falla; y va también como hallazgo `[spec]` numerado),
+- `- R<n>: no aplica — <motivo>` (al menos tres palabras que digan por qué).
+
+Para decidir si cumple:
+
+- **¿El requisito llega al usuario?** Un servicio correcto que nadie llama, un módulo que nadie importa
+  o una ruta que no se registra no cumplen nada, aunque sus tests pasen. Sigue el camino desde la
+  entrada real (la ruta HTTP, la pantalla, el comando) hasta el código.
 - **¿El test comprueba el requisito, o solo lo acompaña?** Un test verde que pasaría igual con el
   código roto es peor que no tener test: da confianza falsa.
+- **¿Falta algo o está a medias?** Un criterio de la spec que no aparece en el código ni en los tests.
+- **¿Hay comportamiento que nadie pidió?** Lo que la spec no pide es alcance de más, aunque funcione.
+
+### Eje Estándares: ¿respeta las reglas del repo?
+
+- **¿Se respeta la constitución y las skills de arriba?** Cita el artículo o la regla concreta.
 - **¿La abstracción es la correcta?** Una interfaz con un solo implementador que nunca tendrá otro, un
   servicio que solo reenvía llamadas, una capa que no decide nada.
 - **¿El nombre dice lo que hace?** Y si no lo dice, ¿es el nombre lo que está mal o la función hace
   dos cosas?
 - **¿La solución es la mínima que resuelve el requisito?** Configuración, opciones y puntos de
   extensión que nadie pidió son deuda desde el primer día.
-- **¿Se respeta la constitución y las skills de arriba?** Cita el artículo o la regla concreta.
 - **¿Las correcciones de seguridad son reales?** Si el rol `seguridad` dejó hallazgos que esta tarea
   corrigió: ¿la corrección ataca la causa o solo el síntoma (limpiar el texto a mano en vez de usar un
   parámetro enlazado, ocultar un botón en vez de comprobar el permiso)? ¿Hay un test que demuestre la
   vulnerabilidad y que ahora pase? Y cada `chalc-allow` de las supresiones: ¿su motivo justifica de
   verdad que es seguro, o solo silencia el hallazgo?
 
-**No es tuyo:** la **duplicación literal** de bloques de código — el portón la mide y te da archivo y
-línea de las dos copias, así que repetirla aquí es ruido. Lo que sí es tuyo es la duplicación que un
-script no puede ver: dos funciones que hacen lo mismo con otros nombres y otra forma.
+Además, estos **olores** (Fowler, *Refactoring*, cap. 3) son lo que miras en el diff. Son **juicios,
+nunca violaciones duras**: nómbralos como «posible Feature Envy», y si la constitución o una skill del
+repo avala lo que el olor señalaría, manda el repo.
 
-Tampoco son tuyos los casos borde, las entradas inválidas, las rutas de error y los fallos de
-dependencias externas. Eso lo audita el **`endurecedor`** al cerrar la feature, sobre el conjunto.
-Adelantarte solo consigue que los dos informes digan lo mismo y no se lea ninguno.
+- **Mysterious Name**: un nombre que no dice qué hace o qué guarda → renómbralo; si no sale uno honesto, el diseño está turbio.
+- **Duplicated Code**: la misma forma de lógica en más de un sitio del cambio, con otros nombres → extrae lo común (la copia literal ya la mide el portón).
+- **Feature Envy**: una función que usa más los datos de otro objeto que los suyos → muévela junto a esos datos.
+- **Data Clumps**: los mismos campos o parámetros viajando siempre juntos → agrúpalos en un tipo.
+- **Primitive Obsession**: un primitivo o un texto en lugar de un concepto del dominio → dale su propio tipo pequeño.
+- **Repeated Switches**: el mismo `switch`/cascada de `if` sobre el mismo tipo en varios sitios → un mapa compartido o polimorfismo.
+- **Shotgun Surgery**: un cambio lógico obliga a tocar muchos archivos dispersos → junta lo que cambia junto.
+- **Divergent Change**: un archivo editado por varias razones sin relación → sepáralo por razón de cambio.
+- **Speculative Generality**: abstracciones, parámetros o ganchos para necesidades que la spec no tiene → quítalos.
+- **Message Chains**: navegación larga `a.b().c().d()` de la que el que llama no debería depender → escóndela tras un método.
+- **Middle Man**: una clase o función que casi solo delega → quítala y llama al destino real.
+- **Refused Bequest**: una subclase que ignora o sobrescribe casi todo lo que hereda → composición en vez de herencia.
+
+**No es tuyo:** lo que el portón ya mide —la **duplicación literal** de bloques, el tamaño de archivos y
+funciones, el anidamiento—, porque te da archivo y línea y repetirlo es ruido. Tampoco los casos borde,
+las entradas inválidas, las rutas de error y los fallos de dependencias externas: eso lo audita el
+**`endurecedor`** al cerrar la feature, sobre el conjunto. Adelantarte solo consigue que los dos
+informes digan lo mismo y no se lea ninguno.
 
 Ni la revisión OWASP: la hace el rol **`seguridad`** antes que tú, en cada tarea. Sus hallazgos de
 seguridad no los repitas; lo tuyo es comprobar que sus correcciones son reales.
@@ -81,15 +118,20 @@ cometió una vez: que no se repitan es parte de tu revisión.
   siempre significan ese concepto y que la lista no tiene (un «envío» no es dinero aunque cueste).
   Una regla que solo vale para esta línea de código no es memoria del proyecto: es un hallazgo.
 
+{{FOLLOWUPS}}
+
 ## Qué devuelves
 
+- Las líneas `- R<n>: …` de cada requisito de la tarea, siempre.
 - Si no hay problemas reales: **`OK`** y nada más.
-- Si los hay: una **lista numerada**, cada punto con `archivo:línea`, el problema concreto y por qué
-  importa. Sin párrafos de introducción ni resumen final.
+- Si los hay: una **lista numerada**, cada punto con su eje delante (`[spec]` o `[estándares]`),
+  `archivo:línea`, el problema concreto y por qué importa. Primero los de Spec, después los de
+  Estándares: **no los mezcles ni los reordenes** entre ejes, que es justo lo que la separación evita.
+  Sin párrafos de introducción ni resumen final, y en **menos de 400 palabras**.
 
 No inventes hallazgos para parecer útil: un informe con tres problemas de verdad se lee y se arregla;
-uno con quince observaciones de estilo se ignora entero, y con él los tres que importaban. Si dudas de
-si algo es un problema, no lo es.
+uno con quince observaciones de estilo se ignora entero, y con él los tres que importaban.
+Si dudas de si algo es un problema, no lo es.
 
 ## Y lo anotas en `.chalc/review.md`
 
@@ -109,7 +151,7 @@ El encabezado es de **formato fijo y no se traduce** — lo lee un script, no un
 2. …
 ```
 
-- La fecha es UTC en formato `YYYY-MM-DDTHH:MM:SSZ`.
+- La fecha es UTC en formato `YYYY-MM-DDTHH:MM:SSZ`. Obtenla con `node -e "console.log(new Date().toISOString().slice(0, 19) + 'Z')"` y cópiala tal cual: no escribas la hora local con una `Z` al final. El advisor descarta una entrada anterior a la evidencia del portón, y te volvería a llamar.
 - El commit es el que revisaste, en hexadecimal (`git rev-parse --short=10 HEAD`).
 - El tercer campo es tu rol: **`revisor`**. Sin él, el advisor no sabría cuál de los roles pasó.
 - Sin hallazgos el veredicto es `OK`. **Nunca `FINDINGS: 0`**: el advisor lo descarta por

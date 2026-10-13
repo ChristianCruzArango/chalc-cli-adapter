@@ -12,6 +12,10 @@ export const RULES = Object.freeze({
   // etapa de tests
   noTestCommand: 'no-test-command',
 
+  // etapa de compilación (spec 018)
+  buildFailed: 'build-failed',
+  buildNotInstalled: 'build-not-installed',
+
   // etapa de mutación
   noTool: 'no-tool',
   notInstalled: 'not-installed',
@@ -60,5 +64,14 @@ export const RULES = Object.freeze({
   // trazabilidad y contrato
   noRequirement: 'no-requirement',
   unknownRequirement: 'unknown-requirement',
-  contractRouteMissing: 'contract-route-missing'
+  contractRouteMissing: 'contract-route-missing',
+
+  // la guarda del asistente (spec 017). No son hallazgos de una revisión sino el motivo de una acción
+  // que se pregunta o se bloquea ANTES de ocurrir; viven aquí para que su redacción tenga la misma
+  // exigencia de paridad que el resto.
+  guardGitCommit: 'git-commit',
+  guardGitPush: 'git-push',
+  guardGitPushForce: 'git-push-force',
+  guardSecretRead: 'secret-read',
+  guardDeleteOutside: 'delete-outside'
 });

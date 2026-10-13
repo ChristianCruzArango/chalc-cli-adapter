@@ -19,6 +19,7 @@ import { parseMutmutStats } from './report-mutmut.mjs';
 import { runCommand, shellArg, UnsafeArgError } from './run.mjs';
 import { rangesOf, relativeTo, touchesChange } from './hunks.mjs';
 import { RULES } from './rules.mjs';
+import { codeLines } from './codelines.mjs';
 import { SOURCE_FILE, isTestFile } from './sources.mjs';
 import { mtimeOf, newestSource, resolveReport } from './report-find.mjs';
 import { caracteresDeLineas } from './textspan.mjs';
@@ -147,6 +148,25 @@ function withinTask(root, changed, lines) {
   };
 }
 
+// ¿Alguna línea que la tarea escribió en un archivo de producción es código? Un archivo que no se puede
+// leer cuenta como código: ante la duda, el portón no aprueba (spec 019, R2).
+async function changesHaveCode(root, changed, lines) {
+  for (const rel of changed.filter(esCodigoMutable)) {
+    let text;
+    try { text = await readFile(join(root, rel), 'utf8'); } catch { return true; }
+    if (codeLines(text).some(({ line }) => touchesChange(lines, rel, line))) return true;
+  }
+  return false;
+}
+
+// Un reporte sin score «no aplica» (spec 019, R1) solo con TRES señales a la vez: la herramienta no
+// generó ni un mutante en la tarea (en ningún estado: uno que no compiló prueba que había qué mutar), se
+// sabe qué archivos tocó la tarea, y ninguna línea que escribió es código. Si falta cualquiera, bloquea.
+async function nothingToMutate(report, { root, changed, lines }) {
+  if (report.inScope !== 0 || !changed.length) return false;
+  return !(await changesHaveCode(root, changed, lines));
+}
+
 // ── etapa ─────────────────────────────────────────────────────────────────────────────────────
 
 // Los bloqueos no señalan una línea de código: señalan que la corrida no se pudo creer. El `data`
@@ -232,7 +252,8 @@ async function readReport(cfg, reportPath, ran, { root, changed, lines }) {
   if (!parse) return { result: blocked(RULES.badReport, { format: cfg.format }, ran) };
   try {
     const report = parse(await readFile(reportPath, 'utf8'), { within: withinTask(root, changed, lines) });
-    return report.score === null ? { result: blocked(RULES.noMutants, {}, ran) } : { report };
+    if (report.score !== null) return { report };
+    return { result: await nothingToMutate(report, { root, changed, lines }) ? { ...BASE, ...ran, ok: true, skipped: true, reason: 'no-code' } : blocked(RULES.noMutants, {}, ran) };
   } catch (err) {
     // Un problema conocido del reporte viaja como código y el informe lo redacta en el idioma del
     // proyecto; cualquier otro error, con su mensaje tal cual.

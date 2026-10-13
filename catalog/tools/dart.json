@@ -10,5 +10,11 @@
     "cases": [{ "match": "\\bflutter\\b", "value": "flutter test" }],
     "default": "dart test"
   },
+  "build": {
+    "rule": "bySignal",
+    "signal": "pubspec",
+    "cases": [{ "match": "\\bflutter\\b", "value": { "command": "flutter analyze --no-fatal-warnings --no-fatal-infos" } }],
+    "default": { "command": "dart analyze --no-fatal-warnings --no-fatal-infos" }
+  },
   "mutation": null
 }

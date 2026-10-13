@@ -31,6 +31,6 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
     await kit.mergeMcpServers(join(projectPath, '.vscode', 'mcp.json'), servers, { key: 'servers', force });
   }
 
-  await kit.writeManifest(projectPath, 'copilot', { stacks, skills, mcps, methods });
+  await kit.writeManifest(projectPath, 'copilot', { stacks, skills, mcps, methods, specLang, architecture });
   return { plan, written: true };
 }

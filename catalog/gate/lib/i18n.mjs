@@ -22,14 +22,15 @@ export const FRAME = {
       title: 'Etapas',
       name: 'Etapa', result: 'Resultado', command: 'Comando', code: 'Salida', duration: 'Duración',
       scope: 'alcance',
-      tests: 'tests', mutation: 'mutación', smells: 'código', duplication: 'duplicación', security: 'seguridad', boundaries: 'fronteras',
+      tests: 'tests', build: 'compilación', mutation: 'mutación', smells: 'código', duplication: 'duplicación', security: 'seguridad', boundaries: 'fronteras',
       traceability: 'trazabilidad', contract: 'contrato'
     },
     status: {
       passed: 'pasó', failed: 'no pasa', blocked: 'bloqueada',
-      skippedFast: 'omitida por --fast', skippedDependency: 'no ejecutada: los tests fallaron',
+      skippedFast: 'omitida por --fast', skippedDependency: 'no ejecutada: los tests fallaron', skippedBuild: 'no ejecutada: no compila',
       notApplicable: 'no aplica en este repo', skippedDisabled: 'desactivada en .chalc/gate.json',
       skippedNoSource: 'no aplica: la tarea no cambió código de producción',
+      skippedNoCode: 'no aplica: los cambios no tienen código mutable (solo imports, decoradores o cierres)',
       capped: 'recorrido acotado por maxFiles: puede haber más'
     },
     mutation: {
@@ -83,14 +84,15 @@ export const FRAME = {
       title: 'Stages',
       name: 'Stage', result: 'Result', command: 'Command', code: 'Exit', duration: 'Duration',
       scope: 'scope',
-      tests: 'tests', mutation: 'mutation', smells: 'code', duplication: 'duplication', security: 'security', boundaries: 'boundaries',
+      tests: 'tests', build: 'build', mutation: 'mutation', smells: 'code', duplication: 'duplication', security: 'security', boundaries: 'boundaries',
       traceability: 'traceability', contract: 'contract'
     },
     status: {
       passed: 'passed', failed: 'failed', blocked: 'blocked',
-      skippedFast: 'skipped by --fast', skippedDependency: 'not run: the tests failed',
+      skippedFast: 'skipped by --fast', skippedDependency: 'not run: the tests failed', skippedBuild: 'not run: the build failed',
       notApplicable: 'not applicable in this repo', skippedDisabled: 'disabled in .chalc/gate.json',
       skippedNoSource: 'not applicable: the task changed no production code',
+      skippedNoCode: 'not applicable: the changes have no mutable code (only imports, decorators or closers)',
       capped: 'scan capped by maxFiles: there may be more'
     },
     mutation: {
@@ -146,6 +148,8 @@ const verb = (lang, role) => CONTRACT_VERB[lang][role] ?? CONTRACT_VERB[lang][''
 // paridad exige que ninguna regla se quede sin traducir en ninguno de los dos.
 export const MESSAGES = {
   es: {
+    [RULES.buildFailed]: (d) => `el código no compila: \`${d.command}\` salió con ${d.code}. Arregla lo que reporta antes de seguir — un repo que no compila no tiene tarea que cerrar`,
+    [RULES.buildNotInstalled]: (d) => `la herramienta de compilación no está instalada (${d.tool}); ${d.install ? `instálala con: ${d.install}` : 'instálala o ajusta "build.command" en .chalc/gate.json'}`,
     [RULES.noTestCommand]: () => 'sin comando de tests configurado: completa "test.command" en .chalc/gate.json — sin pruebas no hay nada que verificar',
     [RULES.noTool]: () => 'sin herramienta de mutación configurada para este repo: completa "mutation" en .chalc/gate.json',
     [RULES.notInstalled]: (d) => `la herramienta de mutación no está instalada (${d.tool}); ${d.install ? `instálala con: ${d.install}` : 'instálala antes de cerrar la tarea'}`,
@@ -187,9 +191,16 @@ export const MESSAGES = {
     [RULES.noRequirement]: (d) => `el test no cita ningún requisito de ${d.spec}: sin cita nadie puede saber qué cubre`,
     [RULES.unknownRequirement]: (d) => `"${d.id}" no existe en ${d.spec}: cita un requisito real o actualiza la spec primero`,
     [RULES.contractRouteMissing]: (d, lang) =>
-      `${d.method} ${d.path} está en el contrato pero este repo no la ${verb(lang, d.role)}: falta "${d.missing.join('", "')}" en el código`
+      `${d.method} ${d.path} está en el contrato pero este repo no la ${verb(lang, d.role)}: falta "${d.missing.join('", "')}" en el código`,
+    [RULES.guardGitCommit]: (d) => `Commit pendiente de tu confirmación: \`${d.command}\`. Las reglas del proyecto exigen tu orden explícita para commitear.`,
+    [RULES.guardGitPush]: (d) => `Push pendiente de tu confirmación: \`${d.command}\`. Las reglas del proyecto exigen tu orden explícita para subir cambios.`,
+    [RULES.guardGitPushForce]: (d) => `Bloqueado: \`${d.command}\` es un push forzado y reescribe historia que otros ya tienen. Si de verdad hace falta, hazlo tú fuera del asistente.`,
+    [RULES.guardSecretRead]: (d) => `Bloqueado: \`${d.path}\` es un archivo de credenciales y su contenido entraría al contexto del modelo. Las plantillas (\`.env.example\`) sí se pueden leer. Si lo necesitas, ábrelo tú; para apagar la guarda, quita su entrada PreToolUse de .claude/settings.`,
+    [RULES.guardDeleteOutside]: (d) => `Bloqueado: \`${d.command}\` borra \`${d.target}\`, que queda fuera del proyecto, es el proyecto entero o no se puede saber adónde apunta. Si es intencional, hazlo tú.`
   },
   en: {
+    [RULES.buildFailed]: (d) => `the code does not compile: \`${d.command}\` exited with ${d.code}. Fix what it reports before moving on — a repo that does not compile has no task to close`,
+    [RULES.buildNotInstalled]: (d) => `the build tool is not installed (${d.tool}); ${d.install ? `install it with: ${d.install}` : 'install it or adjust "build.command" in .chalc/gate.json'}`,
     [RULES.noTestCommand]: () => 'no test command configured: fill in "test.command" in .chalc/gate.json — without tests there is nothing to verify',
     [RULES.noTool]: () => 'no mutation tool configured for this repo: fill in "mutation" in .chalc/gate.json',
     [RULES.notInstalled]: (d) => `the mutation tool is not installed (${d.tool}); ${d.install ? `install it with: ${d.install}` : 'install it before closing the task'}`,
@@ -231,7 +242,12 @@ export const MESSAGES = {
     [RULES.noRequirement]: (d) => `the test cites no requirement from ${d.spec}: without a citation nobody can tell what it covers`,
     [RULES.unknownRequirement]: (d) => `"${d.id}" does not exist in ${d.spec}: cite a real requirement or update the spec first`,
     [RULES.contractRouteMissing]: (d, lang) =>
-      `${d.method} ${d.path} is in the contract but this repo does not ${verb(lang, d.role)} it: "${d.missing.join('", "')}" is missing from the code`
+      `${d.method} ${d.path} is in the contract but this repo does not ${verb(lang, d.role)} it: "${d.missing.join('", "')}" is missing from the code`,
+    [RULES.guardGitCommit]: (d) => `Commit awaiting your confirmation: \`${d.command}\`. The project rules require your explicit go-ahead to commit.`,
+    [RULES.guardGitPush]: (d) => `Push awaiting your confirmation: \`${d.command}\`. The project rules require your explicit go-ahead to push.`,
+    [RULES.guardGitPushForce]: (d) => `Blocked: \`${d.command}\` is a forced push and rewrites history others already have. If it is truly needed, do it yourself outside the assistant.`,
+    [RULES.guardSecretRead]: (d) => `Blocked: \`${d.path}\` is a credentials file and its contents would enter the model's context. Templates (\`.env.example\`) can be read. If you need it, open it yourself; to turn the guard off, remove its PreToolUse entry from .claude/settings.`,
+    [RULES.guardDeleteOutside]: (d) => `Blocked: \`${d.command}\` deletes \`${d.target}\`, which is outside the project, is the whole project, or cannot be resolved. If it is intended, do it yourself.`
   }
 };
 

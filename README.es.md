@@ -126,7 +126,9 @@ determinística.
 
 Implementación mínima, Clean Code, SOLID y arquitectura modular son **principios obligatorios** en todos los proyectos.
 Lo que el usuario elige es la arquitectura concreta. Soporta **Angular, NestJS y .NET**, orquestando
-el scaffolder **oficial** de cada uno (`ng new`, `nest new`, `dotnet new`):
+el scaffolder **oficial** de cada uno (`ng new`, `nest new`, `dotnet new`). Si el scaffolder no deja
+`.gitignore` (`nest new` y `dotnet new` no lo hacen con `--skip-git`), Chalc escribe uno por stack —sin
+secretos, sin dependencias ni salidas de mutación— para que el primer commit no se lleve `node_modules`:
 
 ```bash
 chalc init                         # interactivo: elige stack, describe la idea, elige arquitectura
@@ -362,6 +364,7 @@ chalc/
 │   ├── net.mjs              fetch con timeout/límites y validación de URLs externas
 │   ├── install.mjs          instalar/vendorizar skills (Git/skills.sh/local)
 │   ├── targetkit.mjs        utilidades compartidas por los targets (principios, arquitectura, bloques)
+│   ├── manifest.mjs         lee `.chalc.json`: idioma, métodos y arquitectura que re-equipar respeta
 │   ├── docread.mjs          extrae texto de Word/PDF/Excel/…
 │   ├── ole2.mjs             contenedor OLE2/CFB (Office binario antiguo)
 │   ├── xls.mjs              Excel .xls (BIFF8) → filas, RC4 incluido
@@ -370,6 +373,7 @@ chalc/
 │   ├── init.mjs             registro de stacks: arquitecturas, scaffolder oficial, versión de CLI por Node
 │   ├── init-folders.mjs     guías por carpeta (README.md) + mapa de carpetas para architecture.md
 │   ├── init-scaffold.mjs    re-moldea el proyecto a la arquitectura + escribe docs/architecture.md
+│   ├── init-gitignore.mjs   `.gitignore` por stack cuando el scaffolder no deja uno
 │   ├── verify.mjs           verificación de completitud del proyecto (carpetas, docs, specs, manifiesto)
 │   ├── verify-boundaries.mjs re-export del linter de fronteras del portón — `chalc verify`
 │   ├── gatedetect.mjs      detecta la config del portón desde las señales reales del repo
@@ -409,8 +413,8 @@ chalc/
 │   ├── mcp/                 definiciones de servidores MCP
 │   ├── profiles/            perfiles de modelos por tarea (chalc-default.json: spec/qa/repair)
 │   ├── methods/sdd/         el método SDD (constitución, plantillas es/en, reglas, gráfico)
-│   ├── agents/              los roles de revisión: contrato + prompt (es/en) por carpeta
-│   ├── hooks/               el hook opcional de fin de turno, documentado — nunca instalado
+│   ├── agents/              los roles de revisión: contrato + prompt (es/en) por carpeta; `_shared/` es el texto que reciben todos
+│   ├── hooks/               los hooks opcionales (anotador, aviso de fin de turno, guardas), documentados — nunca instalados
 │   ├── gate/                el portón de calidad: código real que se copia a `.chalc/` al equipar
 │   ├── next/                el advisor de flujo: decide la ÚNICA acción siguiente del ciclo de tarea
 │   ├── tools/               qué sabe chalc de cada stack: tests, mutación, reporte e instalación
@@ -432,7 +436,7 @@ chalc/
 | Skills | `.claude/skills/<id>/` (copia real) |
 | MCP | `.mcp.json` (fusionado, no pisa lo existente) |
 | Reglas/stack | `CLAUDE.md` (bloque gestionado entre `<!-- chalc:start -->` y `<!-- chalc:end -->`) |
-| Manifiesto | `.chalc.json` (qué se instaló y cuándo) |
+| Manifiesto | `.chalc.json` (qué se instaló y cuándo, en qué idioma, con qué método y arquitectura: re-equipar sin flags lo respeta) |
 
 ## Extender Chalc
 
@@ -643,13 +647,14 @@ comprobaba. Un asistente podía reportar un score sin ejecutar nada. Ahora el sc
 el archivo de reporte de la propia herramienta** — nunca de su stdout, nunca de un resumen escrito.
 
 ```
-node .chalc/gate.mjs           # cierra una tarea: tests + mutación + comprobaciones estáticas
-node .chalc/gate.mjs --fast    # omite la mutación (minutos) — NO cierra tarea
+node .chalc/gate.mjs           # cierra una tarea: tests + compilación + mutación + comprobaciones estáticas
+node .chalc/gate.mjs --fast    # omite la mutación (minutos), sí compila — NO cierra tarea
 ```
 
 | Etapa | Qué comprueba | De dónde sale |
 |---|---|---|
 | tests | la suite del propio repo | `test.command` |
+| compilación | que el código compila (`npm run build`, `tsc --noEmit`, `dotnet build`, `cargo check`…); si no compila, la mutación no corre | `build.command` |
 | mutación | score ≥ umbral y mutantes supervivientes | el reporte nativo (Stryker, Stryker.NET, mutmut, PIT) |
 | código | una cosa por archivo, largo de archivo/función, parámetros, anidamiento, `catch` vacío, salida de depuración, `any` | archivos cambiados |
 | seguridad | secretos en el código, TLS desactivado, `http://`, SQL concatenado, `eval`, HTML sin escapar, MD5/SHA1 | líneas que escribió la tarea |
@@ -662,6 +667,15 @@ está o reporte más viejo que el código que cambiaste salen con código distin
 comando de instalación exacto. Cada corrida escribe `.chalc/gate.md` con la fecha, la rama, cada
 comando con su código de salida y su duración reales, el score, los supervivientes y los hallazgos —
 evidencia que puedes leer tú mismo.
+
+Un reporte sin mutantes también bloquea, salvo un caso: si la herramienta corrió, no generó **ni un
+mutante** en la tarea y **ninguna línea cambiada es código** (solo imports, decoradores —también los de
+varias líneas— o cierres), la mutación sale «no aplica: los cambios no tienen código mutable». Con una sola
+línea de lógica, o sin saber qué archivos tocó la tarea, sigue bloqueando.
+
+La compilación existe porque un runner de tests puede tolerar lo que el compilador no: en una prueba de punta a punta,
+código que `tsc` rechazaba pasó tests, mutación y revisión. Un repo sin nada que compilar la ve como «no aplica»;
+sin la herramienta instalada, bloquea con el comando para instalarla.
 
 La configuración vive en **`.chalc/gate.json`** (umbrales, comandos, rutas de reporte). Re-equipar
 regenera el código del portón y **conserva lo que hayas editado ahí**.
@@ -872,7 +886,7 @@ Hoy hay tres roles, y no se pisan:
 | Rol | Cuándo | Qué juzga |
 |---|---|---|
 | `seguridad` | cada tarea, antes del revisor | OWASP Top 10 (y MASVS en móvil), con checklist que el advisor comprueba |
-| `revisor` | cada tarea | calidad del test, abstracción, nombres, mínimo; que las correcciones de seguridad sean reales |
+| `revisor` | cada tarea | dos ejes: **Spec** (una línea por cada `R#` de la tarea, que el advisor exige) y **Estándares** (constitución, skills, olores de Fowler); que las correcciones de seguridad sean reales |
 | `endurecedor` | al cerrar la feature | entradas inválidas, rutas de error, casos borde, dependencias que fallan |
 
 La **cadencia** importa por el coste: cada pasada es una llamada a un modelo. Meter al endurecedor en
@@ -888,6 +902,25 @@ que encontraría al final. Se ajusta por repo en `.chalc/gate.json`:
   ]
 }
 ```
+
+**Un cambio después de la última tarea también se revisa.** Si con todas las tareas marcadas el código
+cambia y el portón vuelve a medir, el advisor vuelve a pedir los roles de tarea que ya habían revisado antes
+que el `endurecedor` y que `done`. Y mientras la evidencia esté vigente, las checklists se validan contra el
+alcance que esa evidencia midió, que es el que recibió el rol.
+
+**El revisor juzga en dos ejes.** *Spec*: cada requisito que cita la tarea, con una línea `- R<n>: cumple |
+no cumple | no aplica — archivo:línea o motivo` que el advisor exige como la checklist OWASP; y si el
+requisito llega de verdad al usuario (un módulo que nadie importa no cumple nada). *Estándares*: la
+constitución, las skills y doce olores de Fowler como juicios, nunca como violaciones. Los hallazgos van
+etiquetados `[spec]` / `[estándares]` y no se mezclan entre ejes. Adaptado del skill `code-review` de
+[mattpocock/skills](https://github.com/mattpocock/skills) (MIT).
+
+**Un rol recuerda sus propios hallazgos.** Cuando un rol dejó `FINDINGS: n` y se le vuelve a llamar,
+el advisor le entrega esos hallazgos con su número, y su entrada nueva tiene que responder a cada uno
+—`- Hallazgo <n>: corregido | no corregido — archivo:línea` o `no aplica — motivo`—. Uno sin respuesta
+deja la tarea abierta, y un `OK` que reconoce un hallazgo sin corregir se contradice. La regla está
+escrita una sola vez, en `catalog/agents/_shared/`, y la reciben los tres roles; también les pide
+formar su juicio con el diff, la spec y la evidencia antes de leer las explicaciones del autor.
 
 **Añadir un rol es añadir una carpeta**: su contrato y su prompt en los dos idiomas. Los cinco
 targets lo proyectan y el advisor lo secuencia sin tocar código.
@@ -941,6 +974,25 @@ nombrando el advisor de cada lado, y está prohibido cambiar de repo sin cerrar 
 > Chalc **nunca instala el hook** que haría esto automático: los hooks se ejecutan solos y
 > `.claude/settings.json` va commiteado, así que activarlo le impondría un comando a todo el que
 > clone el repo. El bloque listo para pegar y el porqué quedan en `.chalc/gate-hook.md`.
+
+### Guardas del asistente: lo que no hace sin ti
+
+Las reglas de `CLAUDE.md` («no commitees sin mi orden», «no leas el `.env`») son instrucciones: un
+asistente que las olvida no encuentra nada que se lo impida. Con Claude Code, chalc deja en
+`.chalc/gate-hook.md` un tercer hook opcional, una guarda `PreToolUse` (`node .chalc/gate/guard.mjs`)
+que mira cada acción antes de que ocurra:
+
+| Acción | Qué pasa |
+|---|---|
+| `git commit`, `git push` | te pregunta: la orden es tuya, en el momento exacto |
+| push forzado (`--force`, `-f`, `--force-with-lease`, `+rama`) | se bloquea |
+| leer credenciales (`.env`, llaves SSH, `.npmrc`, `*.pem`…) con cualquier herramienta o comando | se bloquea; `.env.example` y las demás plantillas sin valores sí se leen |
+| `rm`, `rmdir`, `find -delete` fuera del proyecto, sobre el proyecto entero o con un destino que no se puede resolver (`$VAR`, `$(…)`, `~`, `{a,b}`) | se bloquea; dentro del proyecto se borra con normalidad |
+
+Cuando la acción pasa no responde nada (responder `allow` se saltaría tus permisos), nunca rompe ni
+cuelga el turno, y el motivo sale en el idioma del repo. **Límite honesto:** lee los comandos sin
+ejecutarlos, así que sube el listón pero no es inviolable: es una red para los olvidos del asistente,
+no una frontera de seguridad. Como los otros hooks, chalc la documenta y nunca la instala.
 
 ### La tabla de herramientas: un archivo por lenguaje
 

@@ -30,6 +30,6 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
     await kit.mergeMcpServers(join(projectPath, '.gemini', 'settings.json'), mcps, { force });
   }
 
-  await kit.writeManifest(projectPath, 'gemini', { stacks, skills, mcps, methods });
+  await kit.writeManifest(projectPath, 'gemini', { stacks, skills, mcps, methods, specLang, architecture });
   return { plan, written: true };
 }

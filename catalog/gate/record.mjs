@@ -19,6 +19,7 @@
 import { isAbsolute, relative, resolve } from 'node:path';
 import { isUserSource } from './lib/sources.mjs';
 import { recordTouched } from './lib/touched.mjs';
+import { readStdin } from './lib/stdin.mjs';
 
 // Las claves con las que los asistentes nombran "el archivo sobre el que actué". No hay estándar
 // entre ellos, y aceptar las formas conocidas sale más barato que un anotador por target —y es más
@@ -66,27 +67,12 @@ export async function recordEvent(root, { argv = [], stdin = '' } = {}) {
   return paths;
 }
 
-// Lee todo lo que llegue por la entrada estándar. Sin nada que leer devuelve '' en vez de esperar:
-// un anotador colgado bloquearía el turno del asistente.
-//
-// Solo se llama cuando NO hay rutas por argumento. Encontrado equipando un repo de verdad: con las
-// rutas ya dadas, esto seguía esperando a que alguien cerrara stdin, y nadie la cerraba porque no
-// había nada que mandar por ahí. El proceso no terminaba nunca — que para un hook es peor que
-// fallar: no da error, cuelga el turno entero.
-const readStdin = () => new Promise((done) => {
-  if (process.stdin.isTTY) return done('');
-  let text = '';
-  process.stdin.setEncoding('utf8');
-  process.stdin.on('data', (chunk) => { text += chunk; });
-  process.stdin.on('end', () => done(text));
-  process.stdin.on('error', () => done(''));
-});
-
 // Entrada de línea de comandos. Sale SIEMPRE con 0: un hook que falla interrumpe al asistente, y
 // quedarse sin registro solo significa que el alcance cae al diff —que revisa de más, no de menos—.
 if (process.argv[1] && /record\.mjs$/.test(process.argv[1])) {
   const argv = process.argv.slice(2);
   try {
+    // Solo se lee stdin sin rutas por argumento: con ellas nadie la cierra (ver `lib/stdin.mjs`).
     await recordEvent(process.cwd(), { argv, stdin: argv.length ? '' : await readStdin() });
   } catch { /* anotar nunca puede romper el turno de quien está trabajando */ }
   process.exit(0);

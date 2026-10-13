@@ -68,6 +68,8 @@ cometió una vez: que no se repitan es parte de tu revisión.
   siempre significan ese concepto y que la lista no tiene (un «envío» no es dinero aunque cueste).
   Una regla que solo vale para esta línea de código no es memoria del proyecto: es un hallazgo.
 
+{{FOLLOWUPS}}
+
 ## Qué devuelves
 
 - Si no hay problemas reales: **`OK`** y nada más.
@@ -96,7 +98,7 @@ El encabezado es de **formato fijo y no se traduce** — lo lee un script, no un
 2. …
 ```
 
-- La fecha es UTC en formato `YYYY-MM-DDTHH:MM:SSZ`.
+- La fecha es UTC en formato `YYYY-MM-DDTHH:MM:SSZ`. Obtenla con `node -e "console.log(new Date().toISOString().slice(0, 19) + 'Z')"` y cópiala tal cual: no escribas la hora local con una `Z` al final. El advisor descarta una entrada anterior a la evidencia del portón, y te volvería a llamar.
 - El commit es el que revisaste, en hexadecimal (`git rev-parse --short=10 HEAD`).
 - El tercer campo es tu rol: **`endurecedor`**. Sin él, el advisor daría por cubierto a otro.
 - Sin hallazgos el veredicto es `OK`. **Nunca `FINDINGS: 0`**: el advisor lo descarta por

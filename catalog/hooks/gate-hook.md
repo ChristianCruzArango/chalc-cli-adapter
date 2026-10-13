@@ -1,9 +1,11 @@
 # Hooks del portón (opcionales)
 
-Dos hooks, y el segundo importa más de lo que parece:
+Tres hooks, y el segundo importa más de lo que parece:
 
 1. **Anotar lo que escribes** — para que el portón revise **tu tarea** y no el árbol entero.
 2. **Avisar al terminar un turno** — correr el portón en cuanto acaba un turno, sin que te acuerdes tú.
+3. **Guardas** — que el asistente pregunte antes de commitear o hacer push, y no pueda leer
+   credenciales ni borrar fuera del proyecto.
 
 **chalc no los instala.** Un hook se ejecuta solo, y `.claude/settings.json` va commiteado: activarlo
 desde aquí se lo impondría a todo el que clone este repo, que no pidió nada. Así que los bloques
@@ -84,11 +86,53 @@ rompió, no para dar por buena la tarea. El cierre es el portón completo:
 node .chalc/gate.mjs
 ```
 
+## 3. Guardas: lo que el asistente no hace sin ti
+
+Las reglas «no commitees sin mi orden» o «no leas el `.env`» viven como texto en `CLAUDE.md`, y un
+asistente que las olvida no encuentra nada que se lo impida. Este hook las convierte en una barrera:
+antes de cada acción, la guarda la mira y decide.
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Read|Grep|Glob|NotebookRead",
+        "hooks": [
+          { "type": "command", "command": "node .chalc/gate/guard.mjs" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+| Acción | Qué pasa |
+| --- | --- |
+| `git commit`, `git push` | **Te pregunta.** La orden es tuya, en el momento exacto. |
+| `git push --force`, `-f`, `--force-with-lease`, `+rama` | **Se bloquea.** Reescribe historia que otros ya tienen. |
+| Leer `.env`, llaves SSH, `.npmrc`, `.pypirc`, `.netrc`, `*.pem`… (`Read`, `Grep`, o cualquier comando que los nombre) | **Se bloquea.** Su contenido entraría al contexto del modelo. Las plantillas sin valores (`.env.example`, `.env.sample`, `.env.template`) sí se leen. |
+| `rm`, `rmdir` o `find … -delete` fuera del proyecto, sobre el proyecto entero, o con un destino que no se puede saber (`$VAR`, `$(…)`, `~`, `{a,b}`) | **Se bloquea.** Dentro del proyecto se borra con normalidad. |
+
+El motivo de cada pregunta o bloqueo sale en el idioma del repo (`.chalc/gate.json`) y dice qué
+comando o archivo lo provocó. Si una acción bloqueada es la que querías, hazla tú.
+
+Cuando la acción pasa, la guarda **no responde nada**: responder `allow` aprobaría la acción
+saltándose los permisos que ya tienes configurados. Y si el evento no se entiende o algo falla, sale
+sin decir nada: un hook que rompe el turno es peor que no tener hook.
+
+**Límite, dicho claro:** sube el listón, no es inviolable. Lee los comandos sin ejecutarlos —no
+expande variables ni alias, ni resuelve enlaces simbólicos— y un comando ofuscado a propósito puede
+esquivarla. Es una red para los olvidos del asistente, no una frontera de seguridad.
+
 ## Si no los activas
 
 El del aviso no hace falta: el cierre de tarea del hand-off ya te pide el portón, y el agente revisor
 se niega a revisar si `.chalc/gate.md` falta o quedó más viejo que el último cambio. Ese hook solo
 adelanta el aviso.
+
+Sin las guardas, las reglas de `CLAUDE.md` siguen siendo instrucciones: el asistente las lee, pero
+nada le impide saltárselas. Activarlas no cambia nada de lo demás.
 
 El de anotar tampoco es obligatorio, pero es el que cambia lo que ves en el informe: con él, el
 alcance son exactamente tus archivos; sin él, todo lo que haya cambiado desde la última tarea

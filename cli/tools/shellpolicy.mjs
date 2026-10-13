@@ -5,6 +5,11 @@
 import { realpathSync } from 'node:fs';
 import { relative, resolve, parse } from 'node:path';
 import { deepestExistingRealpath, escapes, GIT_DIR } from './fsconfine.mjs';
+// Las palabras y el subcomando de git se leen igual que en la guarda del asistente (spec 017): viven en
+// el portón, que se emite al repo equipado.
+import { commandTokens, gitSubcommand } from '../../catalog/gate/lib/shellwords.mjs';
+
+export { commandTokens };
 
 const FORBIDDEN = /[;&|`$><\n\r]/;   // encadenado, redirección y sustitución: prohibidos
 // Caracteres de control (ESC incluido): un `\x1b[2K` en el comando haría que el aviso de aprobación
@@ -47,17 +52,7 @@ function inlineEvalFlag(base, token) {
   return null;
 }
 
-// Opciones globales de git que consumen el token siguiente: el subcomando es lo que viene después.
-const GIT_GLOBAL_WITH_VALUE = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--super-prefix', '--config-env']);
 const GIT_CONFIG_READS = new Set(['--get', '--get-all', '--get-regexp', '--get-urlmatch', '--list', '-l', '--show-origin', '--show-scope', '--name-only']);
-
-function gitSubcommand(args) {
-  for (let i = 0; i < args.length; i++) {
-    if (GIT_GLOBAL_WITH_VALUE.has(args[i])) { i++; continue; }
-    if (!args[i].startsWith('-')) return { name: args[i], rest: args.slice(i + 1) };
-  }
-  return { name: '', rest: [] };
-}
 
 // `git config` que ESCRIBE deja ejecución diferida que sobrevive a la sesión: `core.fsmonitor`,
 // `core.hooksPath`, `alias.x=!cmd`… se disparan en el siguiente `git status`. Leer la config es
@@ -68,30 +63,6 @@ function gitConfigWrite(args) {
   if (rest.some((tk) => GIT_CONFIG_READS.has(tk.split('=')[0]))) return false;
   if (['get', 'list'].includes(rest.find((tk) => !tk.startsWith('-')))) return false;
   return true;
-}
-
-// Parser intencionalmente pequeño: acepta palabras y comillas simples/dobles, pero NO escapes. Como no
-// hay shell después, `\\-c` llega literal al binario, no se convierte en `-c`. Rechazamos comillas sin cerrar.
-export function commandTokens(cmd) {
-  const out = [];
-  let cur = '';
-  let quote = '';
-  for (const ch of String(cmd)) {
-    if (quote) {
-      if (ch === quote) quote = '';
-      else cur += ch;
-      continue;
-    }
-    if (ch === '"' || ch === "'") { quote = ch; continue; }
-    if (/\s/.test(ch)) {
-      if (cur) { out.push(cur); cur = ''; }
-      continue;
-    }
-    cur += ch;
-  }
-  if (quote) throw new Error('unterminated quote');
-  if (cur) out.push(cur);
-  return out;
 }
 
 export function pathValue(token) {

@@ -25,6 +25,12 @@ export function currentTask(markdown) {
   return m ? m[1].trim() : '';
 }
 
+// Los requisitos que cita una tarea (`**T2** (R1, R3) — …` → ['R1', 'R3']), una vez cada uno y en orden
+// (spec 019, R4). Son los que el revisor tiene que responder uno por uno. `PR1` o `R2x` no son requisitos.
+export function requirementsOf(text) {
+  return [...new Set(String(text ?? '').match(/(?<!\w)R\d+(?!\w)/g) || [])];
+}
+
 // Recorte con elipsis para mostrar en columnas (tareas y asuntos de commit largos).
 const trunc = (s, max) => (String(s ?? '').length > max ? String(s).slice(0, max - 1).trimEnd() + '…' : String(s ?? ''));
 

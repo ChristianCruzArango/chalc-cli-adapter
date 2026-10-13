@@ -14,6 +14,8 @@ export const CONFIG_REL = '.chalc/gate.json';
 
 const DEFAULTS = {
   test: { command: '' },
+  // Compilación (spec 018). Vacío = no aplica: un repo sin nada que compilar no se bloquea por ello.
+  build: { command: '' },
   mutation: { tool: '', command: '', report: '', format: '', install: '', probe: '', scopeFlag: '', scopeJoin: '', projectFlag: '', threshold: 80, required: true },
   lint: {
     maxFileLines: 300, maxFunctionLines: 40, maxParams: 4, maxDepth: 3,

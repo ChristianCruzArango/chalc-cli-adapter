@@ -32,6 +32,7 @@ export async function scopeHash(root, files = []) {
 // y `scopeFlag`/`probe`/`scopeJoin` cambian qué mide la mutación.
 const GUARDED = [
   ['test', 'command'],
+  ['build', 'command'],
   ['mutation', 'command'], ['mutation', 'required'], ['mutation', 'threshold'], ['mutation', 'format'], ['mutation', 'report'],
   ['mutation', 'scopeFlag'], ['mutation', 'probe'], ['mutation', 'scopeJoin'],
   ['spec', 'dir'],

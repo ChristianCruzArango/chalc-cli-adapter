@@ -4,5 +4,6 @@
   "priority": 60,
   "detect": { "files": ["Cargo.toml"] },
   "test": { "rule": "fixed", "value": "cargo test" },
+  "build": { "rule": "fixed", "value": { "command": "cargo check" } },
   "mutation": null
 }

@@ -2,6 +2,7 @@
   "id": "revisor",
   "order": 10,
   "cadence": "task",
+  "checklist": "requirements",
   "summary": {
     "es": "Revisor de cierre de tarea: audita el diff contra la constitución y las skills del repo, después del portón. Devuelve OK o una lista numerada y lo anota en .chalc/review.md. No modifica ningún otro archivo.",
     "en": "Task-closing reviewer: audits the diff against the constitution and the repo skills, after the gate. Returns OK or a numbered list and logs it to .chalc/review.md. Modifies no other file."

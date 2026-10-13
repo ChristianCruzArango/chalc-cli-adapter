@@ -126,7 +126,9 @@ to a deterministic recommendation.
 
 Minimal implementation, Clean Code, SOLID, and modular architecture are **mandatory principles** in every project.
 What the user chooses is the concrete architecture. It supports **Angular, NestJS, and .NET**, orchestrating
-each one's **official** scaffolder (`ng new`, `nest new`, `dotnet new`):
+each one's **official** scaffolder (`ng new`, `nest new`, `dotnet new`). If the scaffolder leaves no
+`.gitignore` (`nest new` and `dotnet new` don't with `--skip-git`), Chalc writes one per stack —no
+secrets, no dependencies or mutation output— so the first commit does not take `node_modules` with it:
 
 ```bash
 chalc init                         # interactive: pick stack, describe the idea, pick architecture
@@ -361,6 +363,7 @@ chalc/
 │   ├── net.mjs              fetch with timeout/limits and external-URL validation
 │   ├── install.mjs          install/vendor skills (Git/skills.sh/local)
 │   ├── targetkit.mjs        shared utilities for the targets (principles, architecture, blocks)
+│   ├── manifest.mjs         reads `.chalc.json`: language, methods and architecture that re-equipping respects
 │   ├── docread.mjs          extracts text from Word/PDF/Excel/…
 │   ├── ole2.mjs             OLE2/CFB container (legacy binary Office)
 │   ├── xls.mjs              Excel .xls (BIFF8) → rows, RC4 included
@@ -369,6 +372,7 @@ chalc/
 │   ├── init.mjs             stack registry: architectures, official scaffolder, CLI version per Node
 │   ├── init-folders.mjs     per-folder guides (README.md) + folder map for architecture.md
 │   ├── init-scaffold.mjs    reshapes the project to the architecture + writes docs/architecture.md
+│   ├── init-gitignore.mjs   per-stack `.gitignore` when the scaffolder leaves none
 │   ├── verify.mjs           project completeness verification (folders, docs, specs, manifest)
 │   ├── verify-boundaries.mjs re-export of the gate's boundary linter — `chalc verify`
 │   ├── gatedetect.mjs      detects the gate config from the repo's real signals
@@ -408,8 +412,8 @@ chalc/
 │   ├── mcp/                 MCP server definitions
 │   ├── profiles/            per-task model profiles (chalc-default.json: spec/qa/repair)
 │   ├── methods/sdd/         the SDD method (constitution, es/en templates, rules, graphic)
-│   ├── agents/              the review roles: contract + prompt (es/en) per folder
-│   ├── hooks/               the opt-in turn-end hook, documented — never installed
+│   ├── agents/              the review roles: contract + prompt (es/en) per folder; `_shared/` is the text they all get
+│   ├── hooks/               the opt-in hooks (recorder, turn-end check, guards), documented — never installed
 │   ├── gate/                the quality gate: real code copied into `.chalc/` when equipping
 │   ├── next/                the flow advisor: decides the ONE next action of the task cycle
 │   ├── tools/               what chalc knows per stack: tests, mutation, report and install
@@ -431,7 +435,7 @@ chalc/
 | Skills | `.claude/skills/<id>/` (real copy) |
 | MCP | `.mcp.json` (merged, doesn't clobber what exists) |
 | Rules/stack | `CLAUDE.md` (managed block between `<!-- chalc:start -->` and `<!-- chalc:end -->`) |
-| Manifest | `.chalc.json` (what was installed and when) |
+| Manifest | `.chalc.json` (what was installed and when, in which language, with which method and architecture: re-equipping without flags respects it) |
 
 ## Extending Chalc
 
@@ -642,13 +646,14 @@ nobody checked. An assistant could report a score without running anything. Now 
 **parsing the tool's own report file** — never from its stdout, never from a summary someone typed.
 
 ```
-node .chalc/gate.mjs           # closes a task: tests + mutation + static checks
-node .chalc/gate.mjs --fast    # skips mutation (minutes) — does NOT close a task
+node .chalc/gate.mjs           # closes a task: tests + build + mutation + static checks
+node .chalc/gate.mjs --fast    # skips mutation (minutes), still builds — does NOT close a task
 ```
 
 | Stage | What it checks | Where it comes from |
 |---|---|---|
 | tests | the repo's own suite | `test.command` |
+| build | that the code compiles (`npm run build`, `tsc --noEmit`, `dotnet build`, `cargo check`…); if it does not, mutation does not run | `build.command` |
 | mutation | score ≥ threshold and surviving mutants | the native report (Stryker, Stryker.NET, mutmut, PIT) |
 | code | one thing per file, file/function length, parameters, nesting, empty `catch`, debug output, `any` | changed files |
 | security | secrets in the code, disabled TLS, `http://`, concatenated SQL, `eval`, unescaped HTML, MD5/SHA1 | lines the task wrote |
@@ -660,6 +665,15 @@ node .chalc/gate.mjs --fast    # skips mutation (minutes) — does NOT close a t
 older than the code you changed exits non-zero and prints the exact install command. Every run writes
 `.chalc/gate.md` with the date, branch, each command with its real exit code and duration, the score,
 the survivors and the findings — evidence you can read yourself.
+
+A report without mutants blocks too, with one exception: if the tool ran, generated **not a single
+mutant** in the task and **no changed line is code** (only imports, decorators —multi-line ones too— or
+closers), mutation reads "not applicable: the changes have no mutable code". With a single line of logic,
+or without knowing which files the task touched, it still blocks.
+
+The build stage exists because a test runner can tolerate what the compiler does not: in an end-to-end run,
+code that `tsc` rejected passed tests, mutation and review. A repo with nothing to compile sees it as "not applicable";
+without the tool installed, it blocks with the command to install it.
 
 Configuration lives in **`.chalc/gate.json`** (thresholds, commands, report paths). Re-equipping
 regenerates the gate code and **keeps what you edited there**.
@@ -870,7 +884,7 @@ There are three roles today, and they do not overlap:
 | Role | When | What it judges |
 |---|---|---|
 | `seguridad` | every task, before the reviewer | OWASP Top 10 (plus MASVS on mobile), with a checklist the advisor checks |
-| `revisor` | every task | test quality, abstraction, naming, minimality; that security fixes are real |
+| `revisor` | every task | two axes: **Spec** (one line per task `R#`, which the advisor demands) and **Standards** (constitution, skills, Fowler smells); that security fixes are real |
 | `endurecedor` | when the feature closes | invalid input, error paths, edge cases, failing dependencies |
 
 **Cadence** matters because of cost: every pass is a model call. Running the hardener on all twenty
@@ -886,6 +900,25 @@ end. It is tuned per repo in `.chalc/gate.json`:
   ]
 }
 ```
+
+**A change after the last task is reviewed too.** If, with every task ticked, the code changes and the
+gate measures again, the advisor asks again for the task roles that had already reviewed before the
+`endurecedor` and before `done`. And while the evidence is current, checklists are validated against the
+scope that evidence measured, which is the one the role received.
+
+**The reviewer judges on two axes.** *Spec*: each requirement the task cites, with a line `- R<n>: complies |
+violates | n/a — file:line or reason` that the advisor demands like the OWASP checklist; and whether the
+requirement really reaches the user (a module nobody imports meets nothing). *Standards*: the
+constitution, the skills and twelve Fowler smells as judgement calls, never as violations. Findings are
+tagged `[spec]` / `[standards]` and are not mixed across axes. Adapted from the `code-review` skill of
+[mattpocock/skills](https://github.com/mattpocock/skills) (MIT).
+
+**A role remembers its own findings.** When a role left `FINDINGS: n` and is called again, the advisor
+hands it those findings with their number, and its new entry has to answer each one —
+`- Finding <n>: fixed | not fixed — file:line` or `n/a — reason`. One left unanswered keeps the task
+open, and an `OK` that admits a finding is not fixed contradicts itself. The rule is written once, in
+`catalog/agents/_shared/`, and the three roles receive it; it also tells them to form their judgement
+from the diff, the spec and the evidence before reading the author's explanations.
 
 **Adding a role is adding a folder**: its contract and its prompt in both languages. All five targets
 project it and the advisor sequences it without a code change.
@@ -940,6 +973,26 @@ forbidden.
 > Chalc **never installs the hook** that would run this automatically: hooks execute on their own and
 > `.claude/settings.json` is committed, so enabling it would impose a command on everyone who clones
 > the repo. The ready-to-paste block and the reasoning are left in `.chalc/gate-hook.md`.
+
+### Assistant guards: what it does not do without you
+
+The rules in `CLAUDE.md` ("do not commit without my go-ahead", "do not read the `.env`") are
+instructions: an assistant that forgets them finds nothing in its way. With Claude Code, chalc leaves a
+third optional hook in `.chalc/gate-hook.md`, a `PreToolUse` guard (`node .chalc/gate/guard.mjs`) that
+looks at every action before it happens:
+
+| Action | What happens |
+|---|---|
+| `git commit`, `git push` | it asks you: the go-ahead is yours, at the exact moment |
+| forced push (`--force`, `-f`, `--force-with-lease`, `+branch`) | blocked |
+| reading credentials (`.env`, SSH keys, `.npmrc`, `*.pem`…) by any tool or command | blocked; `.env.example` and other value-less templates can be read |
+| `rm`, `rmdir`, `find -delete` outside the project, on the whole project, or on an unresolvable target (`$VAR`, `$(…)`, `~`, `{a,b}`) | blocked; deleting inside the project works as usual |
+
+When the action passes it answers nothing (answering `allow` would bypass your permissions), it never
+breaks or hangs the turn, and the reason comes in the repo's language. **Honest limit:** it reads
+commands without running them, so it raises the bar but is not unbreakable — it is a net for the
+assistant's slips, not a security boundary. Like the other hooks, chalc documents it and never
+installs it.
 
 ### The tool table: one file per language
 

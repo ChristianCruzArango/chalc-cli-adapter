@@ -61,7 +61,7 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   await kit.writeManagedBlock(join(projectPath, 'CLAUDE.md'), managedBlock({ projectPath, skills, mcps, methods, architecture, specLang }));
 
   // 5) Manifiesto
-  await kit.writeManifest(projectPath, 'claude', { stacks, skills, mcps, methods });
+  await kit.writeManifest(projectPath, 'claude', { stacks, skills, mcps, methods, specLang, architecture });
 
   return { plan, written: true };
 }

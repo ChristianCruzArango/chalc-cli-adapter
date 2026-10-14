@@ -15,9 +15,12 @@ import { isAlive, readAnnouncement } from './lib/lifecycle.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
-// ¿Contesta el tablero en `url`? Un anuncio de un proceso vivo que no contesta no sirve.
-const responds = (url) => new Promise((done) => {
-  const req = request(`${url}state.json`, { timeout: 1500 }, (res) => { res.resume(); done(res.statusCode === 200); });
+// ¿Contesta el tablero en `url`? Un anuncio de un proceso vivo que no contesta no sirve. Se pregunta a la página,
+// que no calcula nada: `/state.json` arma el estado del repo (git incluido) y en una máquina lenta pasaba del
+// límite, así que un tablero vivo se daba por muerto y se lanzaba otro (visto en la CI de Windows).
+export const RESPONDS_TIMEOUT_MS = 3000;
+export const responds = (url, timeoutMs = RESPONDS_TIMEOUT_MS) => new Promise((done) => {
+  const req = request(url, { timeout: timeoutMs }, (res) => { res.resume(); done(res.statusCode === 200); });
   req.on('timeout', () => { req.destroy(); done(false); });
   req.on('error', () => done(false));
   req.end();

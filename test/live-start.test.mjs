@@ -84,3 +84,43 @@ test('R1, R2: it prints only the URL, the board answers, and a second call reuse
     if (live) process.kill(live.pid);
   }
 });
+
+// Encontrado en la CI de Windows: para saber si el tablero vive se pedía `/state.json`, que arma el estado del repo
+// (git incluido) y en un runner lento pasaba del límite: el tablero vivo se daba por muerto y se lanzaba otro. Se
+// pregunta a la página, que no calcula nada.
+test('R2: checking that a board answers asks the page, never waits for the repo state', async () => {
+  const { createServer } = await import('node:http');
+  const { RESPONDS_TIMEOUT_MS, responds } = await import('../catalog/live/live.mjs');
+  const server = createServer((req, res) => {
+    if (req.url === '/') { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<html>'); return; }
+    setTimeout(() => { res.writeHead(200); res.end('{}'); }, 60_000);   // el estado, lento a propósito
+  });
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  try {
+    assert.equal(await responds(`http://127.0.0.1:${server.address().port}/`), true);
+    assert.ok(RESPONDS_TIMEOUT_MS >= 3000);
+  } finally { server.closeAllConnections(); server.close(); }
+});
+
+test('R2: a board that answers anything but 200 on its page, or nothing at all, does not count', async () => {
+  const { createServer } = await import('node:http');
+  const { responds } = await import('../catalog/live/live.mjs');
+  const server = createServer((req, res) => { res.writeHead(500); res.end(); });
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  const port = server.address().port;
+  try { assert.equal(await responds(`http://127.0.0.1:${port}/`), false); } finally { server.close(); }
+  await new Promise((done) => server.on('close', done));
+  assert.equal(await responds(`http://127.0.0.1:${port}/`), false);
+});
+
+test('R2: a board that accepts the connection but never answers is given up on, within the time limit', async () => {
+  const { createServer } = await import('node:http');
+  const { responds } = await import('../catalog/live/live.mjs');
+  const server = createServer(() => {});   // acepta y no contesta nunca
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  try {
+    const started = Date.now();
+    assert.equal(await responds(`http://127.0.0.1:${server.address().port}/`, 80), false);
+    assert.ok(Date.now() - started < 2000, 'it does not wait for the default limit');
+  } finally { server.closeAllConnections(); server.close(); }
+});

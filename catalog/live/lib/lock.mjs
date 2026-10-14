@@ -25,6 +25,25 @@ async function isStale(path) {
   try { return Date.now() - (await stat(path)).mtimeMs > STALE_MS; } catch { return false; }
 }
 
+// Recupera un candado viejo SIN carrera. Borrarlo sin más podía llevarse el que otro hook acababa de tomar
+// en su lugar (dos lo ven viejo; uno lo borra y toma uno nuevo; el otro borra ESE). Por eso la recuperación
+// tiene su propio candado (`mkdir`, atómico): solo uno recupera a la vez, y vuelve a mirar dentro antes de
+// borrar —si ya es uno recién tomado, no lo toca—. Ese candado solo dura dos llamadas al disco; si quedó de
+// un hook muerto, también caduca.
+// Se exporta para probar la recuperación sin depender de una carrera real.
+export async function reclaim(path) {
+  const guard = `${path}.reclaim`;
+  if (!(await take(guard))) {
+    if (await isStale(guard)) await rm(guard, { recursive: true, force: true });
+    return;
+  }
+  try {
+    if (await isStale(path)) await rm(path, { recursive: true, force: true });
+  } finally {
+    await rm(guard, { recursive: true, force: true });
+  }
+}
+
 /** Corre `work` con el candado de `root` tomado y devuelve su resultado; `undefined` si no lo consiguió. */
 export async function withLock(root, work, { tries = 40, waitMs = 25 } = {}) {
   const path = join(root, LOCK_REL);
@@ -33,7 +52,7 @@ export async function withLock(root, work, { tries = 40, waitMs = 25 } = {}) {
     if (await take(path)) {
       try { return await work(); } finally { await rm(path, { recursive: true, force: true }); }
     }
-    if (await isStale(path)) await rm(path, { recursive: true, force: true });
+    if (await isStale(path)) await reclaim(path);
     else await pause(waitMs);
   }
   return undefined;

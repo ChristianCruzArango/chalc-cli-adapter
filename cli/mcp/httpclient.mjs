@@ -99,7 +99,10 @@ async function readReply(res, id) {
     if (!msg) throw new Error(t('mcpSseNoAnswer'));
     return msg;
   }
-  return JSON.parse(await readLimitedText(res, MAX_RESPONSE_BYTES));
+  // Como en SSE: solo vale la respuesta a ESTA petición, y solo si es JSON-RPC 2.0.
+  const msg = JSON.parse(await readLimitedText(res, MAX_RESPONSE_BYTES));
+  if (msg?.jsonrpc !== '2.0' || msg.id !== id) throw new Error(t('mcpReplyMismatch', id));
+  return msg;
 }
 
 async function post(conn, message, { expectResponse = true, timeoutMs: limit } = {}) {

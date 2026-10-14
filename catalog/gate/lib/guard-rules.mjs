@@ -64,7 +64,8 @@ function secretArgRule(words) {
 }
 
 // Qué campos de cada herramienta de lectura deciden qué CONTENIDO se lee. El `pattern` de Grep es el
-// texto buscado y el de Glob solo lista nombres: ninguno de los dos es una lectura.
+// texto buscado y el de Glob solo lista nombres: ninguno de los dos es una lectura. (El `Grep` de contenido
+// sobre una carpeta tiene su propia regla, más abajo.)
 const READ_FIELDS = {
   Read: ['file_path'],
   NotebookRead: ['notebook_path'],
@@ -83,8 +84,22 @@ function secretToolRule(event) {
   return path ? secretReadOf(path) : null;
 }
 
+// S8: un `Grep` que DEVUELVE CONTENIDO sobre una carpeta lee archivos que no nombra, `.env` incluido, y sus
+// líneas entran al contexto. Sin leer el disco no se sabe si la ruta es carpeta: se toma por archivo solo lo
+// que tiene extensión (`src/app.ts`); lo demás —ninguna ruta, `.`, `src`, `src/`— pregunta. Un `type` o un
+// `glob` con algo más que comodines acota a archivos concretos y pasa (un `glob` de secretos ya se bloquea).
+const looksLikeFile = (path) => /[^\\/.][^\\/]*\.[^\\/.]+$/.test(path);
+const narrowed = ({ glob, type }) => (typeof type === 'string' && type !== '') || (typeof glob === 'string' && /[^*?\\/]/.test(glob));
+
+function folderGrepRule(event) {
+  const input = event?.tool_input || {};
+  if (event?.tool_name !== 'Grep' || input.output_mode !== 'content' || narrowed(input)) return null;
+  const path = typeof input.path === 'string' && input.path ? input.path : '.';
+  return looksLikeFile(path) ? null : { decision: 'ask', rule: RULES.guardSecretGrep, data: { path } };
+}
+
 const COMMAND_RULES = [gitRule, secretArgRule];
-const TOOL_RULES = [secretToolRule];
+const TOOL_RULES = [secretToolRule, folderGrepRule];
 
 const commandOf = (event) => {
   const command = event?.tool_input?.command;

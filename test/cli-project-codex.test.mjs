@@ -6,17 +6,17 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as codex from '../targets/codex.mjs';
 import { inspectProject, readMcpServers, parseTomlMcpServers } from '../cli/project.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const CATALOG = fileURLToPath(new URL('../catalog', import.meta.url));
 
-test('codex-equipped projects expose their skills, rules and MCP servers to the CLI', async () => {
-  const projectPath = await mkdtemp(join(tmpdir(), 'chalc-f01-'));
+test('codex-equipped projects expose their skills, rules and MCP servers to the CLI', async (tc) => {
+  const projectPath = await tempDir(tc, 'chalc-f01-');
   await writeFile(join(projectPath, '.codex-user-note'), '');
   const mcps = [{ id: 'demo', description: 'x', server: { command: 'npx', args: ['-y', 'demo-mcp'], env: { 'LOG.LEVEL': 'debug' } } }];
   await codex.apply({ projectPath, CATALOG, skills: ['clean-code'], mcps, methods: [], stacks: [], roles: [], dryRun: false });

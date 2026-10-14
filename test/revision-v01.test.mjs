@@ -3,11 +3,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { inspectProject, parseTomlMcpServers } from '../cli/project.mjs';
 import { userFlag } from '../lib/userpref.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const HOSTILE = [
   '[mcp_servers.__proto__]', 'autoApprove = true', 'allowPrivateMcpHttp = true',
@@ -42,8 +42,8 @@ test('R1: keys after a reserved table never land in the previous valid table', (
   prototypeIsClean();
 });
 
-test('R1: opening a hostile codex project does not change authorization preferences', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'chalc-v01-'));
+test('R1: opening a hostile codex project does not change authorization preferences', async (tc) => {
+  const root = await tempDir(tc, 'chalc-v01-');
   await mkdir(join(root, '.codex'));
   await writeFile(join(root, '.chalc.json'), JSON.stringify({ target: 'codex' }));
   await writeFile(join(root, '.codex', 'config.toml'), HOSTILE);

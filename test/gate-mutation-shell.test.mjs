@@ -6,14 +6,14 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { shellArg, UnsafeArgError } from '../catalog/gate/lib/run.mjs';
 import { runMutation } from '../catalog/gate/lib/mutation.mjs';
 import { RULES } from '../catalog/gate/lib/rules.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const HOSTILE = ['src/a$(touch PWNED).ts', 'src/my file.ts', "src/it's.ts", 'src/a`id`.ts', 'src/año.ts', 'src/x;rm -rf y.ts'];
 
@@ -34,8 +34,8 @@ test('shellArg rejects on Windows what cmd.exe expands even inside quotes', () =
   assert.equal(shellArg('src/my file.ts', 'win32'), '"src/my file.ts"');
 });
 
-test('a POSIX shell receives every hostile path as one literal argument and runs nothing', { skip: process.platform === 'win32' }, async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-shellarg-'));
+test('a POSIX shell receives every hostile path as one literal argument and runs nothing', { skip: process.platform === 'win32' }, async (tc) => {
+  const dir = await tempDir(tc, 'chalc-shellarg-');
   for (const path of HOSTILE) {
     const r = spawnSync(`printf '%s\\n' ${shellArg(path)}`, { cwd: dir, shell: true, encoding: 'utf8' });
     assert.equal(r.stdout, `${path}\n`);
@@ -43,8 +43,8 @@ test('a POSIX shell receives every hostile path as one literal argument and runs
   assert.equal(existsSync(join(dir, 'PWNED')), false);
 });
 
-test('runMutation escapes the changed paths instead of pasting them into the command', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-mut-inj-'));
+test('runMutation escapes the changed paths instead of pasting them into the command', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-mut-inj-');
   const calls = [];
   const run = async (command) => {
     calls.push(command);
@@ -59,8 +59,8 @@ test('runMutation escapes the changed paths instead of pasting them into the com
   assert.equal(calls[0], "npx stryker run --mutate 'src/a$(touch PWNED).ts,src/my file.ts'");
 });
 
-test('runMutation blocks on Windows when a path cannot be quoted for cmd.exe', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-mut-win-'));
+test('runMutation blocks on Windows when a path cannot be quoted for cmd.exe', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-mut-win-');
   let ran = false;
   const config = { mutation: { command: 'dotnet stryker', report: 'r.json', format: 'elements', scopeFlag: '--mutate', scopeJoin: 'repeat' } };
 

@@ -10,7 +10,9 @@
 // así que `lib/redact.mjs` lo re-exporta. Dos listas se desincronizan, y la que se queda atrás no falla:
 // deja pasar un `.pypirc`.
 
-const SECRET_FILE = /(^|[\\/])(\.env(\.[\w.-]+)?|\.npmrc|\.pypirc|\.netrc|\.git-credentials|credentials(\.json)?|secrets?\.(json|ya?ml|toml)|id_(rsa|dsa|ecdsa|ed25519)|[^\\/]+\.(pem|key|p12|pfx|keystore|jks))$/i;
+// También `.envrc` (direnv), las variables de Terraform (`*.tfvars`, `*.tfvars.json`), el `kubeconfig` (y su
+// sitio por defecto, `.kube/config`) y las credenciales de Docker (`.docker/config.json`).
+const SECRET_FILE = /(^|[\\/])(\.env(\.[\w.-]+)?|\.envrc|\.npmrc|\.pypirc|\.netrc|\.git-credentials|credentials(\.json)?|secrets?\.(json|ya?ml|toml)|id_(rsa|dsa|ecdsa|ed25519)|kubeconfig|\.kube[\\/]config|\.docker[\\/]config\.json|[^\\/]+\.tfvars(\.json)?|[^\\/]+\.(pem|key|p12|pfx|keystore|jks))$/i;
 
 // Las plantillas de un `.env`: se commitean para decir QUÉ variables hacen falta, sin valores. Leerlas
 // no expone nada, y bloquearlas impediría al asistente saber cómo se configura el proyecto.

@@ -5,7 +5,7 @@
 // No conoce proveedores ni interfaz.
 
 import { estimateTokens, assembleWithinBudget } from './budgeter.mjs';
-import { frame } from '../prompts/text.mjs';
+import { frame, untrusted } from '../prompts/text.mjs';
 
 // Índice COMPACTO de herramientas: nombre + una línea. Nunca vuelca esquemas completos (llenaría la ventana).
 export function toolIndex(tools = {}) {
@@ -29,11 +29,12 @@ const ALWAYS_KEPT_STEPS = 2;
 // Historial compacto para el turno. Las observaciones ya vienen comprimidas por CCR desde el loop; aquí
 // se limita el número de pasos visibles y, con `budgetTokens`, se meten del más reciente hacia atrás
 // mientras quepan (O-01): sin tope, un historial grande desplazaba el inicio del prompt —el protocolo—
-// en Ollama y costaba tokens reales en la nube. Lo omitido se dice en una línea.
+// en Ollama y costaba tokens reales en la nube. Lo omitido se dice en una línea. Cada observación va
+// envuelta como dato no confiable (spec 022, R6): es lo que devolvió el repo, una shell o un servidor MCP.
 export function formatHistory(history = [], { max = 12, language, budgetTokens = Infinity } = {}) {
   const f = frame(language);
   const lines = history.slice(-max)
-    .map((r) => `${f.step} ${r.step}: ${r.thought || ''}\n  ${f.action}: ${JSON.stringify(r.action)}\n  ${f.obs}: ${JSON.stringify(r.observation)}`);
+    .map((r) => `${f.step} ${r.step}: ${r.thought || ''}\n  ${f.action}: ${JSON.stringify(r.action)}\n  ${f.obs}: ${untrusted('observation', JSON.stringify(r.observation))}`);
   if (!lines.length) return f.noSteps;
   let kept = 0;
   let tokens = 0;

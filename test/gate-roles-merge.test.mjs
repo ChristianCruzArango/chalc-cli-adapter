@@ -2,10 +2,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { emitGate, mergeRoles } from '../lib/gateemit.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const CATALOG = [
   { id: 'seguridad', order: 5, cadence: 'task', required: true, checklist: 'owasp' },
@@ -23,8 +23,8 @@ test('new catalog roles are added, the user tweaks are kept, custom roles surviv
   assert.equal(merged.find((r) => r.id === 'seguridad').checklist, 'owasp');
 });
 
-test('re-equipping an old repo puts seguridad in the cycle and says so', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'chalc-f16-'));
+test('re-equipping an old repo puts seguridad in the cycle and says so', async (tc) => {
+  const root = await tempDir(tc, 'chalc-f16-');
   await mkdir(join(root, '.chalc'), { recursive: true });
   await writeFile(join(root, '.chalc', 'gate.json'), JSON.stringify({
     test: { command: 'npm test' },

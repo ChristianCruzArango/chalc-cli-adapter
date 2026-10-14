@@ -87,6 +87,18 @@ rompió, no para dar por buena la tarea. El cierre es el portón completo:
 node .chalc/gate.mjs
 ```
 
+## Cuando cambia un comando del portón
+
+El portón ejecuta `test.command`, `build.command` y `mutation.command` de `.chalc/gate.json` con el shell, y
+este hook lo corre en cada turno. Si alguno cambió desde la última tarea cerrada —un PR, una rama ajena—, el
+portón **se bloquea sin ejecutar nada** hasta que lo revises y lo aceptes:
+
+```
+node .chalc/gate.mjs --seal
+```
+
+`--seal` solo re-sella la configuración vigilada en `.chalc/task.json`; no corre el portón ni mueve la tarea.
+
 ## 3. Guardas: lo que el asistente no hace sin ti
 
 Las reglas «no commitees sin mi orden» o «no leas el `.env`» viven como texto en `CLAUDE.md`, y un
@@ -112,7 +124,8 @@ antes de cada acción, la guarda la mira y decide.
 | --- | --- |
 | `git commit`, `git push` | **Te pregunta.** La orden es tuya, en el momento exacto. |
 | `git push --force`, `-f`, `--force-with-lease`, `+rama` | **Se bloquea.** Reescribe historia que otros ya tienen. |
-| Leer `.env`, llaves SSH, `.npmrc`, `.pypirc`, `.netrc`, `*.pem`… (`Read`, `Grep`, o cualquier comando que los nombre) | **Se bloquea.** Su contenido entraría al contexto del modelo. Las plantillas sin valores (`.env.example`, `.env.sample`, `.env.template`) sí se leen. |
+| Leer `.env`, `.envrc`, llaves SSH, `.npmrc`, `.pypirc`, `.netrc`, `*.pem`, `*.tfvars`, `kubeconfig`, `.docker/config.json`… cuando se NOMBRAN: `Read`, la ruta o el `glob` de `Grep`/`Glob`, o una palabra de un comando de shell | **Se bloquea.** Su contenido entraría al contexto del modelo. Las plantillas sin valores (`.env.example`, `.env.sample`, `.env.template`) sí se leen. |
+| `Grep` con `output_mode: content` sobre una carpeta (sin ruta, `.`, `src/`…) sin acotar con `glob` o `type` | **Te pregunta.** Podría volcar líneas de un `.env` que no nombra. |
 | `rm`, `rmdir` o `find … -delete` fuera del proyecto, sobre el proyecto entero, o con un destino que no se puede saber (`$VAR`, `$(…)`, `~`, `{a,b}`) | **Se bloquea.** Dentro del proyecto se borra con normalidad. |
 
 El motivo de cada pregunta o bloqueo sale en el idioma del repo (`.chalc/gate.json`) y dice qué
@@ -125,6 +138,10 @@ sin decir nada: un hook que rompe el turno es peor que no tener hook.
 **Límite, dicho claro:** sube el listón, no es inviolable. Lee los comandos sin ejecutarlos —no
 expande variables ni alias, ni resuelve enlaces simbólicos— y un comando ofuscado a propósito puede
 esquivarla. Es una red para los olvidos del asistente, no una frontera de seguridad.
+
+Lo que **no** cubre: un comando que lee un secreto sin nombrarlo (`grep -r PASSWORD .`, `cat $(ls -a)`),
+un `Grep` que solo lista archivos o cuenta coincidencias, y cualquier archivo de credenciales con un nombre
+fuera de la lista de arriba.
 
 ## 4. Actividad para el tablero en vivo
 

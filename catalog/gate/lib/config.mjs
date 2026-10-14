@@ -43,9 +43,14 @@ const DEFAULTS = {
   language: 'en'
 };
 
+// Claves que, asignadas, cambian el prototipo en vez de guardar un dato: un gate.json con `"__proto__"` no
+// puede inyectar propiedades heredadas en la config.
+export const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 const merge = (defaults, given) => {
   const out = { ...defaults };
   for (const [key, value] of Object.entries(given || {})) {
+    if (UNSAFE_KEYS.has(key)) continue;
     const isObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
     out[key] = isObject(value) && isObject(defaults[key]) ? merge(defaults[key], value) : value;
   }

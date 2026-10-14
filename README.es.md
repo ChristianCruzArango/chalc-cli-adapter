@@ -540,6 +540,11 @@ chalc update angular-developer      # actualiza solo la(s) skill(s) indicadas
 - Una fuente caída no aborta el resto: se reporta por skill y la corrida continúa.
 - Las builtin del catálogo (sin fuente) se omiten y se cuentan como no-actualizables.
 - Tras actualizar, re-corre `chalc apply` en tus proyectos para propagar el contenido nuevo.
+- Antes de reemplazar una skill, `update` muestra sus archivos añadidos, quitados y modificados y pregunta
+  **por skill**; sin terminal solo aplica con `--yes`, si no la skill queda omitida.
+- Una fuente git se puede fijar a un commit con `<url>@<sha>`: chalc saca exactamente ese commit.
+- Una skill de terceros cuyo frontmatter declara `allowed-tools` o `hooks` se avisa al instalar, al
+  actualizar y en cada `apply`. Las credenciales dentro de la URL de una fuente se rechazan: usa un credential helper de git.
 
 ### Flujo típico: agregar un MCP
 
@@ -772,6 +777,15 @@ El mínimo se mide en **líneas significativas**, no en líneas del archivo. Y e
 opinar sobre lo que ahora mide un script: lo suyo pasa a ser la duplicación que ningún script ve —
 dos funciones que hacen lo mismo con otros nombres y otra forma.
 
+**Cuando cambia un comando del portón.** Si `test.command`, `build.command` o `mutation.command` de
+`gate.json` difieren de lo que selló la tarea, el portón **bloquea antes de ejecutar nada**
+(`commands-unsealed`): un cambio en el repo no puede hacer que el hook ejecute un comando nuevo al final
+de cada turno. Revisa el cambio y vuelve a sellarlo tú:
+
+```bash
+node .chalc/gate.mjs --seal
+```
+
 ### La seguridad se mide y se revisa en cada tarea
 
 El OWASP vivía en skills que el modelo abría «cuando lo ameritara», o sea casi nunca. Ahora entra en
@@ -988,7 +1002,8 @@ que mira cada acción antes de que ocurra:
 |---|---|
 | `git commit`, `git push` | te pregunta: la orden es tuya, en el momento exacto |
 | push forzado (`--force`, `-f`, `--force-with-lease`, `+rama`) | se bloquea |
-| leer credenciales (`.env`, llaves SSH, `.npmrc`, `*.pem`…) con cualquier herramienta o comando | se bloquea; `.env.example` y las demás plantillas sin valores sí se leen |
+| leer credenciales (`.env`, `.envrc`, llaves SSH, `.npmrc`, `*.pem`, `*.tfvars`, `kubeconfig`, `.docker/config.json`…) con cualquier herramienta o comando | se bloquea; `.env.example` y las demás plantillas sin valores sí se leen |
+| `Grep` que devuelve contenido sobre una carpeta entera (podría sacar un secreto línea a línea) | te pregunta; acotado con `type` o con un `glob` concreto, pasa |
 | `rm`, `rmdir`, `find -delete` fuera del proyecto, sobre el proyecto entero o con un destino que no se puede resolver (`$VAR`, `$(…)`, `~`, `{a,b}`) | se bloquea; dentro del proyecto se borra con normalidad |
 
 Cuando la acción pasa no responde nada (responder `allow` se saltaría tus permisos), nunca rompe ni
@@ -1399,7 +1414,12 @@ sobre el proyecto que le indiques — idealmente uno ya equipado por chalc.
 
 - **Tools deterministas**: `read`, `list`, `grep`, `write`, `edit` y `bash` (con allowlist de comandos).
   Escrituras, ediciones y comandos de shell piden **aprobación por acción**: `y` aprueba, `n` rechaza,
-  `a` aprueba todo lo que resta de la instrucción.
+  `a` aprueba todo lo que resta de la instrucción. Aun así, lo que puede ejecutar código del repo **sigue
+  preguntando**: compilaciones (`cargo`, `dotnet`, `ng`, `go build`, `flutter build`), `npm audit fix`,
+  opciones de git que lanzan programas (`-O`, `--exec`, `--extcmd`…, vetadas del todo), escrituras en
+  archivos que un build ejecuta (`build.rs`, `*.csproj`, `angular.json`, `.husky/`…) y tools MCP que no
+  son de solo lectura. La confirmación de `write`/`edit` muestra un extracto del contenido. Archivos,
+  salidas de comandos y resultados MCP llegan al modelo como **datos**, nunca como instrucciones.
 - **Skills equipadas**: el índice compacto entra siempre al prompt; el `SKILL.md` completo solo el de
   las skills relevantes a la tarea (las obligatorias — clean-code, SOLID… — entran siempre).
 - **MCP del proyecto**: conecta los servidores del `.mcp.json` equipado, mostrándote el comando y
@@ -1500,7 +1520,10 @@ falta la herramienta, el portón imprime el comando exacto y se detiene.
 
 - La **API key** vive en `~/.chalc/config.json` (archivo `600` / directorio `700`), **nunca** en el proyecto ni en `.chalc.json`; entrada enmascarada y escritura local atómica.
 - Las fuentes remotas para `spec-ia` usan timeout, límite de tamaño y validación de redirects; se bloquean protocolos no HTTP(S), `localhost` e IPs privadas/locales.
-- Las llamadas a proveedores de IA tienen timeout para evitar procesos colgados.
+- Las llamadas a proveedores de IA tienen timeout para evitar procesos colgados, y reintentan dos veces con backoff solo ante 408/429/5xx o errores de red. La API key nunca viaja por `http://` salvo a loopback.
+- Documentos, tickets e historias de usuario entran a los prompts como **datos no confiables** (delimitados y escapados, nunca en el system prompt); `spec-ia` avisa `suspicious-content` cuando `plan.md`/`tasks.md` traen comandos shell canalizados, URLs ejecutables o frases de inyección.
+- Los procesos externos (`git clone`, `npx skills`, scaffolders, la app bajo QA) reciben un entorno filtrado: sin API keys, tokens ni secretos `CHALC_*` (solo lo que nombres en `CHALC_PASS_ENV`). `chalc init` ejecuta los scaffolders con una **versión exacta fijada** y la muestra.
+- El executor HTTP del agente QA no sigue redirecciones: entrega `status` y `location` al modelo.
 - Las trazas IA guardan hashes, conteos y metadatos; no guardan prompts, documentos fuente ni secretos.
 - Los ids de targets, skills, MCP, rules y métodos se validan como kebab-case seguro antes de usarse como rutas o imports.
 - Instalar skills desde Git/GitHub o `skills.sh` requiere confirmación interactiva o `--allow-exec` en modo no interactivo.

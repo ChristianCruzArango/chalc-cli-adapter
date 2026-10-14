@@ -2,11 +2,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { runMutation } from '../catalog/gate/lib/mutation.mjs';
 import { parseMutmutStats } from '../catalog/gate/lib/report-mutmut.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 async function write(dir, rel, content) {
   await mkdir(dirname(join(dir, rel)), { recursive: true });
@@ -21,8 +21,8 @@ test('mutmut 3 cicd stats are scored like any other report', () => {
   assert.throws(() => parseMutmutStats('<xml/>'), (e) => e.problem === 'notJson');
 });
 
-test('a failing mutmut run shows one aggregated finding', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-f19-'));
+test('a failing mutmut run shows one aggregated finding', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-f19-');
   const run = async () => { await write(dir, 'mutants/mutmut-cicd-stats.json', JSON.stringify({ killed: 1, survived: 3, no_tests: 0, timeout: 0 })); return { code: 0, ms: 1 }; };
   const r = await runMutation({ mutation: { command: 'mutmut run; mutmut export-cicd-stats', report: 'mutants/mutmut-cicd-stats.json', format: 'mutmut-stats' } }, { root: dir, run });
   assert.equal(r.ok, false);
@@ -34,8 +34,8 @@ test('a failing mutmut run shows one aggregated finding', async () => {
 const pit = (mutations) => `<mutations>${mutations.map(([pkg, file, line, status]) =>
   `<mutation detected="${status === 'KILLED'}" status="${status}"><sourceFile>${file}</sourceFile><mutatedClass>${pkg}.${file.replace('.java', '')}</mutatedClass><lineNumber>${line}</lineNumber><mutator>org.pitest.X</mutator></mutation>`).join('')}</mutations>`;
 
-test('PIT mutants outside the task files do not count, and PIT paths match git paths by suffix', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-f19-pit-'));
+test('PIT mutants outside the task files do not count, and PIT paths match git paths by suffix', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-f19-pit-');
   const changed = ['src/main/java/com/acme/Precio.java'];
   const run = async () => {
     await write(dir, 'target/pit-reports/2026/mutations.xml', pit([

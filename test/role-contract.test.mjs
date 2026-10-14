@@ -12,11 +12,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname, resolve as resolvePath } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { AGENTS_DIR, loadRoles, toolsFor } from '../lib/roles.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const ROOT = resolvePath(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -66,8 +66,8 @@ test('R1 — los roles se cargan ordenados por order', async () => {
   assert.deepEqual(orders, [...orders].sort((a, b) => a - b));
 });
 
-test('R4 — un contrato corrupto se descarta sin tumbar la carga de los demás', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-roles-roto-'));
+test('R4 — un contrato corrupto se descarta sin tumbar la carga de los demás', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-roles-roto-');
   await mkdir(join(dir, 'roto'), { recursive: true });
   await writeFile(join(dir, 'roto', 'contract.json'), '{ no soy json', 'utf8');
   await mkdir(join(dir, 'bueno'), { recursive: true });
@@ -78,8 +78,8 @@ test('R4 — un contrato corrupto se descarta sin tumbar la carga de los demás'
   assert.deepEqual((await loadRoles(dir)).map((r) => r.id), ['bueno']);
 });
 
-test('R4 — una carpeta sin contrato no es un rol', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-roles-sin-'));
+test('R4 — una carpeta sin contrato no es un rol', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-roles-sin-');
   await mkdir(join(dir, 'documentacion'), { recursive: true });
   await writeFile(join(dir, 'documentacion', 'LEEME.md'), 'hola', 'utf8');
 
@@ -121,8 +121,8 @@ test('R3 — las herramientas concedidas son EXACTAMENTE las del contrato, sin a
 
 // ── T5: añadir un rol es añadir una carpeta ───────────────────────────────────────────────────
 
-test('R4 — un rol que el código nunca vio se carga igual', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-roles-nuevo-'));
+test('R4 — un rol que el código nunca vio se carga igual', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-roles-nuevo-');
   await mkdir(join(dir, 'documentador'), { recursive: true });
   await writeFile(join(dir, 'documentador', 'contract.json'), JSON.stringify({
     id: 'documentador', order: 30, cadence: 'feature',
@@ -153,9 +153,9 @@ test('R14 — el contrato del revisor declara lo que hoy tiene concedido', async
 
 // ── T16 (R9, R15) — los roles llegan a `.chalc/gate.json` ─────────────────────────────────────
 
-test('R15 — la config detectada declara los roles con su cadencia y su orden', async () => {
+test('R15 — la config detectada declara los roles con su cadencia y su orden', async (tc) => {
   const { detectGateConfig } = await import('../lib/gatedetect.mjs');
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-roles-cfg-'));
+  const dir = await tempDir(tc, 'chalc-roles-cfg-');
 
   const config = await detectGateConfig(dir, { role: 'back', language: 'es' });
 
@@ -169,9 +169,9 @@ test('R15 — la config detectada declara los roles con su cadencia y su orden',
   }
 });
 
-test('R9 — lo que el usuario ajustó en flow.roles se conserva al re-equipar', async () => {
+test('R9 — lo que el usuario ajustó en flow.roles se conserva al re-equipar', async (tc) => {
   const { loadConfig } = await import('../catalog/gate/lib/config.mjs');
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-roles-merge-'));
+  const dir = await tempDir(tc, 'chalc-roles-merge-');
   await mkdir(join(dir, '.chalc'), { recursive: true });
   await writeFile(join(dir, '.chalc', 'gate.json'), JSON.stringify({
     flow: { roles: [{ id: 'endurecedor', order: 20, cadence: 'task', required: false }] }

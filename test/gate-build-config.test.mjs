@@ -6,11 +6,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { configChanges, guardedConfig } from '../catalog/gate/lib/fingerprint.mjs';
 import { loadConfig } from '../catalog/gate/lib/config.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 test('R4 (018): build.command is sealed with the task and its change is reported', () => {
   const sealed = guardedConfig({ build: { command: 'npm run build' } });
@@ -19,8 +19,8 @@ test('R4 (018): build.command is sealed with the task and its change is reported
   assert.deepEqual(configChanges(sealed, { build: { command: 'npm run build' } }), []);
 });
 
-test('R4 (018): a gate.json without build reads as an empty build command', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'chalc-build-config-'));
+test('R4 (018): a gate.json without build reads as an empty build command', async (tc) => {
+  const root = await tempDir(tc, 'chalc-build-config-');
   await mkdir(join(root, '.chalc'), { recursive: true });
   await writeFile(join(root, '.chalc', 'gate.json'), JSON.stringify({ test: { command: 'npm test' } }));
   const { config } = await loadConfig(root);

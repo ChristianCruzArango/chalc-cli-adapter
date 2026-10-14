@@ -7,8 +7,21 @@ import { flushTokenLog } from '../../lib/tokenlog.mjs';
 import { startReview, logRound, logFixOrder, logFixResult, logVerify, REVIEW_REL } from '../engine/reviewfile.mjs';
 import { runVerify, verifyAllowed, verifyCommand } from '../engine/verify.mjs';
 import { frame } from '../prompts/text.mjs';
+import { redactKnownSecrets } from '../../lib/redact.mjs';
 import { c, stepLine } from '../ui/render.mjs';
 import { interruptible, modelOf, reportRoleTokens, runTurn } from './turns.mjs';
+
+// Un fallo inesperado del ciclo de calidad (un gate.json raro, un error de disco) se informa y la sesión
+// sigue, igual que en runTurn: tras /plan o /review una excepción aquí mataba la shell (spec 022, F7).
+const guarded = (fn) => async (shell, io, ...rest) => {
+  try {
+    return await fn(shell, io, ...rest);
+  } catch (e) {
+    io.stopThinking?.();
+    io.print(c.red(`✗ ${e.message}`));
+    return undefined;
+  }
+};
 
 // La pasada del revisor sobre las rutas tocadas. Devuelve su resultado, o null si falló.
 async function reviewerPass(shell, io, task, paths) {
@@ -42,12 +55,12 @@ async function offerFix(shell, io, projectPath, findings) {
   const fix = await runTurn(shell, io, order);
   logFixResult(projectPath, fix || {});
   io.print(c.dim(t('cliReviewLogAt', REVIEW_REL)));
-  await runVerifyTurn(shell, io);
+  await verifyTurn(shell, io);
 }
 
 // Modo review (F2): el reviewer examina lo tocado en el último turno; si hay hallazgos, se ofrece UNA
 // ronda de corrección del coder (acotada: el orquestador no re-revisa solo — el usuario decide).
-export async function runReviewTurn(shell, io, task, paths) {
+async function reviewTurn(shell, io, task, paths) {
   if (!paths.length) { io.print(c.dim(t('cliNothingToReviewNoFiles'))); return; }
   const r = await reviewerPass(shell, io, task, paths);
   if (!r) return;
@@ -57,7 +70,7 @@ export async function runReviewTurn(shell, io, task, paths) {
   const projectPath = shell.session.project?.projectPath;
   startReview(projectPath, task, { reviewer: modelOf(shell, 'reviewer') });
   logRound(projectPath, 1, { ok: r.ok, findings: r.findings });
-  if (r.ok) { io.print(c.green(t('cliReviewOk'))); await runVerifyTurn(shell, io); return; }
+  if (r.ok) { io.print(c.green(t('cliReviewOk'))); await verifyTurn(shell, io); return; }
   if (!r.findings) { io.print(c.yellow(t('cliReviewNoVerdict', r.error || t('cliReviewInterrupted')))); return; }
   await offerFix(shell, io, projectPath, r.findings);
 }
@@ -72,7 +85,8 @@ async function verifyCommandToRun(shell, io, projectPath) {
     if (projectPath) logVerify(projectPath, 0, { skipped: true, reason: 'sin comando de verificación' });
     return null;
   }
-  if (!verifyAllowed(cmd, shell.session.allow || [])) {
+  // Stryker disable next-line ArrayDeclaration: equivalente — una entrada con espacios nunca casa con un binario
+  if (!verifyAllowed(cmd, shell.session.allow || [], { root: projectPath })) {
     io.print(c.dim(t('cliVerifyNotAllowed', cmd)));
     logVerify(projectPath, 0, { skipped: true, command: cmd, reason: 'no permitido por el perfil de confianza' });
     return null;
@@ -96,7 +110,7 @@ async function reapproveIfChanged(shell, io, approved) {
 // Portón de VERIFICACIÓN (compila con la toolchain real del stack): el reviewer solo LEE — el compilador
 // no perdona. Si falla, el usuario decide si los errores van al coder como ronda de corrección.
 // Se ejecuta SIEMPRE la instantánea aprobada (`cmd`), nunca lo que diga gate.json en ese momento.
-export async function runVerifyTurn(shell, io) {
+async function verifyTurn(shell, io) {
   const { project } = shell.session;
   let cmd = await verifyCommandToRun(shell, io, project?.projectPath);
   for (let round = 1; cmd && round <= 2; round++) {
@@ -110,10 +124,14 @@ export async function runVerifyTurn(shell, io) {
     if (round === 2) { io.print(c.yellow(t('cliVerifyStillFailing'))); return; }
     const pick = await io.choose(c.yellow(t('cliPassErrorsQ')), [t('cliOptYesFix'), t('cliOptNoLeave')]);
     if (pick !== 0) { io.print(c.dim(t('cliErrorsNoted'))); return; }
-    const order = frame(shell.session.language).verifyFixTask(v.command, v.output);
+    // Toda `task` construida a partir de salidas pasa por la redacción antes de viajar al proveedor.
+    const order = redactKnownSecrets(frame(shell.session.language).verifyFixTask(v.command, v.output));
     logFixOrder(project.projectPath, order);
     const fix = await runTurn(shell, io, order);
     logFixResult(project.projectPath, fix || {});
     cmd = await reapproveIfChanged(shell, io, cmd);
   }
 }
+
+export const runReviewTurn = guarded(reviewTurn);
+export const runVerifyTurn = guarded(verifyTurn);

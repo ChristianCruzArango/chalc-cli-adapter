@@ -3,6 +3,7 @@
 
 import { stat } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
+import { escapes } from './fsconfine.mjs';
 
 // ——— Referencias locales fantasma ———————————————————————————————————————————————————————————
 // Un archivo de código recién escrito puede referenciar vecinos que NO existen (templateUrl/styleUrls
@@ -18,7 +19,9 @@ const ASSET_EXT = /\.(css|scss|sass|less|html|htm|json|svg)$/i;
 const CODE_EXT = /\.(ts|tsx|js|mjs|cjs|jsx)$/i;
 const MAX_REFS = 15;
 
-export async function missingLocalRefs(absFile, content) {
+// `root` (opcional): una referencia que sale del proyecto no se comprueba ni se reporta; si no, el aviso
+// sería un oráculo de qué archivos existen fuera (basta escribir `import '../../../etc/x'` y mirar).
+export async function missingLocalRefs(absFile, content, root) {
   if (!CODE_EXT.test(absFile)) return [];
   const dir = dirname(absFile);
   const refs = new Set();
@@ -28,6 +31,7 @@ export async function missingLocalRefs(absFile, content) {
   const missing = [];
   for (const ref of refs) {
     const abs = resolve(dir, ref);
+    if (root && escapes(resolve(root), abs)) continue;
     // Con extensión explícita se exige exacta; un import sin extensión se resuelve como Node/TS.
     const candidates = ASSET_EXT.test(ref) || CODE_EXT.test(ref)
       ? [abs]
@@ -69,14 +73,15 @@ export function placementNote(relPath, layoutRoots = []) {
 
 // Avisos post-escritura para archivos de código: ubicación + referencias fantasma + truncamiento.
 // Una sola clave `hint` (el modelo lee la observación completa; dos claves distintas diluyen la corrección).
-export async function writeHints(abs, text, relPath, layoutRoots) {
+// Stryker disable next-line ArrayDeclaration: equivalente — una raíz de un solo segmento es su propia base y nada bajo ella queda fuera del mapa
+export async function writeHints(abs, text, relPath, { root, layoutRoots = [] } = {}) {
   if (!CODE_EXT.test(abs)) return {};
   const notes = [];
   const badPlace = placementNote(relPath, layoutRoots);
   if (badPlace) notes.push(badPlace);
   const delta = braceDelta(text);
   if (delta !== 0) notes.push(`the content looks INCOMPLETE (${delta > 0 ? delta + ' unclosed "{"' : Math.abs(delta) + ' extra "}"'}) — rewrite the file COMPLETE, or send the missing rest with {"append":true}`);
-  const missing = await missingLocalRefs(abs, text);
+  const missing = await missingLocalRefs(abs, text, root);
   if (missing.length) notes.push(`this file references local files that do NOT exist: ${missing.join(', ')} — create them in the next steps or fix the reference`);
   return notes.length ? { hint: notes.join(' | ') } : {};
 }

@@ -7,11 +7,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { decide } from '../catalog/next/lib/decide.mjs';
 import { detectGateConfig } from '../lib/gatedetect.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const GATE = 4000;
 const BRANCH = 'feature/014-seguridad';
@@ -34,8 +33,8 @@ const snapshot = ({ declared = roles('seguridad', 'revisor', 'endurecedor'), ent
 
 const signed = (role, over = {}) => ({ role, date: GATE + 500, ok: true, findings: 0, ...over });
 
-test('R18: equipping declares the security role in gate.json, before the reviewer', async () => {
-  const { flow } = await detectGateConfig(await mkdtemp(join(tmpdir(), 'chalc-sec-roles-')));
+test('R18: equipping declares the security role in gate.json, before the reviewer', async (tc) => {
+  const { flow } = await detectGateConfig(await tempDir(tc, 'chalc-sec-roles-'));
   const ids = flow.roles.map((r) => r.id);
 
   assert.ok(ids.includes('seguridad'));

@@ -6,19 +6,19 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { emitLive, LIVE_ENTRY_REL } from '../lib/liveemit.mjs';
 import { emitRepoTools } from '../lib/commands/equip.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = async (rel) => (await readFile(join(ROOT, rel), 'utf8')).replace(/\r\n/g, '\n');
 
-test('R1: the board is emitted inside .chalc with its launcher', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-live-emit-'));
+test('R1: the board is emitted inside .chalc with its launcher', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-live-emit-');
   await emitLive(dir);
   assert.equal(LIVE_ENTRY_REL, '.chalc/live.mjs');
   assert.match(await readFile(join(dir, LIVE_ENTRY_REL), 'utf8'), /import '\.\/live\/live\.mjs';/);
@@ -27,8 +27,8 @@ test('R1: the board is emitted inside .chalc with its launcher', async () => {
   }
 });
 
-test('R1: equipping a repo emits the board along with the gate, the advisor and the memory', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-live-equip-'));
+test('R1: equipping a repo emits the board along with the gate, the advisor and the memory', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-live-equip-');
   await emitRepoTools(dir, { language: 'es' });
   for (const rel of ['gate.mjs', 'next.mjs', 'memory.mjs', 'live.mjs']) assert.ok(existsSync(join(dir, '.chalc', rel)), rel);
 });

@@ -26,7 +26,7 @@ function fakeAi() {
     req.on('end', () => {
       const user = (JSON.parse(body || '{}').messages || []).map((m) => m.content).join('\n');
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: /Genera el contrato/.test(user) ? CONTRACT : SPEC } }] }));
+      res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: /Generate the contract/.test(user) ? CONTRACT : SPEC } }] }));
     });
   });
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));

@@ -5,12 +5,12 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadRoles } from '../lib/roles.mjs';
 import { writeRole, mdc, yamlScalar } from '../lib/targetkit.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const CATALOG = fileURLToPath(new URL('../catalog', import.meta.url));
 
@@ -23,10 +23,10 @@ function scalar(front, key) {
   return raw;
 }
 
-test('every catalog role is written with a frontmatter that round-trips', async () => {
+test('every catalog role is written with a frontmatter that round-trips', async (tc) => {
   const roles = await loadRoles();
   assert.ok(roles.length >= 3);
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-f06-'));
+  const dir = await tempDir(tc, 'chalc-f06-');
   for (const role of roles) {
     for (const specLang of ['es', 'en']) {
       const file = await writeRole(dir, CATALOG, role, { specLang, file: join(dir, `${role.id}-${specLang}.md`) });

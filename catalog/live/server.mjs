@@ -59,21 +59,31 @@ function send(res, status, type, body) {
   res.end(body);
 }
 
+// El 500 de una petición que falló a medias: si ya salieron las cabeceras, solo queda cerrarla.
+function failed(res) {
+  try { if (res.headersSent) res.end(); else send(res, 500, 'text/plain', 'page unavailable'); } catch { /* conexión ya cerrada */ }
+}
+
 // Lo que contesta a UNA petición.
-async function answer(req, res, { port, state, root }) {
+async function answer(req, res, { port, state, root, page }) {
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'text/plain', 'read-only');
   if (![`127.0.0.1:${port}`, `localhost:${port}`].includes(req.headers.host)) return send(res, 403, 'text/plain', 'forbidden');
   if (req.url !== '/' && req.url !== '/state.json') return send(res, 404, 'text/plain', 'not found');
   let view;
   try { view = await state(root); } catch { return send(res, 500, 'text/plain', 'state unavailable'); }
-  return req.url === '/' ? send(res, 200, 'text/html', pageHtml(view.lang)) : send(res, 200, 'application/json', JSON.stringify(view));
+  return req.url === '/' ? send(res, 200, 'text/html', page(view.lang)) : send(res, 200, 'application/json', JSON.stringify(view));
 }
 
 /** Levanta el tablero en un puerto libre de `127.0.0.1`. Devuelve `{ url, close }`. */
-export function createLiveServer({ root, idleMs = IDLE_MS, state = buildState, onIdle = () => {}, makeIdle = idleTimer }) {
+export function createLiveServer({ root, idleMs = IDLE_MS, state = buildState, page = pageHtml, onIdle = () => {}, makeIdle = idleTimer }) {
   return new Promise((done) => {
     const idle = makeIdle(idleMs, onIdle);
-    const server = createServer((req, res) => { idle.touch(); answer(req, res, { port: server.address().port, state, root }); });
+    // Un fallo al responder (la página que no se arma, una respuesta ya enviada) es un 500 de ESA petición:
+    // como rechazo sin atender tumbaría el servidor entero.
+    const server = createServer((req, res) => {
+      idle.touch();
+      answer(req, res, { port: server.address().port, state, root, page }).catch(() => failed(res));
+    });
     // La URL sale de la dirección en la que escucha DE VERDAD: si algún día dejara de ser solo local, se vería.
     server.listen(0, '127.0.0.1', () => done({
       url: `http://${server.address().address}:${server.address().port}/`,

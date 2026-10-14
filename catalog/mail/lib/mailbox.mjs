@@ -20,6 +20,11 @@ const MAX = 200;
 
 const fail = (error) => ({ ok: false, error, path: '' });
 
+// Un lado es un nombre, nunca una ruta: el mismo patrón con el que el advisor lee el remitente
+// (`next/lib/mail.mjs`). Un `me` o un destinatario con `/` o `..` escribiría fuera de `dir/<lado>/new`.
+const SIDE = /^[a-z][a-z0-9-]*$/;
+export const isSideId = (id) => typeof id === 'string' && SIDE.test(id);
+
 // Nombre ordenable por fecha, con el remitente a la vista para poder auditar la carpeta de un
 // vistazo. Los dos puntos de la hora no valen en Windows.
 const filenameFor = (now, from) => `${String(now).replace(/[:-]/g, '')}-from-${from}.md`;
@@ -30,10 +35,12 @@ const filenameFor = (now, from) => `${String(now).replace(/[:-]/g, '')}-from-${f
 // —el otro lado lo lee, no entiende qué se le pide y deja de mirar el buzón— y una carpeta creada
 // para un destinatario inventado quedaría ahí para siempre.
 export async function send({ dir, from, to, message, peers = [], now, lang = 'en' }) {
-  const valid = peers.map((p) => p.id);
+  const valid = peers.map((p) => p.id).filter(isSideId);
   const tx = textOf(lang);
 
+  if (!isSideId(from)) return fail(tx.badSide(from));
   if (!to) return fail(tx.noRecipient);
+  if (!isSideId(to)) return fail(tx.badSide(to));
   if (to === from) return fail(tx.toSelf(from));
   if (!valid.includes(to)) return fail(tx.unknownSide(to, valid.join(', ')));
 
@@ -65,6 +72,7 @@ export async function send({ dir, from, to, message, peers = [], now, lang = 'en
 // Se conservan en vez de borrarse (R10): son el registro de lo que se coordinó, y el coste de
 // guardarlos es cero comparado con el de no poder reconstruir por qué se hizo algo.
 export async function markRead(dir, me) {
+  if (!isSideId(me)) return 0;
   const inbox = join(dir, me, 'new');
   const done = join(dir, me, 'read');
 

@@ -13,8 +13,7 @@ import { selectInline } from '../ui/select.mjs';
 import { createScreen } from '../ui/screen.mjs';
 import { c, banner, bigTitle, approveText } from '../ui/render.mjs';
 import { SLASH_COMMANDS, agentsText, handleInput } from './commands.mjs';
-
-const APPROVAL_ANSWER = /^(y|yes|s|si|sí|n|no|a|all|todo)$/i;
+import { isApprovalAnswer, isPlainYes } from './answers.mjs';
 
 // Input SIEMPRE vivo: cada línea se enruta según el momento —respuesta de aprobación pendiente,
 // siguiente tarea esperada, o COLA (escrita mientras el agente trabaja; se procesa al terminar el turno).
@@ -25,7 +24,7 @@ export function tuiInput(screen, session) {
   screen.setOnLine((line, { pasted = false } = {}) => {
     const txt = line.trim();
     if (!txt) return;
-    if (inbox.approvalWaiter && !pasted && APPROVAL_ANSWER.test(txt)) { const w = inbox.approvalWaiter; inbox.approvalWaiter = null; w(txt.toLowerCase()); return; }
+    if (inbox.approvalWaiter && !pasted && isApprovalAnswer(txt)) { const w = inbox.approvalWaiter; inbox.approvalWaiter = null; w(txt.toLowerCase()); return; }
     // Comando de observación FUERA DE BANDA: se responde de inmediato aunque un agente esté
     // trabajando o esperando aprobación. No interrumpe, no pausa y no entra a la cola.
     if (txt === '/agents') { screen.print(agentsText(session)); return; }
@@ -94,7 +93,8 @@ export async function runTui(shell, ctl, { header, numCtx, mcpWarnings }) {
   }
 }
 
-function scrollIo(rl, ctl, numCtx) {
+// El io del modo scroll (exportado para probar el selector sin TTY).
+export function scrollIo(rl, ctl, numCtx) {
   const spinner = createSpinner(stdout);
   // print limpia el spinner ANTES de escribir (si no, la línea sale pegada a "⠙ pensando…") y lo
   // reanuda solo si el turno sigue pensando.
@@ -110,8 +110,8 @@ function scrollIo(rl, ctl, numCtx) {
     choose: async (q, options) => {
       spinner.stop();
       if (!stdin.isTTY) {
-        const a = (await rl.question(q + c.dim(' (y/n) '))).trim().toLowerCase();
-        return ['y', 'yes', 's', 'si'].includes(a) ? 0 : options.length - 1;
+        const a = await rl.question(q + c.dim(' (y/n) '));
+        return isPlainYes(a) ? 0 : options.length - 1;
       }
       rl.pause();
       const r = await selectInline(q, options, { input: stdin, output: stdout });

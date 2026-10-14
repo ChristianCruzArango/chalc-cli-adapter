@@ -2,11 +2,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { viewOf } from '../catalog/live/lib/view.mjs';
 import { buildState } from '../catalog/live/server.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const TASKS = '- [x] **T1** (R1) — Servicio\n- [ ] **T2** (R2) — HTTP\n';
 const REVIEW = [
@@ -61,8 +61,8 @@ test('R20: with no tasks yet, the newest spec is the one being written', () => {
   assert.deepEqual([none.source, none.flow[1].state], [{ dir: '', title: '' }, 'current']);
 });
 
-test('R18, R20: the board reads the review log, every spec folder and the constitution from the repo', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'chalc-live-dash-'));
+test('R18, R20: the board reads the review log, every spec folder and the constitution from the repo', async (tc) => {
+  const root = await tempDir(tc, 'chalc-live-dash-');
   await mkdir(join(root, 'specs', '001-saludo'), { recursive: true });
   await mkdir(join(root, 'specs', '002-otra'), { recursive: true });
   await mkdir(join(root, '.chalc'), { recursive: true });
@@ -86,8 +86,8 @@ test('R17: the roles indicator counts the roles whose review is OK', () => {
   assert.deepEqual(view({ snapshot: s }).kpis.roles, { ok: 1, total: 2 });
 });
 
-test('R20: a folder with only spec.md has no plan; plan is a yes/no, not the text; no constitution file reads as none', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'chalc-live-dash-'));
+test('R20: a folder with only spec.md has no plan; plan is a yes/no, not the text; no constitution file reads as none', async (tc) => {
+  const root = await tempDir(tc, 'chalc-live-dash-');
   await mkdir(join(root, 'specs', '001-a'), { recursive: true });
   await mkdir(join(root, 'specs', '003-c'), { recursive: true });
   await writeFile(join(root, 'specs', '001-a', 'spec.md'), '# A\n');

@@ -4,9 +4,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildArchitectureDecision, renderArchitectureDecisionMarkdown, mandatoryPrinciples, MANDATORY_DESIGN_PRINCIPLES } from '../lib/init.mjs';
@@ -33,11 +32,11 @@ test('R36: without a content language everything stays in the UI language, exact
   assert.equal(decisionIn().contentLang, lang);
 });
 
-test('R36: folder READMEs follow the content language', async () => {
+test('R36: folder READMEs follow the content language', async (tc) => {
   const label = 'Feature-first';
   assert.notEqual(renderFolderReadme('angular', label, 'src/app/core', 'en'), renderFolderReadme('angular', label, 'src/app/core', 'es'));
   assert.equal(renderFolderReadme('angular', label, 'src/app/core'), renderFolderReadme('angular', label, 'src/app/core', lang));
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-t36-'));
+  const dir = await tempDir(tc, 'chalc-t36-');
   const decision = decisionIn('en');
   const [first] = await applyArchitectureFolders(dir, decision);
   const written = await readFile(join(dir, first, 'README.md'), 'utf8');
@@ -53,9 +52,9 @@ test('R36: chalc init reads --lang and passes it to the decision and to the equi
 });
 
 // R39 (CLAUDE.md): `--lang` manda sobre CHALC_LANG para la INTERFAZ; con `--lang en` consola y contenido van en inglés.
-test('R36/R39: with --lang the console summary follows it, above CHALC_LANG', { timeout: 30000 }, async () => {
+test('R36/R39: with --lang the console summary follows it, above CHALC_LANG', { timeout: 30000 }, async (tc) => {
   const { spawnSync } = await import('node:child_process');
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-t36c-'));
+  const dir = await tempDir(tc, 'chalc-t36c-');
   const run = (contentFlag) => spawnSync(process.execPath, [fileURLToPath(new URL('../bin/chalc.mjs', import.meta.url)), 'init', '--stack', 'angular', '--name', 'demo', '--dir', dir, '--dry-run', '--yes', '--lang', contentFlag], { encoding: 'utf8', env: { ...process.env, CHALC_LANG: 'es' }, input: '' });
   const en = run('en').stdout;
   assert.match(en, /minimal implementation/);
@@ -67,6 +66,7 @@ test('R36/R39: with --lang the console summary follows it, above CHALC_LANG', { 
 import { folderGuide } from '../lib/init-folders.mjs';
 import { archText } from '../lib/init.mjs';
 import { langCode } from '../lib/commands/catalogstore.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 test('R36: every piece of docs/architecture.md uses the content language (both ways)', () => {
   for (const [code, depH] of [['es', 'Reglas de dependencia'], ['en', 'Dependency rules']]) {
@@ -79,7 +79,7 @@ test('R36: every piece of docs/architecture.md uses the content language (both w
   }
 });
 
-test('R36: folder READMEs use the content language for headers and body (both ways, also on disk)', async () => {
+test('R36: folder READMEs use the content language for headers and body (both ways, also on disk)', async (tc) => {
   const decision = decisionIn('es');
   const folder = decision.architecture.folders.find((f) => folderGuide(decision.stack, f, 'es').goes !== folderGuide(decision.stack, f, 'en').goes);
   for (const [code, header] of [['es', 'Qué va aquí'], ['en', 'What goes here']]) {
@@ -87,7 +87,7 @@ test('R36: folder READMEs use the content language for headers and body (both wa
     assert.match(readme, new RegExp(header), code);
     assert.ok(readme.includes(folderGuide(decision.stack, folder, code).goes), `${code}: cuerpo`);
   }
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-t36es-'));
+  const dir = await tempDir(tc, 'chalc-t36es-');
   await applyArchitectureFolders(dir, decision);
   assert.match(await readFile(join(dir, folder, 'README.md'), 'utf8'), /Qué va aquí/);
 });

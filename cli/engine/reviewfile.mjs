@@ -8,11 +8,13 @@
 import { existsSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { stamp } from './planfile.mjs';
+import { redactSensitiveText } from '../../lib/redact.mjs';
 
 export const REVIEW_REL = '.chalc/review.md';
 export const reviewPath = (projectPath) => join(projectPath, '.chalc', 'review.md');
 
-const indent = (text) => String(text || '').trim().split('\n').map((l) => '    ' + l).join('\n');
+// Todo lo que se sangra en la bitácora (salidas, órdenes) se redacta: review.md queda en el repo.
+const indent = (text) => redactSensitiveText(String(text || '').trim()).split('\n').map((l) => '    ' + l).join('\n');
 
 // Abre la bitácora de UNA revisión (reemplaza la anterior). opts.reviewer: etiqueta del modelo revisor.
 export function startReview(projectPath, task, opts = {}) {

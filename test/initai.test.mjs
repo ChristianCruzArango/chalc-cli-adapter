@@ -50,7 +50,7 @@ test('analyzeArchitectureWithAi compacts a big proposal with CCR and serves reca
   const seenSystems = [];
   let turn = 0;
   const scripted = ['{"recall":"c1"}', '{"done":true,"architectureId":"modular-feature-first","reasoning":"ok","clarifications":[]}'];
-  const chatImpl = async (_cfg, { system }) => { seenSystems.push(system); return scripted[turn++]; };
+  const chatImpl = async (_cfg, { user }) => { seenSystems.push(user); return scripted[turn++]; };   // S4: las secciones viajan en `user`
 
   const res = await analyzeArchitectureWithAi({ cfg, stackId: 'angular', proposal: big, chatImpl, maxSteps: 4 });
   assert.equal(res.architectureId, 'modular-feature-first');

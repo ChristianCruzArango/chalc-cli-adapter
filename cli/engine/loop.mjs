@@ -11,6 +11,7 @@ import { createCcrStore, compactObject } from '../../lib/ccr.mjs';
 import { redactStrings } from '../../lib/redact.mjs';
 import { t } from '../../lib/i18n.mjs';
 import { readTurn, retryMessage } from './protocol.mjs';
+import { nearTools, unknownToolHint } from './neartools.mjs';
 
 // Ejecuta una herramienta de forma segura: un fallo del executor se vuelve observación, no una excepción
 // que tumbe el loop. El modelo ve el error y puede recuperarse en el siguiente turno.
@@ -110,60 +111,11 @@ function recallRecord(store, step, turn) {
   };
 }
 
-// Los modelos locales truncan/mal escriben nombres largos (mcp__server__tool). Si el nombre no existe
-// pero es prefijo inequívoco de UNA tool (o viceversa), se auto-resuelve; si hay varias, se devuelven
-// los nombres válidos para que el modelo se corrija. Solo PREFIJOS y con mínimo 4 caracteres: con
-// contención ("includes") un nombre corto inventado ("sh", "it") se resolvería a una tool DISTINTA
-// (bash, edit) y el agente ejecutaría algo que el modelo no pidió. Devuelve los candidatos.
-function nearTools(tools, turn) {
-  const names = Object.keys(tools);
-  // Solo nombres TRUNCADOS de tools MCP (el modelo escribió el principio de un nombre largo). La otra
-  // dirección —un nombre más largo que empieza por el de una tool— convertía `editor_x` en `edit` y
-  // `bash_y` en `bash`: el agente ejecutaba una tool local que el modelo no pidió.
-  let near = turn.tool.length >= 4
-    ? names.filter((n) => n.startsWith('mcp__') && n.startsWith(turn.tool))
-    : [];
-  // Sufijo único: el modelo escribió solo el nombre de la tool sin el prefijo del server
-  // ("get_best_practices" → "mcp__angular-cli__get_best_practices").
-  if (near.length !== 1 && turn.tool.length >= 4) {
-    const bySuffix = names.filter((n) => n.endsWith(`__${turn.tool}`));
-    if (bySuffix.length === 1) near = bySuffix;
-  }
-  // Namespace inventado con punto/slash (gpt-oss alucina tools de su entrenamiento:
-  // "repo_browser.list", "functions.write"): si el ÚLTIMO segmento coincide EXACTO con una tool
-  // disponible, la intención es inequívoca — se resuelve en vez de rebotar hasta el cortacircuito.
-  if (near.length !== 1 && /[./]/.test(turn.tool)) {
-    const tail = turn.tool.split(/[./]/).pop();
-    if (names.includes(tail)) near = [tail];
-  }
-  // Varios candidatos (típico: escribió solo "mcp__<server>"): desambiguar por los ARGS enviados —
-  // si sus claves solo encajan en el esquema (argHints) de UNA candidata, es esa.
-  if (near.length > 1) {
-    const keys = Object.keys(turn.args || {});
-    if (keys.length) {
-      const byArgs = near.filter((n) => Array.isArray(tools[n]?.argHints) && keys.every((k) => tools[n].argHints.includes(k)));
-      if (byArgs.length === 1) near = byArgs;
-    }
-  }
-  return near;
-}
-
-// La observación de una tool que no existe. Con candidatos, un ejemplo COPIABLE: los modelos locales
-// corrigen mucho mejor imitando un nombre completo concreto que leyendo una lista. Sin candidatos, el
-// modelo INVENTÓ la tool (p. ej. mcp__angular-cli__generate) — se redirige SOLO a alternativas que
-// EXISTEN aquí: en los roles de solo lectura (planner/reviewer) no hay write/edit/bash, y pedir write
-// en ellos significa que el modelo intenta EJECUTAR cuando su entregable es el done.summary.
+// La observación de una tool que no existe (heurísticas y pista en ./neartools.mjs).
 // `a`: el estado del loop (sus `tools` y su `history`).
 function unknownToolRecord(a, turn, { near, step }) {
   const { tools, history } = a;
-  const names = Object.keys(tools);
-  const basics = ['write', 'edit', 'bash'].filter((n) => n in tools);
-  const wantsMutation = ['write', 'edit', 'bash'].includes(turn.tool);
-  const hint = near.length
-    ? `. The name is incomplete: use the FULL exact name, e.g. "${near[0]}"`
-    : (wantsMutation && !basics.length
-      ? '. You are in a READ-ONLY role: do NOT execute changes; explore with read/list/grep and deliver your result with {"done":true,"summary":"..."}'
-      : `. That tool does NOT exist: pick EXACTLY one from "available"${basics.length ? `, or do it with ${basics.join('/')}` : ''}`);
+  const hint = unknownToolHint(tools, turn.tool, near);
   // 2ª repetición idéntica: escalar la corrección (a la 3ª actúa el cortacircuito). El error es
   // determinista — repetirlo igual JAMÁS va a funcionar, y decírselo explícito rompe el patrón.
   const repeatNote = history.length && sameFailing(history[history.length - 1], turn)
@@ -171,7 +123,7 @@ function unknownToolRecord(a, turn, { near, step }) {
     : '';
   return {
     step, thought: turn.thought, action: { tool: turn.tool, args: turn.args },
-    observation: { error: `unknown tool: ${turn.tool}${hint}${repeatNote}`, available: (near.length ? near : names).slice(0, 12) }
+    observation: { error: `unknown tool: ${turn.tool}${hint}${repeatNote}`, available: (near.length ? near : Object.keys(tools)).slice(0, 12) }
   };
 }
 

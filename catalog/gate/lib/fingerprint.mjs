@@ -52,3 +52,12 @@ export function configChanges(sealed, config = {}) {
   const now = guardedConfig(config);
   return Object.keys(now).filter((key) => key in sealed && JSON.stringify(sealed[key]) !== JSON.stringify(now[key]));
 }
+
+// Las claves que deciden QUÉ se ejecuta con `shell: true`. Si cambian, no basta con avisar: el mismo cambio
+// que reescribe el comando puede reescribir `.chalc/task.json`, pero una corrida local no ejecuta nada nuevo
+// hasta que el usuario lo re-sella a mano.
+export const COMMAND_KEYS = Object.freeze(['test.command', 'build.command', 'mutation.command']);
+
+/** De las claves cambiadas, las que son comandos. */
+// Stryker disable next-line ArrayDeclaration: equivalente — cualquier lista por defecto se filtra a [] (no trae claves de comando)
+export const commandChanges = (changes = []) => changes.filter((key) => COMMAND_KEYS.includes(key));

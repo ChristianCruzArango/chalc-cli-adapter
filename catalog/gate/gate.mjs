@@ -10,8 +10,8 @@
 // comprobarlo. Lo que no se puede comprobar, se bloquea; nunca se aprueba por defecto.
 
 import { currentBranch, headCommit, taskScope } from './lib/changed.mjs';
-import { readBaseline, sealBaseline } from './lib/baseline.mjs';
-import { configChanges, guardedConfig, scopeHash } from './lib/fingerprint.mjs';
+import { readBaseline, resealConfig as resealBaseline, sealBaseline } from './lib/baseline.mjs';
+import { commandChanges, configChanges, guardedConfig, scopeHash } from './lib/fingerprint.mjs';
 import { clearTouched } from './lib/touched.mjs';
 import { checkContract } from './lib/contractcheck.mjs';
 import { checkTraceability } from './lib/traceability.mjs';
@@ -66,6 +66,9 @@ export async function runGate({ root = process.cwd(), fast = false, run = runCom
   // —el usuario ajusta su portón—, pero la evidencia y el advisor lo dicen.
   const changedConfig = configChanges((await readBaseline(root)).config, config);
   const meta = { branch: await currentBranch(root), role: config.role, spec: spec ? spec.dir : '', scope, config, configChanges: changedConfig };
+  // Un COMANDO cambiado sí bloquea (S7b): se ejecuta con shell en cada turno (hook `Stop`). Un PR que reescribe
+  // `test.command` no corre solo: el usuario lo revisa y re-sella con `--seal`.
+  if (commandChanges(changedConfig).length) return finish(out, [configStage(commandChanges(changedConfig))], meta);
 
   // Sin saber QUÉ revisar no se revisa (R4b). La salida histórica era el árbol de fuentes entero, y
   // eso no es revisar de más: es cambiar de pregunta sin avisar, y enterrar la tarea de hoy bajo la
@@ -158,6 +161,12 @@ const scopeStage = (rule, data, blocked) => ({
   findings: [{ file: '', line: 0, rule, data }]
 });
 
+// La etapa que se niega a ejecutar comandos cambiados sin re-sellar.
+const configStage = (keys) => ({
+  stage: 'config', ok: false, blocked: true, reason: RULES.commandsUnsealed, command: '', code: null, ms: 0,
+  findings: [{ file: '', line: 0, rule: RULES.commandsUnsealed, data: { keys } }]
+});
+
 // Una violación de frontera, en el formato común de hallazgo.
 const asFinding = (v) => ({
   file: v.file,
@@ -210,28 +219,46 @@ async function sealTask(root, config) {
   await clearTouched(root);
 }
 
+/** Re-sella las claves vigiladas de la config actual (`--seal`). Devuelve false si no hay tarea sellada. */
+export async function resealConfig(root) {
+  const { config, error } = await loadConfig(root);
+  if (error) return false;
+  return resealBaseline(root, guardedConfig(config));
+}
+
 // Resumen por consola. La evidencia completa está en el archivo; esto es para no tener que abrirlo.
 // Va a stdout porque es la salida de la CLI, no depuración.
 const say = (text) => process.stdout.write(`${text}\n`);
 
-function report(result, lang) {
+/** Escribe el resumen de `result` con `write` (stdout por defecto). */
+export function report(result, lang, write = say) {
   const frame = frameOf(lang);
-  say(`\n${frame.title}: ${frame.verdict[result.verdict]}  ·  ${result.evidence}`);
+  write(`\n${frame.title}: ${frame.verdict[result.verdict]}  ·  ${result.evidence}`);
   for (const stage of result.stages) {
     for (const finding of stage.findings) {
       const where = finding.file ? `${finding.file}:${finding.line}` : frame.stages[stage.stage] || stage.stage;
-      say(`  ${where} — ${messageOf(finding.rule, finding.data, lang)}`);
+      write(`  ${where} — ${messageOf(finding.rule, finding.data, lang)}`);
     }
   }
-  if (!result.closesTask && result.verdict === 'pass') say(`\n${frame.fast}`);
+  if (!result.closesTask && result.verdict === 'pass') write(`\n${frame.fast}`);
 }
 
-// Entrada de línea de comandos. Solo corre cuando se invoca el archivo, no al importarlo desde los
-// tests de chalc.
-if (process.argv[1] && /gate\.mjs$/.test(process.argv[1])) {
-  const fast = process.argv.includes('--fast');
-  const result = await runGate({ root: process.cwd(), fast });
-  const { config } = await loadConfig(process.cwd());
-  report(result, config.language || 'en');
-  process.exit(result.code);
+/** ¿`argv` es una invocación directa de este archivo (y no un import desde los tests)? */
+export const isEntry = (argv) => Boolean(argv[1]) && /gate\.mjs$/.test(argv[1]);
+
+/** Entrada de línea de comandos: `--seal` re-sella; si no, corre el portón. Devuelve el código de salida. */
+export async function main({ argv = process.argv, root = process.cwd(), write = say } = {}) {
+  if (argv.includes('--seal')) {
+    const sealed = await resealConfig(root);
+    const frame = frameOf((await loadConfig(root)).config.language || 'en');
+    write(sealed ? frame.sealed : frame.nothingToSeal);
+    return sealed ? 0 : 1;
+  }
+  const result = await runGate({ root, fast: argv.includes('--fast') });
+  const { config } = await loadConfig(root);
+  report(result, config.language || 'en', write);
+  return result.code;
 }
+
+// Solo corre cuando se invoca el archivo, no al importarlo desde los tests de chalc.
+if (isEntry(process.argv)) process.exit(await main());

@@ -72,3 +72,17 @@ export async function sealBaseline(root, { commit, date = new Date(), sealedBy =
 
   return parseBaseline(JSON.stringify(sealed));
 }
+
+// Re-sella SOLO las claves vigiladas de gate.json, sin mover el commit ni la fecha de la línea base. Es el
+// «sí, ese cambio de comando es mío» del usuario (`node .chalc/gate.mjs --seal`). Sin línea base no hay nada
+// que re-sellar: devuelve false.
+export async function resealConfig(root, config) {
+  const path = join(root, TASK_REL);
+  // Stryker disable next-line StringLiteral,ArrowFunction: equivalentes — un Buffer o `undefined` se parsean igual (String/JSON.parse)
+  const text = await readFile(path, 'utf8').catch(() => '');
+  if (!parseBaseline(text).exists) return false;
+  const next = JSON.stringify({ ...JSON.parse(text), config }, null, 2) + '\n';
+  // Stryker disable next-line StringLiteral: equivalente — sin codificación, writeFile escribe un string en utf8
+  await writeFile(path, next, 'utf8');
+  return true;
+}

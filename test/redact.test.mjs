@@ -2,14 +2,14 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { redactSensitiveText, redactKnownSecrets, isSecretFile } from '../lib/redact.mjs';
 import { childEnv } from '../lib/childenv.mjs';
 import { createFsTools } from '../cli/tools/fs.mjs';
 import { createShellTool } from '../cli/tools/shell.mjs';
 import { runAgent } from '../cli/engine/loop.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 test('quoted values with spaces or escaped quotes are fully redacted', () => {
   assert.equal(redactSensitiveText('{"password": "correct horse battery"}'), '{"password": "[REDACTED]"}');
@@ -54,8 +54,8 @@ test('secret files are recognised by name', () => {
   for (const f of ['src/env.ts', 'environment.ts', 'keys.md', 'README.md']) assert.equal(isSecretFile(f), false, f);
 });
 
-test('read, grep and bash do not hand the model the values of a .env', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'chalc-s17-'));
+test('read, grep and bash do not hand the model the values of a .env', async (tc) => {
+  const root = await tempDir(tc, 'chalc-s17-');
   await writeFile(join(root, '.env'), 'DB_HOST=localhost\nDB_PASSWORD=Sup3rS3cret\nAPI_KEY="k k k"\n');
   const { read, grep } = createFsTools({ root });
   const { bash } = createShellTool({ root, allow: ['cat'], approve: async () => true });

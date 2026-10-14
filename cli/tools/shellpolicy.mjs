@@ -8,8 +8,7 @@ import { deepestExistingRealpath, escapes, GIT_DIR } from './fsconfine.mjs';
 // Las palabras y el subcomando de git se leen igual que en la guarda del asistente (spec 017): viven en
 // el portón, que se emite al repo equipado.
 import { commandTokens, gitSubcommand } from '../../catalog/gate/lib/shellwords.mjs';
-
-export { commandTokens };
+import { gitExecOption } from './gitexec.mjs';
 
 const FORBIDDEN = /[;&|`$><\n\r]/;   // encadenado, redirección y sustitución: prohibidos
 // Caracteres de control (ESC incluido): un `\x1b[2K` en el comando haría que el aviso de aprobación
@@ -139,39 +138,48 @@ function unsafePathArg(args) {
   });
 }
 
+// Las asignaciones (`make PREFIX=/usr/local`) y los switches MSBuild (`/t:Build`) son datos de la
+// herramienta, no lecturas: quedan fuera de la comprobación de rutas reales.
+const isData = (tk) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(tk) || /^\/[A-Za-z][A-Za-z0-9]*:/.test(tk);
+
+// Guardas sobre el texto crudo, antes de tokenizar: `[predicado, mensaje, mostrar?]`.
+const TEXT_GUARDS = [
+  [(cmd) => FORBIDDEN.test(cmd), () => 'shell metacharacters not allowed (; & | ` $ > <); one single command per action'],
+  [(cmd) => CONTROL_CHARS.test(cmd), () => 'control characters are not allowed in commands', JSON.stringify]
+];
+
+// Guardas sobre los tokens (capas 2-4): `[hallar(ctx) → lo ofensivo | falsy, mensaje(lo ofensivo, ctx)]`.
+// La primera que encuentra algo rechaza el comando. Notas de las rutas:
+// - Traversal/home (.. ~) se bloquea SIEMPRE (posicional o valor de opción: `npm --prefix=..` escapa).
+// - La ruta ABSOLUTA solo si es POSICIONAL: como valor de una opción larga (`--base-href /app/`),
+//   asignación (`make PREFIX=/usr/local`) o switch MSBuild (`/t:Build`) es dato, no un archivo —
+//   bloquearlo daba falsos positivos en builds legítimos. Ahí manda la aprobación (5). Solo las opciones
+//   LARGAS (--foo) blindan al token siguiente: un flag corto (-v) suele ser booleano, y tras `--` (fin
+//   de opciones POSIX) todo es posicional por definición.
+const TOKEN_GUARDS = [
+  [({ base, allow }) => !allow.includes(base), (_, { base, allow }) => `command not allowed: ${base}. Allowed: ${allow.join(', ') || '(none)'}`],
+  [({ base, args }) => args.map((tk) => inlineEvalFlag(base, tk)).find(Boolean), (flag, { base }) => `flag not allowed for ${base}: ${flag}. Write a script file with write and run it.`],
+  [({ base, args }) => base === 'git' && gitConfigWrite(args), () => 'git config writes are not allowed: they can run commands later (core.fsmonitor, core.hooksPath, alias.x=!cmd). Reading with --get/--list is fine; ask the user to change git config.'],
+  [({ base, args }) => base === 'git' && gitExecOption(args), (opt) => `git option not allowed: ${opt}. It makes git run a program; run commands only through this tool, one at a time.`],
+  [({ base, args }) => base === 'git' && gitUnsafeOption(args), (opt) => `git option not allowed: ${opt}. It writes files or changes what git runs; use write for files.`],
+  [({ args }) => unsafePathArg(args), (tk) => `path argument outside the project is not allowed: ${tk}`],
+  [({ root, args }) => args.find((tk) => !isData(tk) && landsOutsideRoot(root, tk)), (tk) => `path argument outside the project is not allowed: ${tk}`],
+  [({ root, args }) => args.find((tk) => inGitDir(root, tk)), (tk) => `paths inside .git/ are not allowed: ${tk}`]
+];
+
 // Las capas 1-4 sobre un comando: devuelve `{ error, command? }` si se rechaza, o `{ tokens, args }`.
 export function checkCommand(cmd, { root, allow }) {
-  const allowed = allow.join(', ') || '(none)';
   if (!cmd) return { error: 'empty command' };
-  if (FORBIDDEN.test(cmd)) return { command: cmd, error: 'shell metacharacters not allowed (; & | ` $ > <); one single command per action' };
-  if (CONTROL_CHARS.test(cmd)) return { command: JSON.stringify(cmd), error: 'control characters are not allowed in commands' };
+  for (const [rejects, message, show = (c) => c] of TEXT_GUARDS) {
+    if (rejects(cmd)) return { command: show(cmd), error: message() };
+  }
   let tokens;
   try { tokens = commandTokens(cmd); }
   catch { return { command: cmd, error: 'unterminated quote' }; }
-  const base = tokens[0];
-  if (!allow.includes(base)) return { command: cmd, error: `command not allowed: ${base}. Allowed: ${allowed}` };
-  const evalFlag = tokens.slice(1).map((tk) => inlineEvalFlag(base, tk)).find(Boolean);
-  if (evalFlag) return { command: cmd, error: `flag not allowed for ${base}: ${evalFlag}. Write a script file with write and run it.` };
-  if (base === 'git' && gitConfigWrite(tokens.slice(1))) {
-    return { command: cmd, error: 'git config writes are not allowed: they can run commands later (core.fsmonitor, core.hooksPath, alias.x=!cmd). Reading with --get/--list is fine; ask the user to change git config.' };
+  const ctx = { root, allow, base: tokens[0], args: tokens.slice(1) };
+  for (const [find, message] of TOKEN_GUARDS) {
+    const found = find(ctx);
+    if (found) return { command: cmd, error: message(found, ctx) };
   }
-  const gitOption = base === 'git' && gitUnsafeOption(tokens.slice(1));
-  if (gitOption) return { command: cmd, error: `git option not allowed: ${gitOption}. It writes files or changes what git runs; use write for files.` };
-  // Traversal/home (.. ~) se bloquea SIEMPRE (posicional o valor de opción: `npm --prefix=..` escapa).
-  // La ruta ABSOLUTA solo si es POSICIONAL: como valor de una opción larga (`--base-href /app/`,
-  // `--base-href=/app/`), asignación (`make PREFIX=/usr/local`) o switch MSBuild (`/t:Build`) es dato,
-  // no un archivo — bloquearlo daba falsos positivos en builds legítimos. Ahí manda la aprobación (5).
-  // Solo las opciones LARGAS (--foo) blindan al token siguiente: un flag corto (-v) suele ser booleano,
-  // y tras `--` (fin de opciones POSIX) todo es posicional por definición.
-  const args = tokens.slice(1);
-  const unsafePath = unsafePathArg(args);
-  if (unsafePath) return { command: cmd, error: `path argument outside the project is not allowed: ${unsafePath}` };
-  // Las asignaciones (`make PREFIX=/usr/local`) y los switches MSBuild (`/t:Build`) son datos de la
-  // herramienta, no lecturas: quedan fuera de esta comprobación, como en la de arriba.
-  const isData = (tk) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(tk) || /^\/[A-Za-z][A-Za-z0-9]*:/.test(tk);
-  const escaped = args.find((tk) => !isData(tk) && landsOutsideRoot(root, tk));
-  if (escaped) return { command: cmd, error: `path argument outside the project is not allowed: ${escaped}` };
-  const gitDir = args.find((tk) => inGitDir(root, tk));
-  if (gitDir) return { command: cmd, error: `paths inside .git/ are not allowed: ${gitDir}` };
-  return { tokens, args };
+  return { tokens, args: ctx.args };
 }

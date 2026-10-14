@@ -7,9 +7,9 @@ import assert from 'node:assert/strict';
 import { legacyOfficeToText } from '../lib/docread/external.mjs';
 import { t } from '../lib/i18n.mjs';
 import { readDocument } from '../lib/docread.mjs';
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const PATH = '/docs/viejo.doc';
 const failing = () => { throw new Error('no instalado'); };
@@ -47,8 +47,8 @@ test('R19: on macOS textutil goes first; if it fails, the fallback still works',
   assert.equal(fallback, 'desde soffice');
 });
 
-test('R19: readDocument passes its injected converter down to the legacy fallback', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-c04-'));
+test('R19: readDocument passes its injected converter down to the legacy fallback', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-c04-');
   const file = join(dir, 'presentacion.odp');
   await writeFile(file, 'no es un odp real');
   const injected = { platform: 'linux', run: failing, convert: async () => 'via convert inyectado' };

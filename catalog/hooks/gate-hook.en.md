@@ -87,6 +87,18 @@ broke, not to sign the task off. Closing is the full gate:
 node .chalc/gate.mjs
 ```
 
+## When a gate command changes
+
+The gate runs `test.command`, `build.command` and `mutation.command` from `.chalc/gate.json` through the
+shell, and this hook runs it on every turn. If any of them changed since the last closed task —a PR, someone
+else's branch—, the gate **blocks without running anything** until you review it and accept it:
+
+```
+node .chalc/gate.mjs --seal
+```
+
+`--seal` only re-seals the watched config in `.chalc/task.json`; it does not run the gate nor move the task.
+
 ## 3. Guards: what the assistant does not do without you
 
 Rules like "do not commit without my go-ahead" or "do not read the `.env`" live as text in
@@ -112,7 +124,8 @@ barrier: before each action, the guard looks at it and decides.
 | --- | --- |
 | `git commit`, `git push` | **It asks you.** The go-ahead is yours, at the exact moment. |
 | `git push --force`, `-f`, `--force-with-lease`, `+branch` | **Blocked.** It rewrites history others already have. |
-| Reading `.env`, SSH keys, `.npmrc`, `.pypirc`, `.netrc`, `*.pem`… (`Read`, `Grep`, or any command naming them) | **Blocked.** Their contents would enter the model's context. Value-less templates (`.env.example`, `.env.sample`, `.env.template`) can be read. |
+| Reading `.env`, `.envrc`, SSH keys, `.npmrc`, `.pypirc`, `.netrc`, `*.pem`, `*.tfvars`, `kubeconfig`, `.docker/config.json`… when they are NAMED: `Read`, the path or `glob` of `Grep`/`Glob`, or a word of a shell command | **Blocked.** Their contents would enter the model's context. Value-less templates (`.env.example`, `.env.sample`, `.env.template`) can be read. |
+| `Grep` with `output_mode: content` over a folder (no path, `.`, `src/`…) not narrowed by `glob` or `type` | **Asks you.** It could dump lines of a `.env` it does not name. |
 | `rm`, `rmdir` or `find … -delete` outside the project, on the whole project, or on a target that cannot be resolved (`$VAR`, `$(…)`, `~`, `{a,b}`) | **Blocked.** Inside the project, deleting works as usual. |
 
 The reason for each question or block comes in the repo's language (`.chalc/gate.json`) and names the
@@ -125,6 +138,10 @@ fails, it exits silently: a hook that breaks the turn is worse than no hook.
 **Limit, plainly:** it raises the bar, it is not unbreakable. It reads commands without running
 them —it does not expand variables or aliases, nor resolve symbolic links— and a deliberately
 obfuscated command can get past it. It is a net for the assistant's slips, not a security boundary.
+
+What it does **not** cover: a command that reads a secret without naming it (`grep -r PASSWORD .`,
+`cat $(ls -a)`), a `Grep` that only lists files or counts matches, and any credentials file whose name is
+not in the list above.
 
 ## 4. Activity for the live board
 

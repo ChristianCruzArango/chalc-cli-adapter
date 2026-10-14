@@ -6,7 +6,7 @@
 import { spawn } from 'node:child_process';
 import { createJsonRpc } from './jsonrpc.mjs';
 import { childEnv } from '../../lib/childenv.mjs';
-import { killTree, windowsCommand } from '../../lib/proc.mjs';
+import { killTree, windowsCommand, windowsSpawnOptions, trackChild } from '../../lib/proc.mjs';
 import { CLIENT_INFO, MCP_REQUEST_TIMEOUT_MS, MCP_TOOL_TIMEOUT_MS } from './clientinfo.mjs';
 import { t } from '../../lib/i18n.mjs';
 
@@ -17,17 +17,6 @@ const MAX_LINE_BYTES = 8 * 1024 * 1024;
 
 // Tras el SIGTERM de stop(), cuánto se espera antes de SIGKILL: un servidor que lo ignora seguía vivo (O-03).
 const STOP_GRACE_MS = 2000;
-
-// Servidores vivos: al salir el CLI (también por señal, ver lib/fatal.mjs) se matan, síncronamente.
-const live = new Set();
-let exitHooked = false;
-function track(child) {
-  live.add(child);
-  child.on('exit', () => live.delete(child));
-  if (exitHooked) return;
-  exitHooked = true;
-  process.on('exit', () => { for (const c of live) killTree(c, 'SIGKILL'); });
-}
 
 // Termina el servidor: SIGTERM, SIGKILL si sigue vivo tras el margen; resuelve cuando ha salido.
 function stopChild(child, graceMs) {
@@ -43,14 +32,10 @@ function stopChild(child, graceMs) {
 // ENOENT: se lanza vía `cmd.exe /d /s /c "<línea>"` con la línea construida a mano (ver lib/proc.mjs).
 function spawnServer({ command, args, env, cwd }) {
   const win = process.platform === 'win32' ? windowsCommand(command, args, { allowExpansion: true }) : null;
-  return spawn(win ? win.file : command, win ? win.args : args, {
-    cwd,
-    // Sin las credenciales del usuario: un servidor que necesite una la recibe explícita en su `env`.
-    env: childEnv(env || {}),
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true,
-    ...(win ? { windowsVerbatimArguments: true } : {})
-  });
+  // Sin las credenciales del usuario: un servidor que necesite una la recibe explícita en su `env`.
+  // Stryker disable next-line ArrayDeclaration,BooleanLiteral: equivalentes — spawn rellena stdio con 'pipe' y windowsHide no actúa fuera de Windows
+  const opts = { cwd, env: childEnv(env || {}), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true };
+  return spawn(win ? win.file : command, win ? win.args : args, win ? windowsSpawnOptions(opts) : opts);
 }
 
 // Lector del stdout del servidor: parte en líneas JSON y se las pasa al dispatcher. Una línea sin fin
@@ -58,11 +43,19 @@ function spawnServer({ command, args, env, cwd }) {
 // envoltorio cmd.exe y matar solo ese dejaba al servidor real vivo, inundando la tubería heredada (el
 // proceso nunca terminaba; CI de Windows colgado). Recibe texto ya decodificado por flujo
 // (`setEncoding`): `chunk.toString()` por trozo rompía un carácter UTF-8 partido entre dos (O-03).
+// ¿El buffer es una línea SIN fin que ya supera el tope? Se mide en bytes UTF-8 (el tope es de
+// memoria): `length` cuenta unidades UTF-16 y dejaba pasar casi el doble con texto no ASCII. Cada
+// unidad UTF-16 ocupa como mucho 3 bytes: por debajo de maxBytes/3 unidades no hace falta medir.
+export function lineOverflow(buffer, maxBytes = MAX_LINE_BYTES) {
+  if (buffer.length * 3 <= maxBytes || buffer.indexOf('\n') >= 0) return false;
+  return Buffer.byteLength(buffer) > maxBytes;
+}
+
 function lineReader(child, rpc) {
   let buffer = '';
   return (chunk) => {
     buffer += chunk;
-    if (buffer.length > MAX_LINE_BYTES && buffer.indexOf('\n') < 0) {
+    if (lineOverflow(buffer)) {
       buffer = '';
       rpc.close(new Error(t('mcpLineTooLong', MAX_LINE_BYTES)));
       killTree(child, 'SIGKILL');
@@ -99,8 +92,7 @@ export function createStdioClient({ command, args = [], env, cwd, timeoutMs = MC
   let rpc = null;
 
   const start = async () => {
-    child = spawnServer({ command, args, env, cwd });
-    track(child);
+    child = trackChild(spawnServer({ command, args, env, cwd }));
     rpc = createJsonRpc({ send: (m) => child.stdin.write(JSON.stringify(m) + '\n'), timeoutMs });
     wireServer(child, rpc, onStderr);
 

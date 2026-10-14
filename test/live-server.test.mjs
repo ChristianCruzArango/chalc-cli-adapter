@@ -40,7 +40,7 @@ test('R2: a broken announcement reads as none', async () => {
 
 test('R3: a board only withdraws its own announcement', async () => {
   const root = await project();
-  await announce(root, { url: 'u', pid: 1 });
+  await announce(root, { url: 'http://127.0.0.1:4100/', pid: 1 });
   await retire(root, 2);
   assert.ok(existsSync(join(root, LIVE_REL)));
   await retire(root, 1);
@@ -48,9 +48,10 @@ test('R3: a board only withdraws its own announcement', async () => {
   await retire(root, 1);
 });
 
-test('R2: a process is alive if signal 0 reaches it (or is refused), dead if it does not exist', () => {
+// Spec 022 (S7a): un `EPERM` es un proceso de otro usuario, así que no es el tablero que lanzamos.
+test('R2: a process is alive if signal 0 reaches it, dead if it does not exist or is someone else\'s', () => {
   assert.equal(isAlive(process.pid), true);
-  assert.equal(isAlive(1, () => { throw Object.assign(new Error('x'), { code: 'EPERM' }); }), true);
+  assert.equal(isAlive(1, () => { throw Object.assign(new Error('x'), { code: 'EPERM' }); }), false);
   assert.equal(isAlive(999999, () => { throw Object.assign(new Error('x'), { code: 'ESRCH' }); }), false);
   assert.equal(isAlive(0), false);
   assert.equal(isAlive(undefined), false);
@@ -159,12 +160,13 @@ test('R6: the state includes what the activity hook recorded', async () => {
 test('R2: each part of a broken announcement is checked on its own', async () => {
   const root = await project();
   await mkdir(join(root, '.chalc'), { recursive: true });
-  for (const text of ['null', '{"url":5,"pid":1}', '{"url":"u","pid":"1"}', '{"url":"u","pid":1.5}']) {
+  const url = 'http://127.0.0.1:4100/';
+  for (const text of ['null', '{"url":5,"pid":1}', `{"url":"${url}","pid":"1"}`, `{"url":"${url}","pid":1.5}`, '{"url":"u","pid":7}']) {
     await writeFile(join(root, LIVE_REL), text);
     assert.equal(await readAnnouncement(root), null, text);
   }
-  await writeFile(join(root, LIVE_REL), '{"url":"u","pid":7}');
-  assert.deepEqual(await readAnnouncement(root), { url: 'u', pid: 7, started: '' });
+  await writeFile(join(root, LIVE_REL), `{"url":"${url}","pid":7}`);
+  assert.deepEqual(await readAnnouncement(root), { url, pid: 7, started: '' });
 });
 
 test('R3: the board waits 15 minutes by default', () => {

@@ -60,6 +60,8 @@ export const RULES = Object.freeze({
   // opuestas — una es duda y bloquea, la otra es un hecho y se informa.
   scopeUndetermined: 'scope-undetermined',
   scopeEmpty: 'scope-empty',
+  // Un comando del portón (test/build/mutation) cambió desde lo sellado: no se ejecuta hasta re-sellar.
+  commandsUnsealed: 'commands-unsealed',
 
   // trazabilidad y contrato
   noRequirement: 'no-requirement',
@@ -73,5 +75,6 @@ export const RULES = Object.freeze({
   guardGitPush: 'git-push',
   guardGitPushForce: 'git-push-force',
   guardSecretRead: 'secret-read',
+  guardSecretGrep: 'secret-grep',
   guardDeleteOutside: 'delete-outside'
 });

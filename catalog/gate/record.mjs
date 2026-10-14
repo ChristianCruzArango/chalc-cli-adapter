@@ -67,13 +67,18 @@ export async function recordEvent(root, { argv = [], stdin = '' } = {}) {
   return paths;
 }
 
-// Entrada de línea de comandos. Sale SIEMPRE con 0: un hook que falla interrumpe al asistente, y
+// Entrada de línea de comandos. La raíz la da Claude Code en `CLAUDE_PROJECT_DIR`, como en la guarda y en el
+// registro del tablero: la shell puede estar en una subcarpeta, y desde ahí todo quedaría «fuera». Sale SIEMPRE con 0: un hook que falla interrumpe al asistente, y
 // quedarse sin registro solo significa que el alcance cae al diff —que revisa de más, no de menos—.
-if (process.argv[1] && /record\.mjs$/.test(process.argv[1])) {
-  const argv = process.argv.slice(2);
+// `main` recibe argv, entorno, carpeta y lector de stdin para poder probarse sin lanzar el hook.
+export async function main({ argv = process.argv.slice(2), env = process.env, cwd = process.cwd(), read = readStdin } = {}) {
   try {
     // Solo se lee stdin sin rutas por argumento: con ellas nadie la cierra (ver `lib/stdin.mjs`).
-    await recordEvent(process.cwd(), { argv, stdin: argv.length ? '' : await readStdin() });
-  } catch { /* anotar nunca puede romper el turno de quien está trabajando */ }
+    return await recordEvent(env.CLAUDE_PROJECT_DIR || cwd, { argv, stdin: argv.length ? '' : await read() });
+  } catch { return []; /* anotar nunca puede romper el turno de quien está trabajando */ }
+}
+
+if (process.argv[1] && /record\.mjs$/.test(process.argv[1])) {
+  await main();
   process.exit(0);
 }

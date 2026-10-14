@@ -9,14 +9,14 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { allReviews } from '../catalog/next/lib/review.mjs';
 import { checklistProblems } from '../catalog/next/lib/checklist.mjs';
 import { decide } from '../catalog/next/lib/decide.mjs';
 import { isMobileRepo } from '../catalog/next/lib/snapshot.mjs';
 import { detectGateConfig } from '../lib/gatedetect.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const OWASP = ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08', 'A09', 'A10'];
 const MASVS = ['STORAGE', 'CRYPTO', 'AUTH', 'NETWORK', 'PLATFORM', 'CODE', 'RESILIENCE', 'PRIVACY'].map((g) => `MASVS-${g}`);
@@ -136,19 +136,19 @@ test('R29: roles that declare no checklist are not affected', () => {
 
 // ── de dónde salen los datos ──────────────────────────────────────────────────────────────────
 
-test('R29: a repo with an android/ or ios/ folder is mobile', async () => {
-  const plain = await mkdtemp(join(tmpdir(), 'chalc-mobile-'));
+test('R29: a repo with an android/ or ios/ folder is mobile', async (tc) => {
+  const plain = await tempDir(tc, 'chalc-mobile-');
   assert.equal(isMobileRepo(plain), false);
 
   for (const folder of ['android', 'ios']) {
-    const repo = await mkdtemp(join(tmpdir(), 'chalc-mobile-'));
+    const repo = await tempDir(tc, 'chalc-mobile-');
     await mkdir(join(repo, folder));
     assert.equal(isMobileRepo(repo), true, folder);
   }
 });
 
-test('R29: equipping writes the checklist the security role declares into gate.json', async () => {
-  const { flow } = await detectGateConfig(await mkdtemp(join(tmpdir(), 'chalc-checklist-')));
+test('R29: equipping writes the checklist the security role declares into gate.json', async (tc) => {
+  const { flow } = await detectGateConfig(await tempDir(tc, 'chalc-checklist-'));
   assert.equal(flow.roles.find((r) => r.id === 'seguridad').checklist, 'owasp');
   // El revisor declara la suya desde la spec 019 (R4): un requisito por línea, no la de seguridad.
   assert.equal(flow.roles.find((r) => r.id === 'revisor').checklist, 'requirements');

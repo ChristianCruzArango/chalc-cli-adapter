@@ -13,14 +13,14 @@
 
 import { spawn } from 'node:child_process';
 import { childEnv } from '../../lib/childenv.mjs';
-import { killTree, windowsCommand } from '../../lib/proc.mjs';
+import { killTree, portable, trackChild, liveChildCount, IS_WINDOWS } from '../../lib/proc.mjs';
 
 export { killTree };
 import { redactSecretFile } from '../../lib/redact.mjs';
 import { pathAndReal } from './fsconfine.mjs';
-import { checkCommand, commandTokens, pathValue } from './shellpolicy.mjs';
+import { checkCommand, pathValue } from './shellpolicy.mjs';
+import { commandTokens } from '../../catalog/gate/lib/shellwords.mjs';
 
-export { commandTokens };
 
 const DEFAULT_TIMEOUT_MS = 60000;
 const MAX_BUFFER = 1024 * 1024;      // 1 MB; salidas mayores se truncan y las comprime CCR aguas arriba
@@ -36,30 +36,14 @@ const SETTLE_GRACE_MS = 1000;
 // como si "no hiciera nada". CI=true hace que la mayoría use sus defaults sin preguntar.
 const NON_INTERACTIVE_ENV = { CI: 'true', NG_CLI_ANALYTICS: 'false', GIT_TERMINAL_PROMPT: '0', NO_COLOR: '1' };
 
-// Hijos vivos. En POSIX van `detached` (líderes de su grupo, para poder matar el árbol entero), y por
-// eso NO mueren con el CLI: un `process.exit` dejaba builds y servidores huérfanos. Al salir se matan.
-const live = new Set();
-let exitHooked = false;
-function track(child) {
-  live.add(child);
-  child.on('exit', () => live.delete(child));
-  if (exitHooked) return;
-  exitHooked = true;
-  // Síncrono a propósito: en el manejador de `exit` nada asíncrono llega a completarse.
-  process.on('exit', () => { for (const c of live) killTree(c, 'SIGKILL'); });
-}
-
 /** Cuántos hijos de la shell siguen vivos (para comprobar la limpieza sin inspeccionar el sistema). */
-export const liveChildren = () => live.size;
+export const liveChildren = liveChildCount;
 
+// En POSIX, `detached` (líder de su grupo, para matar el árbol entero); en Windows, vía cmd.exe con
+// argv saneado y entorno endurecido (lib/proc.mjs). En los dos casos se rastrea para matarlo al salir.
 function spawnPortable(file, args, opts) {
-  if (process.platform === 'win32') {
-    const cmd = windowsCommand(file, args);
-    return spawn(cmd.file, cmd.args, { ...opts, windowsVerbatimArguments: cmd.windowsVerbatimArguments });
-  }
-  const child = spawn(file, args, { ...opts, detached: true });
-  track(child);
-  return child;
+  const [cmd, argv, options] = portable(file, args, IS_WINDOWS ? opts : { ...opts, detached: true });
+  return trackChild(spawn(cmd, argv, options));
 }
 
 const startError = (message) => ({ code: -1, stdout: '', stderr: message, timedOut: false });

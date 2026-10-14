@@ -10,25 +10,25 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { loadConfig } from '../catalog/gate/lib/config.mjs';
 import { detectGateConfig } from '../lib/gatedetect.mjs';
 import { sidesFor } from '../lib/sides.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 // ── T15: la forma y el defecto ────────────────────────────────────────────────────────────────
 
-test('R11 — la config detectada trae la sección apagada: el caso común es el mono-repo', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-sides-'));
+test('R11 — la config detectada trae la sección apagada: el caso común es el mono-repo', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-sides-');
   const config = await detectGateConfig(dir, { role: '', language: 'es' });
 
   assert.equal(config.flow.sides.enabled, false);
   assert.deepEqual(config.flow.sides.peers, []);
 });
 
-test('R11 — un gate.json sin la sección se lee como apagada, no como rota', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-sides-old-'));
+test('R11 — un gate.json sin la sección se lee como apagada, no como rota', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-sides-old-');
   await mkdir(join(dir, '.chalc'), { recursive: true });
   await writeFile(join(dir, '.chalc', 'gate.json'), JSON.stringify({ test: { command: 'npm test' } }), 'utf8');
 
@@ -36,8 +36,8 @@ test('R11 — un gate.json sin la sección se lee como apagada, no como rota', a
   assert.equal(config.flow.sides.enabled, false);
 });
 
-test('R13 — lo que el usuario ajustó en la sección se conserva', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-sides-merge-'));
+test('R13 — lo que el usuario ajustó en la sección se conserva', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-sides-merge-');
   await mkdir(join(dir, '.chalc'), { recursive: true });
   await writeFile(join(dir, '.chalc', 'gate.json'), JSON.stringify({
     flow: { sides: { me: 'web', owner: 'api', enabled: false } }

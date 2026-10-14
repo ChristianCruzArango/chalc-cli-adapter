@@ -43,6 +43,11 @@ const PEM_BEGIN = /-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----/g;
 const PEM_END = 'PRIVATE KEY-----';
 // Solo se intenta al inicio de un esquema (`(?<!…)`): con `\b`, cada punto de `a.a.a…` abría un intento nuevo.
 const URL_CREDENTIALS_RE = /(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)[^\s/:@]+:[^\s/@]+@/gi;
+// Contraseñas pasadas como bandera de un comando (S9), que `clave = valor` no ve: `--password x`/`--token=x`,
+// el `-u usuario:clave` de curl y el `-pClave` pegado de mysql (solo tras mysql/mariadb: `-print` no es eso).
+const FLAG_SECRET_RE = /(--(?:password|passwd|token|secret|api-key|apikey|auth-token)(?:=|\s+))("[^"]*"|'[^']*'|[^\s"']+)/gi;
+const USER_PASS_RE = /((?:^|\s)(?:-u|--user)(?:=|\s*))[^\s:'"]+:[^\s'"]+/g;
+const MYSQL_PASS_RE = /(\b(?:mysql\w*|mariadb\w*)\b[^\n|;&]{0,200}?\s-p)(?=\S)[^\s'"]+/gi;
 const API_KEY_PATTERNS = [
   /\bsk-(?:proj-|ant-)?[A-Za-z0-9_-]{12,}\b/g,
   /\b(?:sk|pk|rk|ghp|gho|ghu|ghs|github_pat)_[A-Za-z0-9_=-]{12,}\b/g,
@@ -89,6 +94,9 @@ export function redactSensitiveText(value) {
     .replace(COOKIE_RE, '$1[REDACTED]')
     .replace(BEARER_RE, 'Bearer [REDACTED]')
     .replace(BASIC_RE, 'Basic [REDACTED]')
+    .replace(FLAG_SECRET_RE, '$1[REDACTED]')
+    .replace(USER_PASS_RE, '$1[REDACTED]')
+    .replace(MYSQL_PASS_RE, '$1[REDACTED]')
     .replace(KEY_VALUE_RE, (m, quote, name, sep, val) => (isSensitiveName(name) ? `${quote}${name}${quote}${sep}${masked(val)}` : m));
   return text;
 }
@@ -126,7 +134,8 @@ export function safeUrlForDisplay(value) {
     url.hash = '';
     return url.toString();
   } catch {
-    return '[URL inválida]';
+    // Marca neutra, como `[REDACTED]`: esto lo muestra chalc en cualquier idioma.
+    return '[INVALID_URL]';
   }
 }
 

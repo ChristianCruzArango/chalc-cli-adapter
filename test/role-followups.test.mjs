@@ -8,13 +8,13 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { AGENTS_DIR, loadRoles } from '../lib/roles.mjs';
 import { roleText, writeRole } from '../lib/targetkit.mjs';
 import { allReviews } from '../catalog/next/lib/review.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const CATALOG = join(resolve(dirname(fileURLToPath(import.meta.url)), '..'), 'catalog');
 const ROLES = ['revisor', 'seguridad', 'endurecedor'];
@@ -77,16 +77,16 @@ test('R12: the shared folder is not a role', async () => {
   assert.deepEqual([...ids].sort(), [...ROLES].sort());
 });
 
-test('R12: a catalog without the shared text still renders the role, without the marker', async () => {
-  const base = await mkdtemp(join(tmpdir(), 'chalc-shared-'));
+test('R12: a catalog without the shared text still renders the role, without the marker', async (tc) => {
+  const base = await tempDir(tc, 'chalc-shared-');
   await mkdir(join(base, 'agents', 'revisor'), { recursive: true });
   await writeFile(join(base, 'agents', 'revisor', 'agent.md'), 'Revisor.\n\n{{SKILLS}}\n\n{{FOLLOWUPS}}\n', 'utf8');
   const { text } = await roleText(base, role('revisor'), { specLang: LANGS.es });
   assert.equal(text, 'Revisor.\n\n- (ninguna skill equipada)\n\n\n');
 });
 
-test('R12: the agent file Claude Code receives carries the shared text', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-shared-agent-'));
+test('R12: the agent file Claude Code receives carries the shared text', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-shared-agent-');
   const dest = await writeRole(dir, CATALOG, role('seguridad'), { specLang: LANGS.es });
   const agent = await readFile(dest, 'utf8');
   assert.match(agent, /Hallazgo <n>: no corregido/);

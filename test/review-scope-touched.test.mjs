@@ -7,14 +7,14 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { taskScope } from '../catalog/gate/lib/changed.mjs';
 import { touchedFiles } from '../catalog/gate/lib/scope.mjs';
 import { allReviews } from '../catalog/next/lib/review.mjs';
 import { decide } from '../catalog/next/lib/decide.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const git = (dir, args) => new Promise((done) => {
   const child = spawn('git', args, { cwd: dir, stdio: 'ignore' });
@@ -26,8 +26,8 @@ async function write(dir, rel, text = 'x\n') {
   await writeFile(join(dir, rel), text);
 }
 
-test('R15: the task scope also lists every file the task touched, config included, but not .chalc', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-touched-'));
+test('R15: the task scope also lists every file the task touched, config included, but not .chalc', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-touched-');
   await git(dir, ['init', '-q', '-b', 'main', '.']);
   await git(dir, ['config', 'user.email', 't@chalc.dev']);
   await git(dir, ['config', 'user.name', 't']);
@@ -43,8 +43,8 @@ test('R15: the task scope also lists every file the task touched, config include
   assert.deepEqual(scope.touched, ['src/a.ts', 'stryker.conf.json']);
 });
 
-test('R15: without git nothing is known to be touched', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-touched-'));
+test('R15: without git nothing is known to be touched', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-touched-');
   assert.deepEqual((await taskScope(dir)).touched, []);
 });
 

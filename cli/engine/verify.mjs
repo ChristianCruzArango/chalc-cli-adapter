@@ -4,10 +4,12 @@
 // Es código, no modelo: no opina, no alucina y no aprueba de cortesía.
 
 import { join } from 'node:path';
-import { execBounded, commandTokens } from '../tools/shell.mjs';
+import { execBounded } from '../tools/shell.mjs';
+import { checkCommand } from '../tools/shellpolicy.mjs';
 import { CONFIG_REL } from '../../catalog/gate/lib/config.mjs';
 import { MAX_CHILD_OUTPUT } from '../../lib/proc.mjs';
 import { readJsonOrKeepSync } from '../../lib/userdata.mjs';
+import { redactSensitiveText } from '../../lib/redact.mjs';
 
 // Comando de verificación por stack (gana el primero presente). Solo stacks con chequeo estático
 // confiable y acotado; sin entrada → no hay portón (skipped: el orquestador sigue sin bloquear).
@@ -32,12 +34,18 @@ export function verifyCommand(stacks = [], { projectPath } = {}) {
   return VERIFY_COMMANDS.find((v) => stacks.includes(v.stack))?.command || null;
 }
 
-// ¿Lo permite el perfil de confianza? El mismo criterio que la shell: el binario tiene que estar en la
-// lista. Con el perfil `safe` (lista vacía) un build —que ejecuta código del repo: builders de Angular,
-// targets de MSBuild— no corre.
-export function verifyAllowed(command, allow = []) {
-  const [base] = commandTokens(command || '');
-  return !!base && allow.includes(base);
+// ¿Lo permite el perfil de confianza? El MISMO criterio que la shell del agente (`checkCommand`, capas
+// 1-4): binario en la lista, sin metacaracteres, sin eval inline (`node -e`), sin opciones de git que
+// ejecutan y sin rutas fuera del proyecto (spec 022, C7). Con el perfil `safe` (lista vacía) un build
+// —que ejecuta código del repo: builders de Angular, targets de MSBuild— no corre. Lo que no se puede
+// evaluar (una comilla sin cerrar en gate.json, F7) no se permite: nunca lanza.
+// Stryker disable next-line ArrayDeclaration,StringLiteral: equivalentes — una entrada con espacios nunca casa con un binario, y la raíz '' resuelve igual que '.'
+export function verifyAllowed(command, allow = [], { root = '.' } = {}) {
+  try {
+    return !checkCommand(String(command ?? '').trim(), { root, allow }).error;
+  } catch {
+    return false;
+  }
 }
 
 const MAX_OUTPUT = 4000;   // los errores caben; el prompt del fix no se desborda
@@ -52,7 +60,8 @@ export async function runVerify({ projectPath, stacks, command: approved, timeou
   const command = approved ?? verifyCommand(stacks, { projectPath });
   if (!command) return { skipped: true, ok: null };
   const r = await execBounded(command, { cwd: projectPath, timeoutMs, maxBuffer: MAX_CHILD_OUTPUT });
-  const raw = `${r.stdout || ''}\n${r.stderr || ''}`.trim();
+  // Redactada ANTES de salir de aquí: la salida acaba en consola, en la orden al proveedor y en review.md.
+  const raw = redactSensitiveText(`${r.stdout || ''}\n${r.stderr || ''}`.trim());
   const ok = r.code === 0 && !r.timedOut;
   return {
     ok,

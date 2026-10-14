@@ -9,10 +9,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { commandTokens, gitSubcommand, simpleCommands, programOf, shellJoin } from '../catalog/gate/lib/shellwords.mjs';
-import { commandTokens as shellCommandTokens } from '../cli/tools/shell.mjs';
+import { readFileSync } from 'node:fs';
 
+// T12 (spec 022, R19, C8) — la shell y la política importan el tokenizador del origen, sin cadena de re-exports.
 test('R1: the chalc shell and the guard read words with the very same tokenizer', () => {
-  assert.equal(shellCommandTokens, commandTokens);
+  for (const f of ['cli/tools/shell.mjs', 'cli/tools/shellpolicy.mjs']) {
+    const src = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+    assert.match(src, /import \{[^}]*\bcommandTokens\b[^}]*\} from '\.\.\/\.\.\/catalog\/gate\/lib\/shellwords\.mjs'/, f);
+    assert.doesNotMatch(src, /export \{ commandTokens \}/, f);
+  }
 });
 
 test('R1: words and quotes keep their meaning', () => {

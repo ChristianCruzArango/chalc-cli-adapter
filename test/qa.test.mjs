@@ -65,7 +65,7 @@ test('QA lists only feature specs and reads their documented requirements', asyn
     assert.deepEqual(context.requirements, ['R1', 'R2']);
     assert.deepEqual(Object.keys(context.files), ['spec.md', 'plan.md']);
     assert.match(buildQaPlan(context), /\| R1 \| WHEN x THE SYSTEM SHALL y\./);
-    const plan = await writeQaPlan(project, context);
+    const plan = await writeQaPlan(project, context, null, { specLang: 'es' });   // C2: idioma del contenido
     assert.equal(plan.written, true);
     assert.match(await (await import('node:fs/promises')).readFile(plan.path, 'utf8'), /Plan QA/);
   } finally {
@@ -108,7 +108,7 @@ test('QA generates runnable browser tests only for observable cases and fixmes f
 });
 
 test('QA plan marks the table BLOCKED when the spec declares no requirements', () => {
-  const plan = buildQaPlan({ id: '003-empty', files: { 'spec.md': '# Spec\n\nSin requisitos R#.\n' } });
+  const plan = buildQaPlan({ id: '003-empty', files: { 'spec.md': '# Spec\n\nSin requisitos R#.\n' } }, null, { specLang: 'es' });
   assert.match(plan, /\| BLOCKED \|/);
   assert.match(plan, /No se detectaron requisitos/);
 });
@@ -175,8 +175,8 @@ test('QA selects an environment by its key or label, and fails loudly on an unkn
 
 test('QA plan records the chosen launch entry point only when one is selected', () => {
   const context = { id: '001-login', files: { 'spec.md': '- **R1** — Login.\n' } };
-  assert.match(buildQaPlan(context), /\*\*Entorno de arranque:\*\* _pendiente/);
-  assert.match(buildQaPlan(context, { type: 'command', command: 'npm run qa:up' }), /\*\*Entorno de arranque:\*\* `npm run qa:up` \(command\)/);
+  assert.match(buildQaPlan(context, null, { specLang: 'es' }), /\*\*Entorno de arranque:\*\* _pendiente/);
+  assert.match(buildQaPlan(context, { type: 'command', command: 'npm run qa:up' }, { specLang: 'es' }), /\*\*Entorno de arranque:\*\* `npm run qa:up` \(command\)/);
 });
 
 test('QA plan is not silently overwritten; --force (overwrite) regenerates it', async () => {

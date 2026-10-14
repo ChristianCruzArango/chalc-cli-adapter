@@ -34,11 +34,11 @@ test('every reproduced bypass now requires explicit approval', () => {
   }
 });
 
-test('read/build commands stay under /auto; install and test commands ask (spec 016, R7)', () => {
-  for (const cmd of ['dotnet build', 'git status', 'ls src']) {
+test('read commands stay under /auto; install, test and build commands ask (spec 016 R7, spec 022 R2)', () => {
+  for (const cmd of ['git status', 'ls src']) {
     assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: cmd } }), false, cmd);
   }
-  for (const cmd of ['npm test', 'npm install', 'npm ci --silent']) {
+  for (const cmd of ['npm test', 'npm install', 'npm ci --silent', 'dotnet build']) {
     assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: cmd } }), true, cmd);
   }
 });
@@ -61,4 +61,24 @@ test('with /auto on, a quoted interpreter is executed only after an explicit con
   assert.equal(confirmations, 1);
   assert.equal(r.error, 'action not approved by the user');
   assert.equal(r.stdout, undefined);
+});
+
+// T1 (spec 022, R1–R4, S1) — la tabla de la auditoría: cada acción de /auto que ejecutaba código sin
+// confirmación ahora la pide.
+const S1_TABLE = [
+  { tool: 'bash', args: { command: 'git grep -Osh MARCA' } },
+  { tool: 'bash', args: { command: 'cargo check' } },
+  { tool: 'bash', args: { command: 'cargo build' } },
+  { tool: 'bash', args: { command: 'dotnet build' } },
+  { tool: 'bash', args: { command: 'ng build' } },
+  { tool: 'bash', args: { command: 'ng generate component x' } },
+  { tool: 'bash', args: { command: 'npm audit fix --force' } },
+  { tool: 'write', args: { path: 'build.rs', content: 'fn main(){}' } },
+  { tool: 'write', args: { path: 'angular.json', content: '{}' } },
+  { tool: 'write', args: { path: '.husky/pre-commit', content: 'sh x' } },
+  { tool: 'mcp__db__drop_table', args: {} }
+];
+
+test('S1: every action of the audit table requires explicit approval under /auto', () => {
+  for (const action of S1_TABLE) assert.equal(requiresExplicitApproval(action), true, JSON.stringify(action));
 });

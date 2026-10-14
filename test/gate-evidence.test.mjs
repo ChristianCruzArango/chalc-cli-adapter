@@ -6,11 +6,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { renderEvidence, verdictOf, writeEvidence } from '../catalog/gate/lib/evidence.mjs';
 import { RULES } from '../catalog/gate/lib/rules.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const DATE = new Date(2026, 7, 6, 14, 32);
 
@@ -198,8 +198,8 @@ test('renderEvidence says the task changed no production code when mutation had 
 
 // ── escritura ─────────────────────────────────────────────────────────────────────────────────
 
-test('writeEvidence leaves the report at .chalc/gate.md', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-gate-evidence-'));
+test('writeEvidence leaves the report at .chalc/gate.md', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-gate-evidence-');
 
   const path = await writeEvidence(dir, '# informe\n');
 

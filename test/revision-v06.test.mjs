@@ -24,20 +24,26 @@ test('R7: commands that run project code need explicit approval under /auto', ()
   ]) assert.equal(bash(cmd), true, cmd);
 });
 
-test('R7: the positive read/build allowlist stays auto-approvable', () => {
+// spec 022 (R2, S1): compilar y generar ejecutan código del repo (build.rs, <Exec> de MSBuild, builders
+// de angular.json) y salieron de la allowlist: piden aprobación explícita.
+test('R7: the positive read allowlist stays auto-approvable; builds and generators ask (spec 022, R2)', () => {
   for (const cmd of [
     'ls -la', 'cat src/a.ts', 'dir', 'type a.txt', 'echo hola', 'mkdir -p src/x',
     'git status', 'git log --oneline', 'git diff HEAD', 'git show HEAD', 'git add src', 'git rev-parse HEAD',
     'git ls-files', 'git blame a.ts', 'git grep x', 'git branch', 'git describe', 'git shortlog',
-    'ng build', 'ng generate component x', 'ng g c x', 'dotnet build --nologo', 'dotnet new console',
-    'flutter analyze', 'flutter build apk', 'flutter create app', 'dart analyze', 'dart format .',
-    'go build ./...', 'go vet ./...', 'go fmt ./...', 'cargo build', 'cargo check', 'cargo fmt',
+    'dotnet new console', 'flutter analyze', 'flutter create app', 'dart analyze', 'dart format .',
+    'go vet ./...', 'go fmt ./...', 'cargo fmt',
     'npm ls', 'npm list', 'pnpm view x', 'yarn outdated', 'npm audit', 'GIT.EXE status'
   ]) assert.equal(bash(cmd), false, cmd);
+  for (const cmd of [
+    'ng build', 'ng generate component x', 'ng g c x', 'dotnet build --nologo', 'flutter build apk',
+    'go build ./...', 'cargo build', 'cargo check'
+  ]) assert.equal(bash(cmd), true, cmd);
 });
 
 test('R7: options before the first positional argument do not hide the subcommand', () => {
-  assert.equal(bash('cargo --quiet build'), false);
+  assert.equal(bash('cargo --quiet fmt'), false);
+  assert.equal(bash('cargo --quiet build'), true);   // spec 022, R2
   assert.equal(bash('npm --silent test'), true);
   assert.equal(bash('ng --help'), true);   // sin subcomando posicional: no está en la allowlist
 });
@@ -58,7 +64,8 @@ test('R7: ordinary files and look-alikes stay under /auto', () => {
   for (const p of ['src/mypackage.json', 'src/notmakefile', 'src/a.ts', 'README.md', '.chalc/skills/x/SKILL.md', '.github/ISSUE_TEMPLATE/bug.md', 'package-lock.json', 'docs/package.json.md', 'claude.md', 'my.vscode/x']) {
     assert.equal(write(p), false, p);
   }
-  assert.equal(requiresExplicitApproval({ tool: 'mcp__db__drop', args: {} }), false);
+  assert.equal(requiresExplicitApproval({ tool: 'mcp__db__list_tables', args: {} }), false);
+  assert.equal(requiresExplicitApproval({ tool: 'mcp__db__drop', args: {} }), true);   // spec 022, R4
   assert.equal(requiresExplicitApproval({ tool: 'bash' }), false);
 });
 

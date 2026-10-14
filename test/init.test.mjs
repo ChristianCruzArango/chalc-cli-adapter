@@ -46,12 +46,12 @@ test('scaffoldSteps orchestrates the OFFICIAL scaffolder per stack/architecture'
   const ng = scaffoldSteps('angular', 'modular-feature-first', 'mi-app');
   assert.equal(ng.length, 1);
   assert.equal(ng[0].args[0], '--yes');
-  assert.match(ng[0].args[1], /^@angular\/cli@(latest|\d+)$/);   // versión elegida según el Node instalado
+  assert.match(ng[0].args[1], /^@angular\/cli@\d+\.\d+\.\d+$/);   // versión elegida según el Node instalado
   assert.deepEqual(ng[0].args.slice(2, 4), ['new', 'mi-app']);
 
   const nest = scaffoldSteps('nestjs', 'modular-feature', 'mi-api');
   assert.equal(nest[0].args[0], '--yes');
-  assert.match(nest[0].args[1], /^@nestjs\/cli@(latest|\d+)$/);
+  assert.match(nest[0].args[1], /^@nestjs\/cli@\d+\.\d+\.\d+$/);
   assert.deepEqual(nest[0].args.slice(2, 4), ['new', 'mi-api']);
 
   const dnSimple = scaffoldSteps('dotnet', 'webapi-simple', 'mi-svc');
@@ -95,21 +95,21 @@ test('architectureSkills adds interface-design only for clean/hexagonal/enterpri
 
 test('pickCliTag picks the Angular CLI major compatible with the installed Node', () => {
   // Caso real del usuario: Node 22.20.0 < 22.22.3 que pide Angular 22 → cae a 20 (que sí soporta ^22.12).
-  assert.equal(pickCliTag(ANGULAR_CLI_NODE, 'v22.20.0'), '20');
+  assert.equal(pickCliTag(ANGULAR_CLI_NODE, 'v22.20.0'), '20.3.39');
   // Node nuevo en la rama 22 → Angular 22.
-  assert.equal(pickCliTag(ANGULAR_CLI_NODE, 'v22.22.3'), '22');
+  assert.equal(pickCliTag(ANGULAR_CLI_NODE, 'v22.22.3'), '22.2.2');
   // Node 24 reciente → Angular 22; Node 24 viejo → 20.
-  assert.equal(pickCliTag(ANGULAR_CLI_NODE, 'v24.15.0'), '22');
-  assert.equal(pickCliTag(ANGULAR_CLI_NODE, 'v24.0.0'), '20');
+  assert.equal(pickCliTag(ANGULAR_CLI_NODE, 'v24.15.0'), '22.2.2');
+  assert.equal(pickCliTag(ANGULAR_CLI_NODE, 'v24.0.0'), '20.3.39');
   // Node 20 LTS → Angular 20 (no 22).
-  assert.equal(pickCliTag(ANGULAR_CLI_NODE, 'v20.19.0'), '20');
-  // Node muy viejo y sin rama soportada → cae a 'latest' (el CLI mostrará el requerimiento).
-  assert.equal(pickCliTag(ANGULAR_CLI_NODE, 'v16.0.0'), 'latest');
+  assert.equal(pickCliTag(ANGULAR_CLI_NODE, 'v20.19.0'), '20.3.39');
+  // Node muy viejo y sin rama soportada → la versión exacta más nueva (spec 022, S3: nunca 'latest').
+  assert.equal(pickCliTag(ANGULAR_CLI_NODE, 'v16.0.0'), '22.2.2');
 });
 
 test('resolveScaffoldTool reports the chosen tool per stack (null for dotnet)', () => {
-  assert.deepEqual(resolveScaffoldTool('angular', 'v22.20.0'), { pkg: '@angular/cli', tag: '20' });
-  assert.deepEqual(resolveScaffoldTool('nestjs', 'v22.20.0'), { pkg: '@nestjs/cli', tag: 'latest' });
+  assert.deepEqual(resolveScaffoldTool('angular', 'v22.20.0'), { pkg: '@angular/cli', tag: '20.3.39' });
+  assert.deepEqual(resolveScaffoldTool('nestjs', 'v22.20.0'), { pkg: '@nestjs/cli', tag: '11.0.24' });
   assert.equal(resolveScaffoldTool('dotnet', 'v22.20.0'), null);
 });
 

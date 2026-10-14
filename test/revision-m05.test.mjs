@@ -5,15 +5,15 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contentLang } from '../lib/contentlang.mjs';
 import { blockText } from '../lib/targetkit.mjs';
 import { handoffLang } from '../lib/commands/featurehandoff.mjs';
 import { t } from '../lib/i18n.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const CATALOG = fileURLToPath(new URL('../catalog', import.meta.url));
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -34,10 +34,10 @@ test('R32: blockText and handoffLang agree with contentLang (Spanish and castell
   }
 });
 
-test('R32: the Cursor skill rule is written in the spec language', async () => {
+test('R32: the Cursor skill rule is written in the spec language', async (tc) => {
   const cursor = await import('../targets/cursor.mjs');
   const read = async (specLang) => {
-    const projectPath = await mkdtemp(join(tmpdir(), 'chalc-m05-'));
+    const projectPath = await tempDir(tc, 'chalc-m05-');
     await cursor.apply({ projectPath, CATALOG, skills: ['clean-code'], mcps: [], methods: [], stacks: [], specLang, dryRun: false });
     return readFile(join(projectPath, '.cursor', 'rules', 'chalc-skill-clean-code.mdc'), 'utf8');
   };
@@ -47,11 +47,11 @@ test('R32: the Cursor skill rule is written in the spec language', async () => {
   assert.match(await read('Spanish'), /Cuando esta tarea aplique, sigue la skill completa/);
 });
 
-test('R32: the targets plan preview uses the UI language for its words, from one helper', async () => {
+test('R32: the targets plan preview uses the UI language for its words, from one helper', async (tc) => {
   const methods = [{ id: 'sdd', mode: 'full' }];
   for (const name of ['claude', 'codex', 'copilot', 'antigravity', 'cursor']) {
     const target = await import(`../targets/${name}.mjs`);
-    const projectPath = await mkdtemp(join(tmpdir(), 'chalc-m05p-'));
+    const projectPath = await tempDir(tc, 'chalc-m05p-');
     const { plan } = await target.apply({ projectPath, CATALOG, skills: [], mcps: [], methods, stacks: [], specLang: '', dryRun: true });
     assert.ok(plan.some((l) => l.startsWith(t('planMethod').padEnd(10))), name);
     assert.ok(!plan.some((l) => /método|scaffold \+ reglas|hook opcional|bloque chalc/.test(l)) || t('planMethod') === 'método', name);
@@ -61,9 +61,9 @@ test('R32: the targets plan preview uses the UI language for its words, from one
   }
 });
 
-test('R32: the Claude plan carries its notes in the UI language', async () => {
+test('R32: the Claude plan carries its notes in the UI language', async (tc) => {
   const claude = await import('../targets/claude.mjs');
-  const projectPath = await mkdtemp(join(tmpdir(), 'chalc-m05c-'));
+  const projectPath = await tempDir(tc, 'chalc-m05c-');
   const { plan } = await claude.apply({ projectPath, CATALOG, skills: [], mcps: [], methods: [{ id: 'sdd', mode: 'lite' }], stacks: [], specLang: '', dryRun: true });
   assert.ok(plan.includes(`${t('planMethod').padEnd(10)}sdd (lite)  ${t('planScaffoldRules')}`), plan.join('\n'));
   assert.ok(plan.includes(`doc       .chalc/gate-hook.md  ${t('planHookOptional')}`));

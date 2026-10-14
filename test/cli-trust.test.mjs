@@ -40,21 +40,22 @@ test('requiresExplicitApproval: intérpretes y runners de paquetes ejecutan cód
   }
 });
 
-test('requiresExplicitApproval: con /auto solo la allowlist de lectura/compilación queda sin preguntar (spec 016, R7)', () => {
-  for (const cmd of ['git status', 'ls -la', 'dotnet build', 'cargo build', 'mkdir src', '', null]) {
+// T1 (spec 022, R2, S1) — compilar ejecuta código del repo (build.rs, targets de MSBuild): ya no pasa solo.
+test('requiresExplicitApproval: con /auto solo la allowlist de lectura queda sin preguntar (spec 016 R7, spec 022 R2)', () => {
+  for (const cmd of ['git status', 'ls -la', 'cargo fmt', 'mkdir src', '', null]) {
     assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: cmd } }), false, `${cmd} no debe exigir aprobación explícita`);
   }
   // Instalar y correr tests ejecutan código del proyecto (scripts de npm, conftest.py…): desde R7 preguntan.
-  for (const cmd of ['npm install', 'npm test', 'npm ci', 'flutter pub get']) {
+  for (const cmd of ['npm install', 'npm test', 'npm ci', 'flutter pub get', 'dotnet build', 'cargo build']) {
     assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: cmd } }), true, `${cmd} debe exigir aprobación explícita`);
   }
 });
 
-test('requiresExplicitApproval: solo bash con comando eval-capable rompe el /auto', () => {
+test('requiresExplicitApproval: bash eval-capable y MCP mutante rompen el /auto', () => {
   assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: 'node x.js' } }), true);
   assert.equal(requiresExplicitApproval({ tool: 'bash', args: { command: 'git status' } }), false);
   assert.equal(requiresExplicitApproval({ tool: 'write', args: { path: 'x.js' } }), false);   // write/edit siguen bajo /auto
-  assert.equal(requiresExplicitApproval({ tool: 'mcp__db__drop', args: {} }), false);          // MCP lo gobierna approval.mjs
+  assert.equal(requiresExplicitApproval({ tool: 'mcp__db__drop', args: {} }), true);           // spec 022 R4: MCP mutante pregunta
   assert.equal(requiresExplicitApproval({}), false);
   assert.equal(requiresExplicitApproval({ tool: 'bash' }), false);                             // sin comando no hay qué frenar
 });

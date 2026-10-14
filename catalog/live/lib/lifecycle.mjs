@@ -11,11 +11,15 @@ import { dirname, join } from 'node:path';
 
 export const LIVE_REL = '.chalc/live.json';
 
+// La única URL que el tablero anuncia de verdad: `127.0.0.1` y su puerto. `live.json` vive en el repo y
+// cualquiera puede escribirlo (o commitearlo): una URL de fuera se le entregaría al usuario como «su» tablero.
+const LOCAL_URL = /^http:\/\/127\.0\.0\.1:\d{1,5}\/$/;
+
 /** El anuncio vigente `{ url, pid, started }`, o null si no hay o no se entiende. */
 export async function readAnnouncement(root) {
   let raw;
   try { raw = JSON.parse(await readFile(join(root, LIVE_REL), 'utf8')); } catch { return null; }
-  if (!raw || typeof raw.url !== 'string' || !Number.isInteger(raw.pid)) return null;
+  if (!raw || typeof raw.url !== 'string' || !LOCAL_URL.test(raw.url) || !Number.isInteger(raw.pid)) return null;
   return { url: raw.url, pid: raw.pid, started: String(raw.started ?? '') };
 }
 
@@ -31,10 +35,11 @@ export async function retire(root, pid) {
   if ((await readAnnouncement(root))?.pid === pid) await rm(join(root, LIVE_REL), { force: true });
 }
 
-/** ¿Sigue vivo el proceso? La señal 0 no hace nada: solo pregunta. `EPERM` es «existe, pero no es tuyo». */
+/** ¿Sigue vivo NUESTRO proceso? La señal 0 no hace nada: solo pregunta. `EPERM` es «existe, pero no es tuyo»:
+ *  el tablero lo lanza este mismo usuario, así que un proceso ajeno (el pid 1, el de otro usuario) no es él. */
 export function isAlive(pid, kill = process.kill.bind(process)) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
-  try { kill(pid, 0); return true; } catch (err) { return err?.code === 'EPERM'; }
+  try { kill(pid, 0); return true; } catch { return false; }
 }
 
 /** Un temporizador de inactividad: `onIdle` cuando pasan `ms` sin un `touch()`. */

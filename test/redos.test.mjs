@@ -6,14 +6,14 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createFsTools } from '../cli/tools/fs.mjs';
 import { lineMatcher, safeTest, RegexTimeoutError, hasNestedQuantifier } from '../lib/saferegex.mjs';
 import { _internals } from '../lib/docread.mjs';
 import { stripHtml } from '../lib/sources.mjs';
 import { buildAgentReplaySpec } from '../lib/qaagent.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const N = 320 * 1024;
 const fast = (fn, label) => {
@@ -36,8 +36,8 @@ test('plain text is matched literally and regex syntax still works', () => {
   assert.equal(safeTest('^/login$', '/login'), true);
 });
 
-test('grep reports a slow pattern as an error the model can act on', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'chalc-s10-'));
+test('grep reports a slow pattern as an error the model can act on', async (tc) => {
+  const root = await tempDir(tc, 'chalc-s10-');
   await writeFile(join(root, 'a.txt'), `${'a'.repeat(120)}!\n`);
   const { grep } = createFsTools({ root });
   const r = await grep.run({ pattern: '(a+)+$' });

@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { tasksProgress, currentTask, cleanTaskText, diffStates, createMonitor, scanWorkspace, scanWorkspaces, renderPage, renderTerminal, startDashboard } from '../lib/dashboard.mjs';
 import { DICT } from '../lib/i18n.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 function sh(args, cwd) { execFileSync('git', args, { cwd, stdio: 'ignore' }); }
 
@@ -98,8 +98,8 @@ test('createMonitor accumulates the activity log across ticks', async () => {
 });
 
 // R1, R2, R3 — escanea un workspace: rama, limpio, commits sobre la base, progreso y estado agregado.
-test('scanWorkspace reads branch, cleanliness, commits over base and task progress', async () => {
-  const base = await mkdtemp(join(tmpdir(), 'chalc-dash-'));
+test('scanWorkspace reads branch, cleanliness, commits over base and task progress', async (tc) => {
+  const base = await tempDir(tc, 'chalc-dash-');
   await sideRepo(base, '005-login', 'back', '- [x] T1\n- [ ] T2\n');
   await sideRepo(base, '005-login', 'front', '- [ ] T1\n');
   const ws = await scanWorkspace(base, '005-login');
@@ -116,19 +116,19 @@ test('scanWorkspace reads branch, cleanliness, commits over base and task progre
 });
 
 // R3 — completa cuando TODAS las tareas de TODOS los lados están marcadas; sin marcar → sin arrancar.
-test('scanWorkspace derives complete and not-started statuses', async () => {
-  const base = await mkdtemp(join(tmpdir(), 'chalc-dash-'));
+test('scanWorkspace derives complete and not-started statuses', async (tc) => {
+  const base = await tempDir(tc, 'chalc-dash-');
   await sideRepo(base, '006-pagos', 'back', '- [x] T1\n- [x] T2\n');
   await sideRepo(base, '006-pagos', 'front', '- [x] T1\n');
   assert.equal((await scanWorkspace(base, '006-pagos')).status, 'complete');
-  const base2 = await mkdtemp(join(tmpdir(), 'chalc-dash-'));
+  const base2 = await tempDir(tc, 'chalc-dash-');
   await sideRepo(base2, '007-perfil', 'back', '- [ ] T1\n');
   assert.equal((await scanWorkspace(base2, '007-perfil')).status, 'not-started');
 });
 
 // R4 — workspace roto (sin lados legibles) → estado de error, sin lanzar; el resto sigue.
-test('scanWorkspaces marks broken workspaces and keeps scanning the rest', async () => {
-  const base = await mkdtemp(join(tmpdir(), 'chalc-dash-'));
+test('scanWorkspaces marks broken workspaces and keeps scanning the rest', async (tc) => {
+  const base = await tempDir(tc, 'chalc-dash-');
   await sideRepo(base, '005-login', 'back', '- [ ] T1\n');
   await mkdir(join(base, '008-rota'), { recursive: true });            // sin lados: rota
   await mkdir(join(base, 'no-es-workspace'), { recursive: true });     // sin NNN-: se ignora
@@ -140,8 +140,8 @@ test('scanWorkspaces marks broken workspaces and keeps scanning the rest', async
 });
 
 // R4 — un lado sin specs legibles también rompe el workspace (worktree movido/borrado).
-test('scanWorkspace marks broken when a side has no readable spec tasks', async () => {
-  const base = await mkdtemp(join(tmpdir(), 'chalc-dash-'));
+test('scanWorkspace marks broken when a side has no readable spec tasks', async (tc) => {
+  const base = await tempDir(tc, 'chalc-dash-');
   const dest = join(base, '009-x', 'back');
   await mkdir(dest, { recursive: true });   // carpeta sin git y sin specs
   assert.equal((await scanWorkspace(base, '009-x')).status, 'broken');
@@ -167,8 +167,8 @@ test('renderPage expands long tasks with a details arrow that survives refreshes
 });
 
 // R2 — el escaneo conserva la tarea COMPLETA (limpia, sin truncar): el recorte es del render.
-test('scanWorkspace keeps the full cleaned task text for the page to expand', async () => {
-  const base = await mkdtemp(join(tmpdir(), 'chalc-dash-'));
+test('scanWorkspace keeps the full cleaned task text for the page to expand', async (tc) => {
+  const base = await tempDir(tc, 'chalc-dash-');
   const longTask = '**T9** — ' + 'detalle '.repeat(30);
   await sideRepo(base, '010-larga', 'back', `- [ ] ${longTask}\n`);
   const ws = await scanWorkspace(base, '010-larga');
@@ -213,8 +213,8 @@ test('renderTerminal shows the activity log below the boards', () => {
 });
 
 // R1, R6, R9 — sirve / y /api/state solo por GET en localhost; close() apaga limpio.
-test('startDashboard serves state over GET only and closes cleanly', async () => {
-  const base = await mkdtemp(join(tmpdir(), 'chalc-dash-'));
+test('startDashboard serves state over GET only and closes cleanly', async (tc) => {
+  const base = await tempDir(tc, 'chalc-dash-');
   await sideRepo(base, '005-login', 'back', '- [x] T1\n- [ ] T2\n');
   const { server, port } = await startDashboard({ baseDir: base, port: 0 });   // puerto efímero
   try {

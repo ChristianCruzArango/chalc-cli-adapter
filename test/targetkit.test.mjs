@@ -71,8 +71,8 @@ test('copyMethodScaffolds never overwrites the user files', async () => {
 
 test('copyMethodScaffolds is a no-op when there are no methods or no scaffoldDir', async () => {
   const base = await mkdtemp(join(tmpdir(), 'chalc-scaffold-'));
-  await copyMethodScaffolds([], base);
-  await copyMethodScaffolds([{ id: 'x', scaffoldDir: join(base, 'nope') }], base);   // dir inexistente: ignora
-  await copyMethodScaffolds(undefined, base);
-  assert.ok(true);
+  // T8 (spec 022, R20, 5.3): la aserción es que no rechace, no un assert.ok(true).
+  await assert.doesNotReject(copyMethodScaffolds([], base));
+  await assert.doesNotReject(copyMethodScaffolds([{ id: 'x', scaffoldDir: join(base, 'nope') }], base));   // dir inexistente: ignora
+  await assert.doesNotReject(copyMethodScaffolds(undefined, base));
 });

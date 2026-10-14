@@ -96,7 +96,7 @@ test('R3: readSection keeps the title, truncation and required flag', async () =
   try {
     await writeFile(join(root, 'doc.md'), 'x'.repeat(50));
     const s = await readSection(root, join(root, 'doc.md'), { key: 'k', title: 'Title', required: true, maxChars: 10 });
-    assert.deepEqual(s, { key: 'k', required: true, text: `### Title\n${'x'.repeat(10)}\n[…truncated]` });
+    assert.deepEqual(s, { key: 'k', required: true, text: `### Title\n<untrusted source="doc.md">\n${'x'.repeat(10)}\n[…truncated]\n</untrusted>` });   // spec 022, R6
     assert.equal(await readSection(root, null, { key: 'k', title: 'T' }), null);
     await writeFile(join(root, 'empty.md'), '  \n');
     assert.equal(await readSection(root, join(root, 'empty.md'), { key: 'k', title: 'T' }), null);

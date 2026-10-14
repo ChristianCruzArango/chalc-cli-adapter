@@ -96,7 +96,9 @@ function createShellState(session, cfg, model) {
     tokens: { input: 0, output: 0, calls: 0 },   // consumo acumulado de la SESIÓN (para /tokens)
     // Auto-aprobación (/auto, o cli.autoApprove en la config): ejecuta write/edit/bash/MCP sin preguntar.
     // Es el modo "acepta todo" de Claude Code — más fluido, menos control; se puede alternar en la sesión.
-    // EXCEPCIÓN (trust.mjs): bash eval-capable (node/npx/python, npm run…) pide confirmación SIEMPRE.
+    // EXCEPCIÓN (tools/trust.mjs, allowlist POSITIVA): pide confirmación SIEMPRE lo que no es lectura
+    // —intérpretes, runners, builds, git con opciones no listadas—, write/edit sobre archivos que otra
+    // herramienta ejecuta y toda tool MCP que no sea de solo lectura.
     approval: { auto: userFlag(cfg, 'autoApprove') },
     policy: createApprovalPolicy({
       mcpMode: cfg.cli?.mcpApproval || cfg.cli?.mcpApprove || cfg.cli?.mcpApprovalMode,

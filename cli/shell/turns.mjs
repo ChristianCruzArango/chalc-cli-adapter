@@ -8,8 +8,10 @@ import { flushTokenLog } from '../../lib/tokenlog.mjs';
 import { touchedPaths } from '../engine/review.mjs';
 import { planItems, stepTask, stepNeedsMutation, stepRetryTask, stepIsSpecWork } from '../engine/plan.mjs';
 import { markStepDone, specInfo, PLAN_REL } from '../engine/planfile.mjs';
-import { c, stepLine, resultLine, mutationReport, truncate } from '../ui/render.mjs';
+import { c, stepLine, resultLine, mutationReport } from '../ui/render.mjs';
 import { requiresExplicitApproval } from '../tools/trust.mjs';
+import { describeAction, actionPreview } from './describeaction.mjs';
+import { isApproveAll, isYes } from './answers.mjs';
 
 export const fmtK = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n));
 
@@ -48,34 +50,27 @@ export function reportRoleTokens(shell, io, label) {
   io.print(c.dim(t('cliRoleTokens', label, fmtK(u.input), fmtK(u.output), u.calls)));
 }
 
-function describeAction(action) {
-  const a = action.args || {};
-  const p = a.path || a.file || a.filename || a.file_path || t('cliNoPath');
-  if (action.tool === 'write') return `write${a.append ? ' (append)' : ''} ${p} (${String(a.content ?? a.text ?? '').length} bytes)`;
-  if (action.tool === 'edit') return `edit ${p}`;
-  if (action.tool === 'bash') return `bash: ${a.command || a.cmd || ''}`;
-  if (String(action.tool || '').startsWith('mcp__')) {
-    const [, server, ...rest] = action.tool.split('__');
-    return `MCP ${server}/${rest.join('__')} ${truncate(a, 80)}`;
-  }
-  return `${action.tool} ${truncate(a, 80)}`;
-}
-
 // La aprobación de un turno. "aprobar todo" arranca activado si /auto está encendido, y "a" lo activa
-// para el resto del turno. /auto (y "a") NO cubre bash eval-capable (node/npx/python/npm run…): sin
-// ese freno, auto-aprobación + perfil dev anula la única defensa real del shell (la aprobación humana).
-function makeApprove(shell, io, role) {
+// para el resto del turno. Ni /auto ni "a" cubren lo que `requiresExplicitApproval` (tools/trust.mjs)
+// marca: bash fuera de la allowlist POSITIVA de lectura (intérpretes, runners, builds, git con opciones
+// no listadas…), write/edit sobre archivos que otra herramienta ejecuta y MCP que no es de lectura.
+// Sin ese freno, auto-aprobación + perfil dev anula la única defensa real del shell: la aprobación humana.
+// Antes de preguntar se enseña el extracto de lo que se va a escribir (spec 022, R5).
+export function makeApprove(shell, io, role) {
   let approveAll = shell.approval.auto;
   const { session } = shell;
   return async (action) => {
     if (!shell.policy.needsApproval(action.tool)) return true;
     if (approveAll && !requiresExplicitApproval(action)) return true;
+    const label = describeAction(action);
     const activeId = session.agents?.active(role);
-    if (activeId) session.agents.update(activeId, { status: 'waiting_approval', currentAction: describeAction(action) });
-    const ans = String(await io.confirm(describeAction(action))).trim().toLowerCase();
+    if (activeId) session.agents.update(activeId, { status: 'waiting_approval', currentAction: label });
+    const preview = actionPreview(action);
+    if (preview) io.print(c.dim(preview));
+    const ans = await io.confirm(label);
     if (activeId) session.agents.update(activeId, { status: 'running' });
-    if (['a', 'all', 'todo'].includes(ans)) approveAll = true;
-    const ok = ['y', 'yes', 's', 'si', 'a', 'all', 'todo'].includes(ans);
+    if (isApproveAll(ans)) approveAll = true;
+    const ok = isYes(ans);
     // Feedback inmediato: sin esto, tras aprobar un comando lento (ng generate…) parece que "no hizo nada".
     io.print(ok ? c.dim(t('cliApproved')) : c.dim(t('cliDenied')));
     return ok;

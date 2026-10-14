@@ -41,8 +41,6 @@ const ALLOWED = {
   'cli/tools/fsconfine.mjs::path outside the project (symlink): ${p}': MODEL,
   'cli/tools/fsconfine.mjs::writing inside .git/ is not allowed: ${p}': MODEL,
   'cli/engine/model.mjs::Ollama ${res.status}: ${await readLimitedText(res)}': TECHNICAL,
-  'lib/ai.mjs::Anthropic ${res.status}: ${await readLimitedText(res)}': TECHNICAL,
-  'lib/ai.mjs::API ${res.status}: ${await readLimitedText(res)}': TECHNICAL,
   'lib/sources.mjs::URL ${res.status}: ${current}': TECHNICAL,
   'lib/sources.mjs::Azure DevOps ${res.status}: ${(await readLimitedText(res)).slice(0, 300)}': TECHNICAL,
   'lib/sources.mjs::Jira ${res.status}: ${(await readLimitedText(res)).slice(0, 300)}': TECHNICAL,

@@ -6,10 +6,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
 import { lintSource, lintChanged } from '../catalog/gate/lib/smells.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const limits = (over = {}) => ({ maxFileLines: 300, maxFunctionLines: 40, maxParams: 4, maxDepth: 3, ...over });
 
@@ -232,8 +232,8 @@ test('lintSource honours raised limits', async () => {
 
 // ── sobre los archivos cambiados ──────────────────────────────────────────────────────────────
 
-test('lintChanged reads the changed files and skips what it cannot lint', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'chalc-gate-smells-'));
+test('lintChanged reads the changed files and skips what it cannot lint', async (tc) => {
+  const dir = await tempDir(tc, 'chalc-gate-smells-');
   const write = async (rel, text) => {
     await mkdir(dirname(join(dir, rel)), { recursive: true });
     await writeFile(join(dir, rel), text, 'utf8');

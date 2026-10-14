@@ -6,19 +6,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile, rename } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { changedSince, changedLineInfo, headCommit } from '../catalog/gate/lib/changed.mjs';
 import { parseHunks } from '../catalog/gate/lib/hunks.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd, stdio: 'ignore' });
 
 const NAMES = ['src/año.ts', 'src/my file.ts', 'src/canción final.ts'];
 if (process.platform !== 'win32') NAMES.push('src/it\'s "q".ts');
 
-test('changed files keep their real names, committed or not', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'chalc-f08-'));
+test('changed files keep their real names, committed or not', async (tc) => {
+  const root = await tempDir(tc, 'chalc-f08-');
   git(root, 'init', '-q');
   await mkdir(join(root, 'src'));
   await writeFile(join(root, 'src/base.ts'), 'export const a = 1;\n');

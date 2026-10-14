@@ -21,7 +21,7 @@ export const FRAME = {
     stages: {
       title: 'Etapas',
       name: 'Etapa', result: 'Resultado', command: 'Comando', code: 'Salida', duration: 'Duración',
-      scope: 'alcance',
+      scope: 'alcance', config: 'configuración',
       tests: 'tests', build: 'compilación', mutation: 'mutación', smells: 'código', duplication: 'duplicación', security: 'seguridad', boundaries: 'fronteras',
       traceability: 'trazabilidad', contract: 'contrato'
     },
@@ -62,6 +62,8 @@ export const FRAME = {
     fast: 'Corrida rápida (`--fast`): la mutación no se ejecutó, así que **no cierra la tarea**.',
     configChanged: '`.chalc/gate.json` cambió desde el cierre de la tarea anterior en claves que deciden el veredicto',
     configMissing: (rel) => `falta ${rel}: vuelve a equipar el repo con chalc`,
+    sealed: 'Comandos del portón re-sellados: la próxima corrida los ejecuta.',
+    nothingToSeal: 'No hay tarea sellada todavía (.chalc/task.json): no hay nada que re-sellar.',
     configInvalid: (rel, why) => `${rel} no es JSON válido: ${why}`,
     configThresholdInvalid: (rel, value) => `${rel}: mutation.threshold debe ser un número entre 0 y 100 (ahora vale ${value})`,
     invalidKept: (file, why, copy) => `${file} no es JSON válido (${why}); se guardó una copia en ${copy} y se sigue sin él.`,
@@ -83,7 +85,7 @@ export const FRAME = {
     stages: {
       title: 'Stages',
       name: 'Stage', result: 'Result', command: 'Command', code: 'Exit', duration: 'Duration',
-      scope: 'scope',
+      scope: 'scope', config: 'config',
       tests: 'tests', build: 'build', mutation: 'mutation', smells: 'code', duplication: 'duplication', security: 'security', boundaries: 'boundaries',
       traceability: 'traceability', contract: 'contract'
     },
@@ -121,6 +123,8 @@ export const FRAME = {
     fast: 'Fast run (`--fast`): mutation did not run, so this **does not close the task**.',
     configChanged: '`.chalc/gate.json` changed since the previous task was closed, in keys that decide the verdict',
     configMissing: (rel) => `${rel} is missing: equip the repo with chalc again`,
+    sealed: 'Gate commands re-sealed: the next run will execute them.',
+    nothingToSeal: 'There is no sealed task yet (.chalc/task.json): nothing to re-seal.',
     configInvalid: (rel, why) => `${rel} is not valid JSON: ${why}`,
     configThresholdInvalid: (rel, value) => `${rel}: mutation.threshold must be a number between 0 and 100 (it is ${value})`,
     invalidKept: (file, why, copy) => `${file} is not valid JSON (${why}); a copy was kept at ${copy} and it is ignored.`,
@@ -186,6 +190,7 @@ export const MESSAGES = {
     [RULES.featureBoundary]: (d) => `"${d.from}" importa "${d.to}" (${d.import}): los features no se importan entre sí`,
 
     [RULES.scopeUndetermined]: () => 'no se puede saber qué archivos cambió esta tarea: no hay repo de git ni registro de rutas escritas en .chalc/task.files — el portón revisa una tarea, no el proyecto entero, así que no revisa nada hasta poder acotarlo',
+    [RULES.commandsUnsealed]: (d) => `cambió un comando del portón desde la última tarea cerrada (${d.keys.join(', ')}): no se ejecuta un comando que nadie revisó. Revisa .chalc/gate.json y, si el cambio es tuyo, re-sella con \`node .chalc/gate.mjs --seal\``,
     [RULES.scopeEmpty]: (d) => `no hay nada que revisar: ningún fuente cambió desde ${d.from ? `"${d.from}"` : 'la última tarea cerrada'} — sin código medido no hay tarea que cerrar`,
 
     [RULES.noRequirement]: (d) => `el test no cita ningún requisito de ${d.spec}: sin cita nadie puede saber qué cubre`,
@@ -196,6 +201,7 @@ export const MESSAGES = {
     [RULES.guardGitPush]: (d) => `Push pendiente de tu confirmación: \`${d.command}\`. Las reglas del proyecto exigen tu orden explícita para subir cambios.`,
     [RULES.guardGitPushForce]: (d) => `Bloqueado: \`${d.command}\` es un push forzado y reescribe historia que otros ya tienen. Si de verdad hace falta, hazlo tú fuera del asistente.`,
     [RULES.guardSecretRead]: (d) => `Bloqueado: \`${d.path}\` es un archivo de credenciales y su contenido entraría al contexto del modelo. Las plantillas (\`.env.example\`) sí se pueden leer. Si lo necesitas, ábrelo tú; para apagar la guarda, quita su entrada PreToolUse de .claude/settings.`,
+    [RULES.guardSecretGrep]: (d) => `Pregunta: \`Grep\` con \`output_mode: content\` sobre la carpeta \`${d.path}\` puede volcar al contexto líneas de un archivo de credenciales que no nombra (un \`.env\`). Acótalo a un archivo, un \`glob\` o un \`type\`, o confírmalo tú.`,
     [RULES.guardDeleteOutside]: (d) => `Bloqueado: \`${d.command}\` borra \`${d.target}\`, que queda fuera del proyecto, es el proyecto entero o no se puede saber adónde apunta. Si es intencional, hazlo tú.`
   },
   en: {
@@ -237,6 +243,7 @@ export const MESSAGES = {
     [RULES.featureBoundary]: (d) => `"${d.from}" imports "${d.to}" (${d.import}): features do not import each other`,
 
     [RULES.scopeUndetermined]: () => 'there is no way to tell which files this task changed: no git repo and no record of written paths in .chalc/task.files — the gate reviews a task, not the whole project, so it reviews nothing until the scope can be narrowed down',
+    [RULES.commandsUnsealed]: (d) => `a gate command changed since the last closed task (${d.keys.join(', ')}): a command nobody reviewed is not run. Check .chalc/gate.json and, if the change is yours, re-seal with \`node .chalc/gate.mjs --seal\``,
     [RULES.scopeEmpty]: (d) => `there is nothing to review: no source changed since ${d.from ? `"${d.from}"` : 'the last closed task'} — with no measured code there is no task to close`,
 
     [RULES.noRequirement]: (d) => `the test cites no requirement from ${d.spec}: without a citation nobody can tell what it covers`,
@@ -247,6 +254,7 @@ export const MESSAGES = {
     [RULES.guardGitPush]: (d) => `Push awaiting your confirmation: \`${d.command}\`. The project rules require your explicit go-ahead to push.`,
     [RULES.guardGitPushForce]: (d) => `Blocked: \`${d.command}\` is a forced push and rewrites history others already have. If it is truly needed, do it yourself outside the assistant.`,
     [RULES.guardSecretRead]: (d) => `Blocked: \`${d.path}\` is a credentials file and its contents would enter the model's context. Templates (\`.env.example\`) can be read. If you need it, open it yourself; to turn the guard off, remove its PreToolUse entry from .claude/settings.`,
+    [RULES.guardSecretGrep]: (d) => `Question: \`Grep\` with \`output_mode: content\` over the folder \`${d.path}\` can dump into the context lines of a credentials file it does not name (a \`.env\`). Narrow it to one file, a \`glob\` or a \`type\`, or confirm it yourself.`,
     [RULES.guardDeleteOutside]: (d) => `Blocked: \`${d.command}\` deletes \`${d.target}\`, which is outside the project, is the whole project, or cannot be resolved. If it is intended, do it yourself.`
   }
 };

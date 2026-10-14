@@ -4,12 +4,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
-import { mkdtemp } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { renderPage, renderTerminal, startDashboard } from '../lib/dashboard.mjs';
 import { stripControl } from '../lib/termsafe.mjs';
 import { c } from '../lib/ansi.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const HOSTILE = 'x" onmouseover="alert(1)\' y';
 
@@ -28,8 +27,8 @@ function get(port, host) {
   });
 }
 
-test('the server only answers requests addressed to localhost', async () => {
-  const base = await mkdtemp(join(tmpdir(), 'chalc-dash-host-'));
+test('the server only answers requests addressed to localhost', async (tc) => {
+  const base = await tempDir(tc, 'chalc-dash-host-');
   const { server, port } = await startDashboard({ baseDir: base, port: 0 });
   try {
     assert.equal(await get(port, 'evil.example:' + port), 403);

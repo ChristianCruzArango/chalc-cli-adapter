@@ -5,7 +5,7 @@ import { readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { projectTree } from './project.mjs';
 import { readForPrompt } from './tools/saferead.mjs';
-import { frame } from './prompts/text.mjs';
+import { frame, untrusted } from './prompts/text.mjs';
 
 // Cómo se GENERA código en cada stack: la instrucción concreta que evita que el modelo invente
 // "tools de generación" MCP que no existen. Solo stacks con generador oficial de CLI.
@@ -34,12 +34,13 @@ function contextSection(project, language) {
 // key: identificador estable (independiente del idioma); title: encabezado visible (inglés: va al modelo).
 // maxChars acota archivos largos (un README de 30k no debe desplazar al resto del contexto).
 // root: raíz del proyecto; el archivo se lee confinado y redactado (V-03), nunca siguiendo un enlace fuera.
+// El contenido va envuelto como dato no confiable (spec 022, R6): el repo puede ser ajeno.
 export async function readSection(root, file, { key, title, required = false, maxChars = Infinity } = {}) {
   if (!file) return null;
   let text = (await readForPrompt(root, file))?.trim();
   if (!text) return null;
   if (text.length > maxChars) text = text.slice(0, maxChars) + '\n[…truncated]';
-  return { key, text: `### ${title}\n${text}`, required };
+  return { key, text: `### ${title}\n${untrusted(relative(root, file).replace(/\\/g, '/'), text)}`, required };
 }
 
 // README internos de carpetas (src/app/features/README.md, core, shared…): documentan la convención
@@ -65,7 +66,8 @@ async function folderNotesSection(projectPath, title) {
     let text = (await readForPrompt(projectPath, file))?.trim();   // ilegible o fuera de la raíz: se omite
     if (!text) continue;
     if (text.length > 1500) text = text.slice(0, 1500) + '\n[…truncated]';
-    parts.push(`#### ${relative(projectPath, file).replace(/\\/g, '/')}\n${text}`);
+    const rel = relative(projectPath, file).replace(/\\/g, '/');
+    parts.push(`#### ${rel}\n${untrusted(rel, text)}`);
   }
   if (!parts.length) return null;
   return { key: 'folder-notes', required: false, text: `### ${title}\n${parts.join('\n\n')}` };

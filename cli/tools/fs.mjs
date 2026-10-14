@@ -9,6 +9,7 @@ import { lineMatcher, RegexTimeoutError } from '../../lib/saferegex.mjs';
 import { redactSecretFile } from '../../lib/redact.mjs';
 import { resolveInRoot, assertNotGitDir, writeConfined, realRelative, pathAndReal } from './fsconfine.mjs';
 import { writeHints } from './fshints.mjs';
+import { readConfinedBytes } from './saferead.mjs';
 
 export { resolveInRoot } from './fsconfine.mjs';
 export { missingLocalRefs, braceDelta, placementNote } from './fshints.mjs';
@@ -46,6 +47,22 @@ async function autoListed(abs, path) {
   } catch { return { path, error: 'not a readable directory' }; }
 }
 
+// Texto de un archivo del proyecto por la vía confinada: ruta real abierta sin seguir enlaces y tope
+// medido sobre el archivo ABIERTO (sin carrera entre validar y leer). → { text } o { error, size? }.
+// Salir de la raíz sigue lanzando, como en resolveInRoot: el loop lo convierte en observación.
+async function readProjectText(root, path) {
+  let file;
+  try { file = await readConfinedBytes(root, path, MAX_READ); } catch (e) {
+    // Stryker disable next-line OptionalChaining: equivalente — readConfinedBytes siempre lanza un Error, nunca null
+    if (/outside the project/.test(String(e?.message))) throw e;
+    // Stryker disable next-line OptionalChaining: equivalente — readConfinedBytes siempre lanza un Error, nunca null
+    return { error: e?.code === 'ENOENT' ? 'does not exist' : 'not a readable file' };
+  }
+  if (!file.buf) return { size: file.size, error: `large file (${file.size} bytes); use grep to search inside` };
+  if (isBinary(file.buf)) return { error: 'binary; not text' };
+  return { text: file.buf.toString('utf8') };
+}
+
 function readTool(root) {
   return {
     summary: 'Reads a text file. args: { path }',
@@ -56,12 +73,11 @@ function readTool(root) {
       let st;
       try { st = await stat(abs); } catch { return { path, error: 'does not exist' }; }
       if (st.isDirectory()) return autoListed(abs, path);
-      if (st.size > MAX_READ) return { path, size: st.size, error: `large file (${st.size} bytes); use grep to search inside` };
-      const buf = await readFile(abs);
-      if (isBinary(buf)) return { path, error: 'binary; not text' };
+      const file = await readProjectText(root, path);
+      if (file.error) return { path, ...file };
       // Un `.env`, una clave o un archivo de credenciales ES una lista de secretos: se ve su forma, no sus
       // valores. Se mira la ruta pedida Y la real: un enlace `notes.txt -> .env` es un `.env` (V-04).
-      return { path, content: redactSecretFile(buf.toString('utf8'), pathAndReal(root, path)) };
+      return { path, content: redactSecretFile(file.text, pathAndReal(root, path)) };
     }
   };
 }
@@ -182,7 +198,7 @@ function writeTool(root, approve, layoutRoots) {
       const target = await writeConfined(root, path, content, { append });
       // En append los avisos se calculan sobre el archivo COMPLETO (el trozo solo puede estar cortado).
       const finalText = append ? await readFile(target, 'utf8') : content;
-      const hints = await writeHints(abs, finalText, path, layoutRoots);
+      const hints = await writeHints(abs, finalText, path, { root, layoutRoots });
       if (shrankNote) hints.hint = hints.hint ? `${shrankNote} | ${hints.hint}` : shrankNote;
       return { path, bytes: content.length, ...(append ? { appended: true } : {}), ok: true, ...hints };
     }
@@ -200,8 +216,10 @@ function editTool(root, approve, layoutRoots) {
       if (typeof oldStr !== 'string' || oldStr === '') return { path, error: 'missing "old" (exact text to replace)' };
       const abs = resolveInRoot(root, path);
       assertNotGitDir(resolve(root), path, abs);
-      let text;
-      try { text = await readFile(abs, 'utf8'); } catch { return { path, error: 'does not exist' }; }
+      // Mismo tope y misma detección de binario que `read`: nada de cargar un lockfile o una imagen entera.
+      const file = await readProjectText(root, path);
+      if (file.error) return { path, ...file };
+      const { text } = file;
       const occurrences = text.split(oldStr).length - 1;
       if (occurrences === 0) return { path, error: '"old" was not found in the file' };
       if (occurrences > 1) return { path, error: `"old" appears ${occurrences} times; add context to make it unique` };
@@ -210,14 +228,13 @@ function editTool(root, approve, layoutRoots) {
       // vieja transformada borraría su cambio sin decirlo (C-01). Se relee y, si difiere, no se escribe.
       // Antes de releer se vuelve a confinar: si lo cambiaron por un enlace hacia fuera, se rechaza como
       // siempre (y no se lee el archivo ajeno).
-      resolveInRoot(root, path);
-      if ((await readFile(abs, 'utf8').catch(() => null)) !== text) {
+      if ((await readProjectText(root, path)).text !== text) {
         return { path, conflict: true, error: 'the file changed while waiting for approval; read it again and redo the edit' };
       }
       // Función de reemplazo: con un string, `$&`, `$$`, `` $` `` y `$'` se interpretarían como patrones.
       const finalText = text.replace(oldStr, () => newStr);
       await writeConfined(root, path, finalText);
-      return { path, ok: true, ...(await writeHints(abs, finalText, path, layoutRoots)) };
+      return { path, ok: true, ...(await writeHints(abs, finalText, path, { root, layoutRoots })) };
     }
   };
 }

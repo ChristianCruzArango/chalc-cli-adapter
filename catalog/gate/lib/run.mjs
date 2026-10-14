@@ -26,7 +26,8 @@ export const runningCount = () => running.size;
 //
 // `child.kill()` no basta: con `shell: true` el hijo es el shell, y quien de verdad trabaja son sus
 // nietos. Matar solo al shell los deja huérfanos, que es el fallo que esto viene a evitar.
-function killTree(child) {
+// `sys` ({ kill, sleep }) se inyecta para probar la secuencia de señales sin procesos reales.
+export function killTree(child, sys = SYSTEM) {
   if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
 
   if (WINDOWS) {
@@ -36,10 +37,31 @@ function killTree(child) {
     return;
   }
 
-  // En POSIX el hijo es líder de su grupo (`detached`), así que el negativo alcanza a los nietos.
-  try { process.kill(-child.pid, 'SIGKILL'); } catch {
-    try { child.kill('SIGKILL'); } catch { /* ya no está */ }
+  // En POSIX el hijo es líder de su grupo (`detached`), así que el negativo alcanza a los nietos. Primero
+  // SIGTERM: Stryker y PIT limpian sus temporales al recibirlo. Si el grupo sigue vivo tras una espera corta,
+  // SIGKILL. La espera es SÍNCRONA a propósito: esto corre también desde el manejador de `exit`.
+  if (!signalGroup(child, 'SIGTERM', sys)) return;
+  for (let waited = 0; waited < GRACE_MS && groupAlive(child, sys); waited += POLL_MS) sys.sleep(POLL_MS);
+  if (groupAlive(child, sys)) signalGroup(child, 'SIGKILL', sys);
+}
+
+// Cuánto se espera a que el grupo termine por las buenas, y cada cuánto se mira. Corta: un líder ya muerto
+// sigue contando (zombi) hasta que se le recoge, y recogerlo no puede pasar mientras esto espera.
+const GRACE_MS = 500;
+const POLL_MS = 25;
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+const SYSTEM = { kill: (pid, signal) => process.kill(pid, signal), sleep: sleepSync };
+
+// Manda `signal` al grupo del hijo (o, si no se puede, al hijo). Devuelve si llegó a alguno.
+function signalGroup(child, signal, sys) {
+  try { sys.kill(-child.pid, signal); return true; } catch {
+    try { return child.kill(signal); } catch { return false; }
   }
+}
+
+// ¿Queda algún proceso del grupo? La señal 0 solo pregunta.
+function groupAlive(child, sys) {
+  try { sys.kill(-child.pid, 0); return true; } catch { return false; }
 }
 
 // Termina todo lo que el portón tenga en marcha.
@@ -82,7 +104,8 @@ export function shellArg(value, platform = process.platform) {
   if (BARE_ARG.test(text)) return text;
   if (platform === 'win32') {
     if (CMD_UNSAFE.test(text)) throw new UnsafeArgError(text);
-    return `"${text}"`;
+    // Las `\` que cierran el valor se duplican: `"C:\dir\"` haría de la última un escape de la comilla.
+    return `"${text.replace(/(\\+)$/, '$1$1')}"`;
   }
   if (text.includes('\0')) throw new UnsafeArgError(text);
   return `'${text.replace(/'/g, `'\\''`)}'`;

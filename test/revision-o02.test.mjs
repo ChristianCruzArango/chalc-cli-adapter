@@ -4,14 +4,13 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runAgent } from '../cli/engine/loop.mjs';
 import { chatOllama, createChatImpl } from '../cli/engine/model.mjs';
 import { execBounded, createShellTool, liveChildren } from '../cli/tools/shell.mjs';
 import { mcpToolsForAgent } from '../cli/mcp/astools.mjs';
 import { interruptible } from '../cli/shell/turns.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const POSIX = process.platform !== 'win32';
 const renderPrompt = () => ({ system: 's', user: 'u' });
@@ -121,10 +120,10 @@ test('R25: an aborted shell command is killed and resolves in well under a secon
   assert.equal(liveChildren(), 0);
 });
 
-test('R25: an already aborted signal does not even start the command', { timeout: 5000, skip: !POSIX }, async () => {
+test('R25: an already aborted signal does not even start the command', { timeout: 5000, skip: !POSIX }, async (tc) => {
   const controller = new AbortController();
   controller.abort();
-  const root = await mkdtemp(join(tmpdir(), 'chalc-o02-'));
+  const root = await tempDir(tc, 'chalc-o02-');
   const { bash } = createShellTool({ root, allow: ['sleep'], approve: async () => true });
   const r = await bash.run({ command: 'sleep 30' }, { signal: controller.signal });
   assert.match(r.stderr, /interrupted/);

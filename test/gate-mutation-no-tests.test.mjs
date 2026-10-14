@@ -7,10 +7,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { runMutation } from '../catalog/gate/lib/mutation.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const REPORT = 'reports/mutation/mutation.json';
 const KILLED = JSON.stringify({
@@ -18,8 +18,8 @@ const KILLED = JSON.stringify({
   files: { 'src/cobro.mjs': { mutants: [{ id: '1', mutatorName: 'BooleanLiteral', status: 'Killed', location: { start: { line: 1, column: 1 } } }] } }
 });
 
-test('the tests of the task are left out of the mutation scope, in every naming convention', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'chalc-mut-tests-'));
+test('the tests of the task are left out of the mutation scope, in every naming convention', async (tc) => {
+  const root = await tempDir(tc, 'chalc-mut-tests-');
   const commands = [];
   const run = async (command) => {
     commands.push(command);

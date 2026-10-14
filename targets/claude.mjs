@@ -53,7 +53,7 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   if (dryRun) return { plan, written: false };
 
   // 1) Skills
-  await kit.copySkills(CATALOG, skills, join(projectPath, '.claude', 'skills'), { tools });
+  await kit.copySkills(CATALOG, skills, join(projectPath, '.claude', 'skills'), { tools, specLang });
 
   // 2) MCP -> fusionar sin pisar otros servidores
   if (mcps.length) {

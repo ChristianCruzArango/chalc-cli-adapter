@@ -7,6 +7,7 @@ import { EventEmitter } from 'node:events';
 import { childEnvForApp } from '../lib/childenv.mjs';
 import { runInitStep } from '../lib/commands/init.mjs';
 import { launch, runPlaywrightSpec } from '../lib/commands/qaenv.mjs';
+import { envValue } from './helpers/envkey.mjs';
 
 const SECRETS = { CHALC_API_KEY: 'sk-x', CHALC_QA_TOKEN: 'tok', CHALC_QA_PASSWORD: 'pw', CHALC_QA_USER: 'qa@x', CHALC_PAT: 'pat', OPENROUTER_API_KEY: 'or' };
 
@@ -51,7 +52,7 @@ test('T4 (spec 022, R2, S2) runInitStep no pasa credenciales al scaffolder', asy
   const env = calls[0].opts.env;
   assertNoSecrets(env);
   assert.equal(env.NG_CLI_ANALYTICS, 'false');
-  assert.ok(env.PATH);
+  assert.ok(envValue(env, 'PATH'));
 });
 
 test('T4 (spec 022, R2, S2) el dev server de qa no recibe CHALC_* ni credenciales', async () => {

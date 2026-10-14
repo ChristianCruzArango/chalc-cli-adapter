@@ -7,6 +7,7 @@ import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { windowsEnv, windowsSpawnOptions, trackChild, liveChildCount } from '../lib/proc.mjs';
 import { execBounded, liveChildren } from '../cli/tools/shell.mjs';
+import { envValue } from './helpers/envkey.mjs';
 
 // T2 (spec 022, R17, S9 Windows cwd)
 test('T2 (spec 022, R17, S9 Windows cwd): the cmd.exe child env never searches the current directory', () => {
@@ -15,7 +16,7 @@ test('T2 (spec 022, R17, S9 Windows cwd): the cmd.exe child env never searches t
   // Sin env explícito se hereda el del proceso, con la protección añadida.
   const inherited = windowsEnv(undefined);
   assert.equal(inherited.NoDefaultCurrentDirectoryInExePath, '1');
-  assert.equal(inherited.PATH, process.env.PATH);
+  assert.equal(envValue(inherited, 'PATH'), process.env.PATH);
   // Un env que intentara desactivarla no gana.
   assert.equal(windowsEnv({ NoDefaultCurrentDirectoryInExePath: '' }).NoDefaultCurrentDirectoryInExePath, '1');
 });
@@ -53,10 +54,12 @@ test('T2 (spec 022, R19, C6): no module keeps its own copy of the live-children 
 });
 
 test('T2 (spec 022, R19, C6): a running shell child is tracked and released when it ends', async () => {
-  const run = execBounded('node -e "setTimeout(()=>{},300)"', { cwd: process.cwd(), timeoutMs: 5000 });
-  await new Promise((r) => setTimeout(r, 100));
+  // Sin `>` ni llaves: en Windows el hijo pasa por cmd.exe, que los toma como redirección o bloque. El hijo
+  // se registra al lanzarlo (síncrono), así que se comprueba sin esperar a ciegas.
+  const run = execBounded('node -e "setTimeout(Object,300)"', { cwd: process.cwd(), timeoutMs: 5000 });
   assert.ok(liveChildren() >= 1);
-  await run;
+  const result = await run;
+  assert.equal(result.code, 0, JSON.stringify(result));
   await new Promise((r) => setTimeout(r, 50));
   assert.equal(liveChildren(), 0);
 });

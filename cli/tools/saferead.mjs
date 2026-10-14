@@ -23,12 +23,14 @@ function confinedRealPath(root, file) {
 }
 
 // Abre `path` sin seguir enlaces y lee como mucho `maxBytes` del archivo ABIERTO (su fstat, no el de
-// una ruta que pudo cambiar). `whole`: si el archivo supera el tope no se lee nada (buf null). Un
-// directorio falla al leer (EISDIR), como antes.
+// una ruta que pudo cambiar). `whole`: si el archivo supera el tope no se lee nada (buf null). Solo se
+// leen archivos regulares: en POSIX un directorio falla al leer (EISDIR), pero en Windows se abre y se lee
+// como si estuviera vacío; por eso se comprueba el tipo del archivo ABIERTO en todos los sistemas.
 async function readOpened(path, maxBytes, { whole = false } = {}) {
   const handle = await open(path, FS.O_RDONLY | NOFOLLOW);
   try {
     const st = await handle.stat();
+    if (!st.isFile()) throw Object.assign(new Error(`not a regular file: ${path}`), { code: 'EISDIR' });
     if (whole && st.size > maxBytes) return { size: st.size, buf: null };
     const size = Math.min(st.size, maxBytes);
     const buf = Buffer.alloc(size);

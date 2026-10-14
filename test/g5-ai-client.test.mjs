@@ -9,7 +9,6 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { chat } from '../lib/ai.mjs';
 import { t } from '../lib/i18n.mjs';
 
@@ -111,8 +110,9 @@ test('T5 R18 F15: config.json lives under CHALC_HOME for the AI client and the s
     const chalcHome = join(home, 'custom');
     await mkdir(chalcHome, { recursive: true });
     await writeFile(join(chalcHome, 'config.json'), JSON.stringify({ lang: 'es' }));
-    const ai = fileURLToPath(new URL('../lib/ai.mjs', import.meta.url));
-    const i18n = fileURLToPath(new URL('../lib/i18n.mjs', import.meta.url));
+    // import() exige una URL file://: una ruta de Windows (`D:\…`) se tomaría como el esquema `d:`.
+    const ai = new URL('../lib/ai.mjs', import.meta.url).href;
+    const i18n = new URL('../lib/i18n.mjs', import.meta.url).href;
     const script = `const a = await import(${JSON.stringify(ai)}); const i = await import(${JSON.stringify(i18n)}); console.log(JSON.stringify([a.CONFIG_PATH, i.lang]));`;
     const env = { ...process.env, CHALC_HOME: chalcHome, HOME: home, USERPROFILE: home, LANG: 'en_US.UTF-8', LC_ALL: '', LC_MESSAGES: '' };
     delete env.CHALC_LANG;

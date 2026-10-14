@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mutateScope, mutateBase, isMutable } from './helpers/mutatescope.mjs';
+import { tempDir } from './helpers/tmpdir.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -36,9 +37,23 @@ test('5.5: qué se puede mutar', () => {
   for (const p of ['lib/i18n/es/core.mjs', 'bin/chalc.mjs', 'cli/index.mjs', 'test/a.test.mjs', 'stryker.config.mjs', 'lib/x.json']) assert.equal(isMutable(p), false, p);
 });
 
-test('5.5: la base sale de CHALC_MUTATE_BASE y, sin ella, de git', () => {
+// Repo propio con historial conocido: el del checkout no sirve, porque CI clona con profundidad 1 y no hay HEAD~1.
+function repoWithHistory(dir) {
+  const g = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...args], { cwd: dir, stdio: 'ignore' });
+  const rev = (ref) => execFileSync('git', ['rev-parse', ref], { cwd: dir, encoding: 'utf8' }).trim();
+  g('init', '-q', '-b', 'main');
+  g('commit', '-q', '--allow-empty', '-m', 'a');
+  return { g, rev };
+}
+
+test('5.5: la base sale de CHALC_MUTATE_BASE y, sin ella, de git', async (t) => {
   assert.equal(mutateBase({ CHALC_MUTATE_BASE: 'abc123' }, ROOT), 'abc123');
-  const base = mutateBase({}, ROOT);
-  assert.ok(base, 'hay una base');
-  assert.doesNotThrow(() => execFileSync('git', ['rev-parse', '--verify', `${base}^{commit}`], { cwd: ROOT, stdio: 'ignore' }));
+  const dir = await tempDir(t, 'chalc-mutbase-');
+  const { g, rev } = repoWithHistory(dir);
+  const onMain = rev('HEAD');
+  g('switch', '-q', '-c', 'develop');
+  g('commit', '-q', '--allow-empty', '-m', 'b');
+  assert.equal(mutateBase({}, dir), onMain, 'en una rama: el merge-base con main');
+  g('switch', '-q', 'main');
+  assert.equal(mutateBase({}, dir), 'HEAD~1', 'en main: el commit anterior');
 });

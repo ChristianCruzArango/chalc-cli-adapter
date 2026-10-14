@@ -20,6 +20,13 @@ test('T5 R18 F5: a caller abort propagates as AbortError, not as a timeout', asy
 });
 
 test('T5 R18 F5: the own deadline is still reported as a timeout', async () => {
-  const err = await fetchWithTimeout('http://x.test/', { fetchImpl: hangingFetch, timeoutMs: 10 }).catch((e) => e);
-  assert.equal(err.message, t('netTimeout', 'http://x.test/'));
+  // El temporizador de fetchWithTimeout va con unref() y el fetch falso no mantiene nada vivo: sin este
+  // temporizador propio, Node 20/22 ve el event loop vacío y cancela el test antes del plazo.
+  const keepAlive = setTimeout(() => {}, 5000);
+  try {
+    const err = await fetchWithTimeout('http://x.test/', { fetchImpl: hangingFetch, timeoutMs: 10 }).catch((e) => e);
+    assert.equal(err.message, t('netTimeout', 'http://x.test/'));
+  } finally {
+    clearTimeout(keepAlive);
+  }
 });

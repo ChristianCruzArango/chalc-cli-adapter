@@ -15,6 +15,7 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   for (const m of mcps) plan.push(`mcp       .codex/config.toml  ::  ${m.id}`);
   for (const me of methods) plan.push(kit.methodPlanLine(me));
   plan.push('rules     AGENTS.md');
+  plan.push(`command   ${kit.liveCommandFile('codex')}`);
   plan.push('manifest  .chalc.json');
   if (dryRun) return { plan, written: false };
 
@@ -25,6 +26,8 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
 
   const block = await kit.chalcBlock(CATALOG, { projectPath, skills, mcps, methods, roles, architecture, specLang });
   await kit.writeManagedBlock(join(projectPath, 'AGENTS.md'), block);
+  // El comando explícito que levanta el tablero (spec 021, R9).
+  await kit.writeLiveCommand(projectPath, 'codex', specLang);
 
   // MCP → .codex/config.toml. Sin parser TOML (cero dependencias): bloque gestionado con comentarios #,
   // igual que el bloque markdown — lo del usuario (model, profiles…) no se toca.

@@ -30,6 +30,15 @@ const usable = (paths) => [...new Set(
 
 const without = (from, others) => from.filter((f) => !others.includes(f));
 
+/**
+ * Todo lo que la tarea tocó —diff y registro—, SIN el filtro de código (spec 020, R15): la configuración que
+ * crea una tarea (`stryker.conf.json`) es de la tarea, y un rol la puede citar al revisarla. Lo de chalc
+ * (`.chalc/`) no: son sus propios registros, no trabajo de la tarea. El alcance del portón no cambia.
+ */
+export const touchedFiles = (registry = [], diff = []) => [...new Set(
+  [...(registry || []), ...(diff || [])].map((p) => String(p ?? '').replace(/\\/g, '/').trim()).filter(Boolean)
+)].filter((p) => !p.startsWith('.chalc/')).sort();
+
 // El alcance a partir de las dos fuentes.
 //
 // `diff` es `null` cuando no se pudo calcular —sin repo, o con una referencia que no resuelve—, que

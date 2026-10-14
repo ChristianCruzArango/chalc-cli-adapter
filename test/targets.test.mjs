@@ -4,16 +4,16 @@ import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as claude from '../targets/claude.mjs';
-import * as gemini from '../targets/gemini.mjs';
+import * as antigravity from '../targets/antigravity.mjs';
 import * as copilot from '../targets/copilot.mjs';
 import * as codex from '../targets/codex.mjs';
 
-// El archivo de instrucciones del usuario (CLAUDE.md / GEMINI.md / copilot-instructions.md / AGENTS.md)
+// El archivo de instrucciones del usuario (CLAUDE.md / AGENTS.md — spec 021: todos menos Claude leen AGENTS.md)
 // es SAGRADO: equipar debe FUSIONAR el bloque de chalc, nunca sobrescribir/borrar lo que el usuario ya tenía.
 const CASES = [
   { name: 'Claude', mod: claude, rel: 'CLAUDE.md' },
-  { name: 'Gemini', mod: gemini, rel: 'GEMINI.md' },
-  { name: 'Copilot', mod: copilot, rel: join('.github', 'copilot-instructions.md') },
+  { name: 'Antigravity', mod: antigravity, rel: 'AGENTS.md' },
+  { name: 'Copilot', mod: copilot, rel: 'AGENTS.md' },
   { name: 'Codex', mod: codex, rel: 'AGENTS.md' }
 ];
 

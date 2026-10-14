@@ -28,7 +28,7 @@ import { parseGateState } from './state.mjs';
 import { readMemoryFacts } from './memory.mjs';
 import { tasksProgress, currentTask } from './tasks.mjs';
 
-const REVIEW_REL = '.chalc/review.md';
+export const REVIEW_REL = '.chalc/review.md';
 
 // Puertas por defecto, iguales a las que el portón escribe en `gate.json`. Se repiten aquí porque un
 // repo equipado con una versión anterior de chalc no las tendrá, y el defecto seguro es el
@@ -57,7 +57,8 @@ async function readTasks(root, specDir, findSpec) {
   if (!found) return { hasTasksFile: false, done: 0, total: 0, current: '', mtime: 0 };
 
   const { done, total } = tasksProgress(found.text);
-  return { hasTasksFile: true, done, total, current: currentTask(found.text), mtime: await mtimeOf(join(root, found.path)) };
+  // `dir` y `text` (spec 020): el tablero muestra la spec y la lista entera sin volver a buscar tasks.md.
+  return { hasTasksFile: true, done, total, current: currentTask(found.text), mtime: await mtimeOf(join(root, found.path)), dir: found.dir, text: found.text };
 }
 
 // El alcance de la tarea (spec 013, R8), tolerante a todo.
@@ -189,7 +190,8 @@ export async function snapshot(root, {
     tasks,
     gate: { ...gate, pending: Array.isArray(gateConfig.pending) ? gateConfig.pending : [] },
     review: { ...lastReview(reviewText), entries: allReviews(reviewText) },
-    changed: { files, newestMtime: await newestOf(root, files), source: scope.source, undetermined: scope.undetermined },
+    // `touched` (spec 020, R15): todo lo que la tarea cambió, config incluida; las citas de un rol valen contra eso.
+    changed: { files, touched: scope.touched || [], newestMtime: await newestOf(root, files), source: scope.source, undetermined: scope.undetermined },
     flow,
     ...await sidesFacts(problems, { root, sides, specDir: gateConfig.spec?.dir || 'specs', findSpec }),
     git: { isRepo: !!currentRef, branch: currentRef, head: currentHead || '' },

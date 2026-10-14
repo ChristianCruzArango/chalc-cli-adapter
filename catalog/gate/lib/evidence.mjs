@@ -14,9 +14,12 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { frameOf, messageOf } from './i18n.mjs';
+import { redactSensitiveText } from './redact.mjs';
 
 export const EVIDENCE_REL = '.chalc/gate.md';
 export const STATE_REL = '.chalc/gate.state.json';
+// Tope del detalle por etapa en el estado (spec 020, R10): el tablero lo despliega; el informe tiene todos.
+export const MAX_DETAILS = 20;
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -37,7 +40,8 @@ const table = (headers, rows) => [row(headers), row(headers.map(() => '---')), .
 
 // Estado de una etapa, en palabras del marco. El motivo de una omisión importa tanto como la
 // omisión: no es lo mismo saltarse la mutación por `--fast` que porque el stack no la admite.
-function statusOf(stage, frame) {
+// Exportado para el tablero (spec 020), que lo escribe con las mismas palabras que el informe.
+export function statusOf(stage, frame) {
   if (stage.blocked) return frame.status.blocked;
   if (stage.skipped) {
     if (stage.reason === 'fast') return frame.status.skippedFast;
@@ -221,17 +225,42 @@ export function renderState({ stages, meta, fast }) {
     // Lo suprimido con `chalc-allow`, en detalle: la memoria lo guarda como decisión aceptada al
     // cerrar la tarea (spec 015, R13). El informe lo muestra; este campo lo lee una máquina.
     suppressions: stages.flatMap((s) => s.allowed || []).map(({ file, line, rule, reason }) => ({ file, line, rule, reason })),
-    stages: stages.map((s) => ({
-      stage: s.stage,
-      ok: !!s.ok,
-      blocked: !!s.blocked,
-      skipped: !!s.skipped,
-      reason: s.reason || '',
-      findings: (s.findings || []).length,
-      allowed: (s.allowed || []).length,
-      capped: !!s.capped
-    }))
+    stages: stages.map(stateStage)
   };
+}
+
+// Una etapa del estado: su resultado, cuántos hallazgos tuvo y su detalle, sin una palabra traducida.
+function stateStage(s) {
+  return {
+    stage: s.stage,
+    ok: !!s.ok,
+    blocked: !!s.blocked,
+    skipped: !!s.skipped,
+    reason: s.reason || '',
+    findings: (s.findings || []).length,
+    allowed: (s.allowed || []).length,
+    capped: !!s.capped,
+    // El score y los supervivientes de la mutación (spec 020): el tablero los muestra sin leer gate.md.
+    ...(typeof s.score === 'number' ? { score: s.score, survivors: (s.survivors || []).length } : {}),
+    // El porqué de la etapa (spec 020, R10): cada hallazgo con su regla y sus datos, SIN escribirlo en ningún
+    // idioma —este estado es igual en todos—; el tablero lo escribe con `messageOf`, como el informe. Los
+    // datos se redactan porque los pinta una página. Con tope; `findings` sigue diciendo cuántos había.
+    details: detailsOf(s.findings)
+  };
+}
+
+function detailsOf(findings) {
+  return (findings || []).slice(0, MAX_DETAILS).map((f) => ({
+    file: f.file || '',
+    line: f.line || 0,
+    rule: f.rule,
+    data: redactData(f.data)
+  }));
+}
+
+// Los valores de texto de un hallazgo, redactados; lo demás (números, listas de supervivientes…) tal cual.
+function redactData(data) {
+  return Object.fromEntries(Object.entries(data || {}).map(([key, value]) => [key, typeof value === 'string' ? redactSensitiveText(value) : value]));
 }
 
 // Deja el estado en `.chalc/gate.state.json` y devuelve su ruta relativa.

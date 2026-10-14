@@ -4,7 +4,7 @@
 
 Chalc is a local CLI for **creating new projects** (`chalc init`) and **equipping existing projects** with development-assistant configuration: skills, MCP servers, rules, and working methods.
 
-The equip flow (`chalc`) doesn't call AI models: it reads project signals (`package.json`, root files, globs), applies catalog rules, and writes the files the chosen target needs (Claude Code, GitHub Copilot, Cursor, Gemini CLI, or Codex CLI).
+The equip flow (`chalc`) doesn't call AI models: it reads project signals (`package.json`, root files, globs), applies catalog rules, and writes the files the chosen target needs (Claude Code, Codex CLI, Antigravity, Cursor, or GitHub Copilot).
 
 AI is **opt-in** and used only in three commands, always with the API key configured by the user:
 - **`chalc init`** — the AI *suggests* an architecture calibrated to your proposal (an ally, not an oracle; you decide).
@@ -36,6 +36,7 @@ This way, an Angular project can receive its Angular skills, a NestJS one its ba
 | `chalc verify [path]` | Verifies a project: completeness (folders/README, architecture.md, specs/) + **architecture boundaries** (layers) | no |
 | `node .chalc/gate.mjs` | **Quality gate** of an equipped repo: tests + mutation + static checks; evidence in `.chalc/gate.md`. Not a chalc command — it runs in the repo, with or without chalc | no |
 | `node .chalc/memory.mjs` | **Project memory**: searches what was learned (`search`, `get`, `concepts`) and captures it when each task closes (`capture`). Not a chalc command — it runs in the repo | no |
+| `node .chalc/live.mjs` | **Live board** of an equipped repo: starts a local page in the background (read-only, `127.0.0.1`) with the task in progress, the gate (and why), each role, what is missing, the tokens and time per task and each agent's activity, and prints its URL. It shuts itself down. Not a chalc command — it runs in the repo | no |
 | `node .chalc/next.mjs` | **Flow advisor** of an equipped repo: tells you the ONE next action of the task cycle, reading the repo's real state. Read-only. Not a chalc command — it runs in the repo, with or without chalc | no |
 | `chalc doctor` | Validates the catalog (rules, skills, MCP, methods, targets) | no |
 | `chalc configure` | Manages the catalog (rules/skills/MCP) via menu | no |
@@ -176,7 +177,7 @@ When creating, Chalc generates the official scaffolder's base project, the archi
 `README.md`, `docs/architecture.md`, `specs/` (SDD method), the global skills (`minimal-implementation`,
 `clean-code`, `solid-principles`, `modular-architecture`, `mutation-testing`, `secure-coding`, plus the OWASP security ones
 `security-and-hardening`, `security-review`, `code-security`, `security-threat-model`), the stack's skills, the MCP, and the chosen AI target
-(`CLAUDE.md`, Cursor, Copilot, Gemini, or Codex).
+(`CLAUDE.md` for Claude Code; `AGENTS.md` for Codex, Antigravity, Cursor and Copilot).
 
 #### Extensible to any framework
 
@@ -416,6 +417,7 @@ chalc/
 │   ├── hooks/               the opt-in hooks (recorder, turn-end check, guards), documented — never installed
 │   ├── gate/                the quality gate: real code copied into `.chalc/` when equipping
 │   ├── next/                the flow advisor: decides the ONE next action of the task cycle
+│   ├── live/                the live board: local page with the state and each agent's activity
 │   ├── tools/               what chalc knows per stack: tests, mutation, report and install
 │   └── mail/                the mailbox between the sides of a workspace
 ├── rules/                   criteria: which signal = which stack = what gets installed (incl. global.json)
@@ -424,7 +426,7 @@ chalc/
 │   ├── codex.mjs            translator to Codex CLI
 │   ├── copilot.mjs          translator to GitHub Copilot
 │   ├── cursor.mjs           translator to Cursor
-│   └── gemini.mjs           translator to Gemini CLI
+│   └── antigravity.mjs      translator to Antigravity
 └── test/                    suite with `node --test` (parser, init, AI, QA, security, doctor)
 ```
 
@@ -845,8 +847,8 @@ node .chalc/memory.mjs concepts         # the concepts, for writing a spec
 ### Reviewer agent: what the gate cannot measure
 
 The gate measures and does not opine. Next to it, each repo gets a **reviewer agent** in its target's
-format (a real subagent in `.claude/agents/` for Claude Code, a rule in `.cursor/rules/`, a section of
-the managed block for Codex, Copilot and Gemini). It reads `.chalc/gate.md`, the task's diff, the
+format (a real subagent in `.claude/agents/` for Claude Code; a section of the managed block in
+`AGENTS.md` for Codex, Antigravity, Cursor and Copilot). It reads `.chalc/gate.md`, the task's diff, the
 constitution and **that repo's active skills**, and judges what only reading can tell: whether the
 test verifies the requirement or merely accompanies it, whether the abstraction is right, whether the
 name says what it does.
@@ -923,8 +925,8 @@ from the diff, the spec and the evidence before reading the author's explanation
 **Adding a role is adding a folder**: its contract and its prompt in both languages. All five targets
 project it and the advisor sequences it without a code change.
 
-> **Only Claude Code grants per-agent permissions.** In Cursor the role is a rule, and in Codex,
-> Copilot and Gemini a section of the managed block: there the scope is an **instruction, not a
+> **Only Claude Code grants per-agent permissions.** In Codex, Antigravity, Cursor and Copilot
+> the role is a section of the managed block in `AGENTS.md`: there the scope is an **instruction, not a
 > restriction**, and what is emitted says so in those words. chalc tells you which of the two you got
 > when it equips the repo.
 
@@ -993,6 +995,41 @@ breaks or hangs the turn, and the reason comes in the repo's language. **Honest 
 commands without running them, so it raises the bar but is not unbreakable — it is a net for the
 assistant's slips, not a security boundary. Like the other hooks, chalc documents it and never
 installs it.
+
+### Live board: see where it is while it works
+
+Use the **`/chalc-live`** command (in Codex, `$chalc-live`) —or ask the agent how it is going— and it answers with
+a URL: the command and the method rules tell it to run `node .chalc/live.mjs`, which starts a local page in the background and returns at once. The page refreshes
+itself every 2 s and shows:
+
+- **Full screen, with a side bar**: the project's specs (the current one marked, with its progress), section
+  navigation and a chip with what the agent is doing —*working* (and which role is inside) or *idle*, with the
+  explanation on hover—, so a page that does not move never looks stuck.
+- **The summary**: a headline ("Task T1 (1 of 1) · gate BLOCKED on security and duplication · next: fix what
+  the gate reports"), the advisor's reason, and progress, tokens, time and roles up to date.
+- **The SDD flow** of the feature: constitution → spec → plan → tasks → implementation (TDD + mutation) →
+  gate → roles → close, each phase done, in progress, pending or with problems.
+- **The last gate** with its verdict as a stamp and its stages in a lane: picking one opens **why** in a panel
+  beside it, in the same words as `.chalc/gate.md`. And **token and time bars per task**.
+- **The tasks**, opening with a click: their `R#`, status, tokens (input, output, cache read and write), time
+  and their own activity.
+- **The roles' notes as they wrote them**, pass by pass: verdict, task in progress, and every line in full
+  —numbered findings, `R#`, checklist categories, follow-ups on findings— with its mark.
+- **What is missing** and each agent's **live activity**.
+
+All of the above comes from files in the repo and works the same with any target (Claude, Codex, Antigravity,
+Cursor, Copilot). Activity, tokens and time come from the activity hook (`.chalc/gate-hook.md`, Claude Code only): on each
+event it reads **only what is new** in the transcript of the session and of each role, counts each message
+once and charges it to the task in progress. What happened with no task in progress (the spec, the plan) is
+added to the total and shown apart. If you enable the hook in the middle of a session, what came before in
+that session falls on the task in progress.
+
+It is not an agent: it spends no tokens, only reads the repo, and shows the same as the advisor because it
+uses the same reading. It listens on `127.0.0.1` only, checks the `Host` header, is read-only and shuts
+down after 15 minutes with nobody looking (`--idle <minutes>` changes it). The activity log keeps who, what
+and where, never content, with secrets redacted. Its files (`.chalc/live.json`, `.chalc/activity.jsonl`,
+`.chalc/usage.json`) belong to the machine and the session: the `.gitignore` that `chalc init` creates keeps
+them out.
 
 ### The tool table: one file per language
 
@@ -1513,12 +1550,21 @@ npm run test:mutation
 
 The same neutral catalog is projected to each tool's native format. You pick the target in the interactive flow or with `--target`.
 
-| Target | Instructions | Skills | MCP |
-|---|---|---|---|
-| **Claude Code** | `CLAUDE.md` | `.claude/skills/<id>/` | `.mcp.json` |
-| **GitHub Copilot** | `.github/copilot-instructions.md` | `.chalc/skills/<id>/` (referenced) | `.vscode/mcp.json` (`servers`, type `stdio`) |
-| **Gemini CLI** | `GEMINI.md` | `.chalc/skills/<id>/` (referenced) | `.gemini/settings.json` (`mcpServers`) |
-| **Cursor** | `.cursor/rules/chalc-*.mdc` | `.chalc/skills/<id>/` + a `.mdc` per skill | `.cursor/mcp.json` (`mcpServers`) |
-| **Codex CLI** | `AGENTS.md` | `.chalc/skills/<id>/` (referenced) | `.codex/config.toml` (`[mcp_servers.<id>]`, managed block) |
+| Target | Instructions | Skills | MCP | Board command |
+|---|---|---|---|---|
+| **Claude Code** | `CLAUDE.md` (imports `@AGENTS.md` if present) | `.claude/skills/<id>/` | `.mcp.json` | `/chalc-live` |
+| **Codex CLI** | `AGENTS.md` | `.chalc/skills/<id>/` (referenced) | `.codex/config.toml` (`[mcp_servers.<id>]`, managed block) | `$chalc-live` |
+| **Antigravity** | `AGENTS.md` | `.agents/skills/<id>/` | `.agents/mcp_config.json` (`mcpServers`) | `/chalc-live` |
+| **Cursor** | `AGENTS.md` | `.chalc/skills/<id>/` + a `.mdc` per skill | `.cursor/mcp.json` (`mcpServers`) | `/chalc-live` |
+| **GitHub Copilot** | `AGENTS.md` | `.chalc/skills/<id>/` (referenced) | `.vscode/mcp.json` (`servers`, type `stdio`) | `/chalc-live` |
+
+`AGENTS.md` is today the instructions file every harness reads except Claude Code, which has its own (each
+harness's official documentation). When re-equipping a project from an earlier version, chalc removes **only its
+block** from `GEMINI.md` (Antigravity reads it too), `.github/copilot-instructions.md` and the `chalc-*.mdc` rules
+it no longer uses; what you wrote stays.
+
+**Gemini CLI is no longer a target.** Google retired it for individual accounts on June 18, 2026, and its
+replacement is **Antigravity** (the `agy` CLI and the desktop app, which read the same project files).
+`--target gemini` answers with an error that says so and suggests `--target antigravity`.
 
 All of them also write `.chalc.json` (manifest). Adding another assistant = one `targets/<nombre>.mjs` with `apply()`, reusing the catalog and rules.

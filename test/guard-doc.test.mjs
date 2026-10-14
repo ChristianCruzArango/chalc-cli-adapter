@@ -68,7 +68,8 @@ test('R7: the document says what the guard asks, what it blocks and where it sto
   }
 });
 
-test('R7: the document counts three hooks now', async () => {
-  assert.match(await read('gate-hook.md'), /^Tres hooks/m);
-  assert.match(await read('gate-hook.en.md'), /^Three hooks/m);
+// Eran tres con la guarda (spec 017); la spec 020 añade el de actividad del tablero en vivo.
+test('R7: the document counts four hooks now', async () => {
+  assert.match(await read('gate-hook.md'), /^Cuatro hooks/m);
+  assert.match(await read('gate-hook.en.md'), /^Four hooks/m);
 });

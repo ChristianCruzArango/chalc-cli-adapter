@@ -81,7 +81,7 @@ export async function buildProjectSections(project, language) {
   // Árbol REAL del proyecto (requerido): sin él, los modelos locales adivinan rutas que no existen.
   const tree = await projectTree(project.projectPath);
   if (tree) sections.push({ key: 'tree', required: true, text: `### project tree (the REAL files — do not guess paths)\n${tree}` });
-  // Instrucciones del proyecto (CLAUDE.md / copilot-instructions.md / GEMINI.md según target): el
+  // Instrucciones del proyecto (CLAUDE.md o AGENTS.md según target): el
   // documento rector que el usuario mantiene para SUS agentes — obligatorio, no opcional.
   const root = project.projectPath;
   if (project.equipped && project.paths.rulesFile) {

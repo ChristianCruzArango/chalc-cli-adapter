@@ -8,20 +8,9 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { gitStatus } from '../lib/gitprep.mjs';
 import { readJsonOrKeep } from '../lib/userdata.mjs';
+import { TARGET_LAYOUT } from '../lib/targetfiles.mjs';
 
-// Dónde deja cada target su contenido. VERIFICADO contra targets/*.mjs (claude/cursor/copilot/gemini/codex).
-// skillsDir: carpeta con <id>/SKILL.md ; mcpFile: JSON con MCP ; mcpKey: clave del objeto de servidores
-// (varía: "mcpServers" | "servers") ; rulesFile: doc de instrucciones del asistente, o null si el target
-// no usa un archivo único (cursor dispersa reglas en .cursor/rules/*.mdc → se apoya en constitución/arquitectura).
-// Nota: solo claude guarda skills en .claude/skills; el resto usa la carpeta neutra .chalc/skills.
-const TARGET_LAYOUT = {
-  claude:  { skillsDir: ['.claude', 'skills'], mcpFile: ['.mcp.json'],                mcpKey: 'mcpServers', rulesFile: ['CLAUDE.md'] },
-  cursor:  { skillsDir: ['.chalc', 'skills'],  mcpFile: ['.cursor', 'mcp.json'],      mcpKey: 'mcpServers', rulesFile: null },
-  copilot: { skillsDir: ['.chalc', 'skills'],  mcpFile: ['.vscode', 'mcp.json'],      mcpKey: 'servers',    rulesFile: ['.github', 'copilot-instructions.md'] },
-  gemini:  { skillsDir: ['.chalc', 'skills'],  mcpFile: ['.gemini', 'settings.json'], mcpKey: 'mcpServers', rulesFile: ['GEMINI.md'] },
-  // Codex guarda los MCP en TOML (`[mcp_servers.<id>]`), no en JSON.
-  codex:   { skillsDir: ['.chalc', 'skills'],  mcpFile: ['.codex', 'config.toml'],    mcpKey: 'mcp_servers', rulesFile: ['AGENTS.md'], mcpFormat: 'toml' }
-};
+// Dónde deja cada target su contenido: un solo mapa, en lib/targetfiles.mjs (spec 021, R7).
 
 // Lee las tablas `[mcp_servers.<id>]` (y sus subtablas, p. ej. `.env`) de un config.toml de Codex.
 // Es el subconjunto que escribe `tomlMcpServers` (lib/targetkit.mjs): claves simples o citadas y
@@ -194,7 +183,7 @@ async function scanInstalledSkills(skillsDir) {
 
 // Archivos de instrucciones de asistentes que podrían existir en el proyecto (los ponga chalc o no).
 // Sirve para reportar "qué tiene el proyecto" aunque no esté equipado por chalc.
-const ASSISTANT_FILES = [['CLAUDE.md'], ['GEMINI.md'], ['AGENTS.md'], ['.github', 'copilot-instructions.md'], ['.cursor', 'rules']];
+const ASSISTANT_FILES = [['CLAUDE.md'], ['AGENTS.md'], ['GEMINI.md'], ['.github', 'copilot-instructions.md'], ['.cursor', 'rules'], ['.agents']];
 
 function detectAssistantFiles(projectPath) {
   return ASSISTANT_FILES.filter((parts) => existsSync(join(projectPath, ...parts))).map((parts) => parts.join('/'));

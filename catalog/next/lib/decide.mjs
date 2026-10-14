@@ -114,14 +114,22 @@ function unreadable(s) {
 // El alcance contra el que se valida es el que MIDIÓ la evidencia mientras siga vigente (spec 018, R9): es
 // el que el portón escribió en «Alcance de la tarea» y el que el rol recibió. El vivo puede ser otro —el
 // portón re-sella la base al aprobar—, y validar contra él castigaba al rol por citar lo que se le dio.
-const reviewScope = (s) => (evidenceIsCurrent(s) && s.gate.scopeFiles?.length ? s.gate.scopeFiles : s.changed.files || []);
+const measuredScope = (s) => (evidenceIsCurrent(s) && s.gate.scopeFiles?.length ? s.gate.scopeFiles : s.changed.files || []);
+// Y además todo lo que la tarea tocó aunque el portón no lo mida (spec 020, R15): la configuración que creó
+// la tarea es de la tarea, y citarla al revisar A05 no es citar algo ajeno.
+const reviewScope = (s) => [...new Set([...measuredScope(s), ...(s.changed.touched || [])])];
+
+// ¿Es una revisión de una tarea ya cerrada? (spec 020, R16). Escrita ANTES de la última marca de `tasks.md`,
+// es de la tarea que se marcó: se validó para dejar cerrarla, y exigirle los requisitos de la siguiente la
+// dejaba en `ask_human`. En el mismo segundo no se sabe cuál fue antes, y en la duda se valida.
+const closedBefore = (s, entry) => Number.isFinite(s.tasks.mtime) && sameSecond(entry.date) < sameSecond(s.tasks.mtime);
 
 function checklistIssues(s) {
   const facts = { mobile: !!s.platform?.mobile, scope: reviewScope(s), requirements: requirementsOf(s.tasks.current) };
   const delivered = s.memory?.entries || [];
   return rolesOf(s).flatMap((role) => {
     const entry = entryOf(s, role);
-    if (!entry) return [];
+    if (!entry || closedBefore(s, entry)) return [];
     const found = [
       ...(role.checklist ? checklistProblems(entry, { kind: role.checklist, ...facts }) : []),
       ...confirmationProblems(entry, delivered),

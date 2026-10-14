@@ -1,11 +1,12 @@
 # Gate hooks (optional)
 
-Three hooks, and the second one matters more than it looks:
+Four hooks, and the second one matters more than it looks:
 
 1. **Record what you write** — so the gate reviews **your task** and not the whole tree.
 2. **Check when a turn ends** — run the gate as soon as a turn is over, without you remembering.
 3. **Guards** — the assistant asks before committing or pushing, and cannot read credentials or
    delete outside the project.
+4. **Activity** — the live board (`node .chalc/live.mjs`) shows what each agent is doing.
 
 **chalc does not install them.** A hook runs on its own, and `.claude/settings.json` is committed:
 enabling it from here would impose it on everyone who clones this repo, who asked for nothing. So the
@@ -124,6 +125,34 @@ fails, it exits silently: a hook that breaks the turn is worse than no hook.
 **Limit, plainly:** it raises the bar, it is not unbreakable. It reads commands without running
 them —it does not expand variables or aliases, nor resolve symbolic links— and a deliberately
 obfuscated command can get past it. It is a net for the assistant's slips, not a security boundary.
+
+## 4. Activity for the live board
+
+`node .chalc/live.mjs` starts a local page with the project's state. With this hook it also shows, live,
+what each one is doing: the main agent and each role (`seguridad`, `revisor`, `endurecedor`) —which tool,
+on which file or with which command, and when each role starts and finishes—.
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "node .chalc/live/record.mjs" }] }
+    ],
+    "SubagentStart": [{ "hooks": [{ "type": "command", "command": "node .chalc/live/record.mjs" }] }],
+    "SubagentStop": [{ "hooks": [{ "type": "command", "command": "node .chalc/live/record.mjs" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "node .chalc/live/record.mjs" }] }]
+  }
+}
+```
+
+What is recorded in `.chalc/activity.jsonl` is **who, what and where**, never the contents: not what is
+written to a file, not what a tool answers, not a role's prompt. Anything that could be a secret is
+redacted, and the file keeps only the last 500 actions. If something fails, the hook exits silently. If you
+already have a `PreToolUse` (the guard), add this entry to the same array.
+
+With the same hook the board counts the **tokens and time of each task**: on each event it reads only what
+is new in the session transcript (and, when a role finishes, its own), counts each message once and charges
+it to the task in progress, in `.chalc/usage.json`. Numbers only, never text from the transcript.
 
 ## If you don't enable them
 

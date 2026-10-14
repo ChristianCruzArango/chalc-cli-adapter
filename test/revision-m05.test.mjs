@@ -49,14 +49,14 @@ test('R32: the Cursor skill rule is written in the spec language', async () => {
 
 test('R32: the targets plan preview uses the UI language for its words, from one helper', async () => {
   const methods = [{ id: 'sdd', mode: 'full' }];
-  for (const name of ['claude', 'codex', 'copilot', 'gemini', 'cursor']) {
+  for (const name of ['claude', 'codex', 'copilot', 'antigravity', 'cursor']) {
     const target = await import(`../targets/${name}.mjs`);
     const projectPath = await mkdtemp(join(tmpdir(), 'chalc-m05p-'));
     const { plan } = await target.apply({ projectPath, CATALOG, skills: [], mcps: [], methods, stacks: [], specLang: '', dryRun: true });
     assert.ok(plan.some((l) => l.startsWith(t('planMethod').padEnd(10))), name);
     assert.ok(!plan.some((l) => /método|scaffold \+ reglas|hook opcional|bloque chalc/.test(l)) || t('planMethod') === 'método', name);
   }
-  for (const name of ['claude', 'codex', 'copilot', 'gemini', 'cursor']) {
+  for (const name of ['claude', 'codex', 'copilot', 'antigravity', 'cursor']) {
     assert.doesNotMatch(readFileSync(join(ROOT, 'targets', `${name}.mjs`), 'utf8'), /`método {4}/, name);
   }
 });

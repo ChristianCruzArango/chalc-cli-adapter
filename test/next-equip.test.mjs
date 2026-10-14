@@ -1,7 +1,7 @@
 // T14 (R1, R4) — el advisor llega al repo al equiparlo, con CUALQUIER CLI.
 //
 // Este es el cable que hace real todo lo anterior. chalc es un equipador: el usuario elige su CLI
-// —Claude Code, Codex, Copilot, Cursor o Gemini— y espera que al equipar quede TODO resuelto dentro
+// —Claude Code, Codex, Copilot, Cursor o Antigravity— y espera que al equipar quede TODO resuelto dentro
 // del repo, sin pasos manuales después. `equipForSpec` es el único punto por el que pasan los tres
 // consumidores (mono-repo, full-stack y worktree), así que emitir ahí los cubre a los tres.
 //
@@ -17,7 +17,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { equipForSpec } from '../lib/commands/equip.mjs';
 
-const TARGETS = ['claude', 'codex', 'copilot', 'cursor', 'gemini'];
+const TARGETS = ['claude', 'codex', 'copilot', 'cursor', 'antigravity'];
 
 async function project(files = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'chalc-next-equip-'));

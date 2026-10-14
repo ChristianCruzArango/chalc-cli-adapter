@@ -90,7 +90,7 @@ test('R15 — sigue prohibido tocar cualquier OTRO archivo', async () => {
 
 // ── T18: en los cinco CLIs ────────────────────────────────────────────────────────────────────
 
-for (const target of ['claude', 'codex', 'copilot', 'cursor', 'gemini']) {
+for (const target of ['claude', 'codex', 'copilot', 'cursor', 'antigravity']) {
   test(`R15 — con el target ${target}, el repo equipado lleva la instrucción de anotar`, async () => {
     const proj = await jest();
     await equipForSpec(proj, 'lite', target, { specLang: 'español' });

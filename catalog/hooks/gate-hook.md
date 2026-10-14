@@ -1,11 +1,12 @@
 # Hooks del portón (opcionales)
 
-Tres hooks, y el segundo importa más de lo que parece:
+Cuatro hooks, y el segundo importa más de lo que parece:
 
 1. **Anotar lo que escribes** — para que el portón revise **tu tarea** y no el árbol entero.
 2. **Avisar al terminar un turno** — correr el portón en cuanto acaba un turno, sin que te acuerdes tú.
 3. **Guardas** — que el asistente pregunte antes de commitear o hacer push, y no pueda leer
    credenciales ni borrar fuera del proyecto.
+4. **Actividad** — que el tablero en vivo (`node .chalc/live.mjs`) muestre qué hace cada agente.
 
 **chalc no los instala.** Un hook se ejecuta solo, y `.claude/settings.json` va commiteado: activarlo
 desde aquí se lo impondría a todo el que clone este repo, que no pidió nada. Así que los bloques
@@ -124,6 +125,34 @@ sin decir nada: un hook que rompe el turno es peor que no tener hook.
 **Límite, dicho claro:** sube el listón, no es inviolable. Lee los comandos sin ejecutarlos —no
 expande variables ni alias, ni resuelve enlaces simbólicos— y un comando ofuscado a propósito puede
 esquivarla. Es una red para los olvidos del asistente, no una frontera de seguridad.
+
+## 4. Actividad para el tablero en vivo
+
+`node .chalc/live.mjs` levanta una página local con el estado del proyecto. Con este hook, además, muestra
+en vivo qué hace cada uno: el agente principal y cada rol (`seguridad`, `revisor`, `endurecedor`) —qué
+herramienta usa, sobre qué archivo o con qué comando, y cuándo entra y sale cada rol—.
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "node .chalc/live/record.mjs" }] }
+    ],
+    "SubagentStart": [{ "hooks": [{ "type": "command", "command": "node .chalc/live/record.mjs" }] }],
+    "SubagentStop": [{ "hooks": [{ "type": "command", "command": "node .chalc/live/record.mjs" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "node .chalc/live/record.mjs" }] }]
+  }
+}
+```
+
+Lo que se registra en `.chalc/activity.jsonl` es **quién, qué y dónde**, nunca el contenido: ni lo que se
+escribe en un archivo, ni lo que responde una herramienta, ni el prompt de un rol. Lo que pudiera ser un
+secreto se redacta, y el archivo guarda solo las últimas 500 acciones. Si algo falla, el hook sale sin decir
+nada. Si ya tienes un `PreToolUse` (la guarda), añade esta entrada al mismo array.
+
+Con el mismo hook el tablero cuenta los **tokens y el tiempo de cada tarea**: en cada evento lee solo lo
+nuevo del transcript de la sesión (y, al salir un rol, el suyo), cuenta cada mensaje una vez y lo carga a la
+tarea en curso, en `.chalc/usage.json`. Solo cifras, nunca texto del transcript.
 
 ## Si no los activas
 

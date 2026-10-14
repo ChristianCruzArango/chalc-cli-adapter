@@ -70,15 +70,17 @@ test('loadProject usa el layout correcto por target (copilot → clave "servers"
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('loadProject: cursor no tiene archivo de reglas único (rulesFile null) y skills en .chalc/skills', async () => {
+// Desde la spec 021 (R4) Cursor lee AGENTS.md: ya tiene archivo de reglas, como el resto.
+test('loadProject: cursor lee AGENTS.md y sus skills están en .chalc/skills', async () => {
   const dir = await makeProject({
     '.chalc.json': JSON.stringify({ target: 'cursor', skills: ['clean-code'], mcp: [] }),
-    '.chalc/skills/clean-code/SKILL.md': '---\nname: clean-code\n---\n'
+    '.chalc/skills/clean-code/SKILL.md': '---\nname: clean-code\n---\n',
+    'AGENTS.md': '# reglas\n'
   });
   try {
     const p = await loadProject(dir);
     assert.ok(p.paths.skillsDir.endsWith(join('.chalc', 'skills')));
-    assert.equal(p.paths.rulesFile, null);
+    assert.equal(p.paths.rulesFile, join(dir, 'AGENTS.md'));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 

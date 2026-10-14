@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // Raíces de código ejecutable que se distribuyen (package.json "files"). Del catálogo, solo lo que se ejecuta.
-const SOURCE_ROOTS = ['bin', 'cli', 'lib', 'targets', 'catalog/gate', 'catalog/next', 'catalog/memory', 'catalog/mail'];
+const SOURCE_ROOTS = ['bin', 'cli', 'lib', 'targets', 'catalog/gate', 'catalog/next', 'catalog/memory', 'catalog/mail', 'catalog/live'];
 
 // Módulos que ningún test carga EN PROCESO, con el motivo. La cobertura en proceso no los ve. (Los
 // comandos de lib/commands se cargan desde el registro de verbos —lib/commands/verbs.mjs, M-04—.)

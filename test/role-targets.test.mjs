@@ -25,7 +25,7 @@ const roles = await loadRoles();
 
 // Targets con modelo de permisos por agente, y sin él.
 const WITH_PERMISSIONS = ['claude'];
-const WITHOUT_PERMISSIONS = ['codex', 'copilot', 'cursor', 'gemini'];
+const WITHOUT_PERMISSIONS = ['codex', 'copilot', 'cursor', 'antigravity'];
 
 async function equipWith(name, specLang = 'español') {
   const dir = await mkdtemp(join(tmpdir(), 'chalc-role-targets-'));

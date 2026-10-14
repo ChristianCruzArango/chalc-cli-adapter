@@ -15,7 +15,8 @@
 //
 // El rol lo añadió la spec 009 (R8) y no es decorativo: con varios roles de revisión, una entrada
 // anónima daría por cubierto a cualquiera de ellos. Una entrada sin rol no se interpreta.
-const ENTRY = /^##[ \t]+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)[ \t]*·[ \t]*([0-9a-f]+)[ \t]*·[ \t]*([a-z][a-z0-9-]*)[ \t]*·[ \t]*(OK|FINDINGS:[ \t]*\d+)[ \t]*$/;
+// Exportada para el tablero (spec 020, R18): lee la bitácora con esta MISMA gramática.
+export const ENTRY = /^##[ \t]+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)[ \t]*·[ \t]*([0-9a-f]+)[ \t]*·[ \t]*([a-z][a-z0-9-]*)[ \t]*·[ \t]*(OK|FINDINGS:[ \t]*\d+)[ \t]*$/;
 
 const NONE = { exists: false, date: 0, commit: '', role: '', ok: false, findings: 0 };
 

@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process';
 import { isUserSource } from './sources.mjs';
 import { readBaseline } from './baseline.mjs';
 import { readTouched } from './touched.mjs';
-import { resolveScope } from './scope.mjs';
+import { resolveScope, touchedFiles } from './scope.mjs';
 import { parseHunks, removedByFile } from './hunks.mjs';
 
 // Salida de un comando de git, o null si git no está o el repo no existe.
@@ -86,10 +86,13 @@ export async function taskScope(root) {
   const registry = await readTouched(root, { since: baseline.date });
 
   const ref = baseline.commit || await mergeBase(root);
-  const diff = await changedSince(root, ref);
+  // Una sola lectura de git: `resolveScope` se queda con el código (lo que revisa el portón) y `touched`
+  // con todo lo que la tarea cambió.
+  const diff = await changedPaths(root, ref);
 
   return {
     ...resolveScope({ registry: registry.files, diff, diffSource: baseline.exists ? 'baseline' : 'branch' }),
+    touched: touchedFiles(registry.files, diff),
     from: ref,
     ...await changedLineInfo(root, ref),
     staleRegistry: registry.stale
@@ -133,7 +136,10 @@ export const isRepo = async (root) => !!await git(['rev-parse', '--is-inside-wor
 // que un rebase se llevó por delante—. `null` no es `[]`: uno significa «no sé» y el otro «no
 // cambió nada». Confundirlos es exactamente lo que la spec 013 vino a quitar, porque el segundo
 // pasa por aprobado y el primero tiene que bloquear (R4b, R13).
-export async function changedSince(root, ref) {
+//
+// Aquí va todo lo cambiado, también configuración y documentación (spec 020, R15): las citas de un rol valen
+// contra eso. Lo que el portón revisa —solo el código— lo da `changedSince`.
+export async function changedPaths(root, ref) {
   if (!await isRepo(root)) return null;
 
   const found = new Set();
@@ -162,7 +168,12 @@ export async function changedSince(root, ref) {
     }
   }
 
-  return [...found].map((f) => f.replace(/\\/g, '/')).filter(isUserSource).sort();
+  return [...found].map((f) => f.replace(/\\/g, '/')).sort();
+}
+
+/** Lo cambiado desde `ref` que el portón revisa: el código del usuario. `null` sin repo. */
+export async function changedSince(root, ref) {
+  return (await changedPaths(root, ref))?.filter(isUserSource) ?? null;
 }
 
 // El punto del que salió la rama. Se prueban las bases habituales; la primera que exista manda.

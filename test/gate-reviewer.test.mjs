@@ -52,7 +52,7 @@ async function assistantText(dir) {
   return parts.join('\n');
 }
 
-const TARGETS = ['claude', 'codex', 'copilot', 'cursor', 'gemini'];
+const TARGETS = ['claude', 'codex', 'copilot', 'cursor', 'antigravity'];
 
 // ── el revisor llega en los cinco formatos ────────────────────────────────────────────────────
 
@@ -96,11 +96,12 @@ test('the claude reviewer can only write its own logbook, nothing else', async (
   assert.match(agent, /\.chalc\/review\.md/, 'la plantilla acota por escrito a qué archivo');
 });
 
-test('the cursor target writes the reviewer as one of its rules', async () => {
+// Desde la spec 021 (R4) Cursor lee AGENTS.md: el revisor va en el bloque, no en una regla `.mdc` aparte.
+test('the cursor target writes the reviewer in the AGENTS.md block', async () => {
   const dir = await equipWith('cursor');
 
-  // El nombre deriva del contrato desde la spec 009: `chalc-<id>.mdc`.
-  assert.ok(existsSync(join(dir, '.cursor', 'rules', 'chalc-revisor.mdc')));
+  assert.match(await readFile(join(dir, 'AGENTS.md'), 'utf8'), /revisor/i);
+  assert.ok(!existsSync(join(dir, '.cursor', 'rules', 'chalc-revisor.mdc')));
 });
 
 // ── qué dice el revisor ───────────────────────────────────────────────────────────────────────

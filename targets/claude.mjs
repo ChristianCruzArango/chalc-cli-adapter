@@ -7,7 +7,7 @@
 //   - .chalc.json                 (manifiesto)
 
 import { cp } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as kit from '../lib/targetkit.mjs';
 
@@ -21,6 +21,7 @@ function planOf({ skills, mcps, methods, roles }) {
   for (const m of mcps) plan.push(`mcp       .mcp.json  ::  ${m.id}`);
   for (const me of methods) plan.push(kit.methodPlanLine(me, kit.planNote('planScaffoldRules')));
   plan.push(`rules     CLAUDE.md  ${kit.planNote('planChalcBlock')}`);
+  plan.push(`command   ${kit.liveCommandFile('claude')}`);
   plan.push('manifest  .chalc.json');
   return plan;
 }
@@ -28,10 +29,23 @@ function planOf({ skills, mcps, methods, roles }) {
 // El bloque de CLAUDE.md que chalc gestiona: lo común a todo target (kit.blockSections) y, en medio,
 // las skills activas — Claude Code las carga solo de .claude/skills, así que basta con nombrarlas.
 // Los roles no van aquí: en Claude son subagentes propios (.claude/agents).
+//
+// Con AGENTS.md en el proyecto, Claude Code solo lo lee si CLAUDE.md lo importa (spec 021, R5): se importa.
+// Y si AGENTS.md ya lleva el bloque de chalc (el repo está equipado también para otro harness), lo común no se
+// repite aquí: quedan el import y lo propio de Claude, sus skills activas.
 function managedBlock({ projectPath, skills, mcps, methods, architecture, specLang }) {
-  const { head, tail } = kit.blockSections({ projectPath, skills, mcps, methods, architecture, specLang });
+  const agents = agentsFile(projectPath);
+  const { head, tail } = agents.hasChalc ? { head: [], tail: [] } : kit.blockSections({ projectPath, skills, mcps, methods, architecture, specLang });
   const active = skills.length ? ['', `### ${kit.blockText(specLang).skillsActive}`, ...skills.map((s) => `- \`${s}\``)] : [];
-  return [kit.START, '## ⚙️ Chalc', ...head, ...active, ...tail, kit.END].join('\n');
+  const imported = agents.exists ? ['', '@AGENTS.md'] : [];
+  return [kit.START, '## ⚙️ Chalc', ...imported, ...head, ...active, ...tail, kit.END].join('\n');
+}
+
+// ¿Tiene el proyecto AGENTS.md, y lleva ya el bloque de chalc?
+function agentsFile(projectPath) {
+  const path = join(projectPath, 'AGENTS.md');
+  if (!existsSync(path)) return { exists: false, hasChalc: false };
+  return { exists: true, hasChalc: readFileSync(path, 'utf8').includes(kit.START) };
 }
 
 export async function apply({ projectPath, CATALOG, skills, mcps, methods, stacks, architecture, specLang, dryRun, tools = null, roles = [], force = false }) {
@@ -51,7 +65,7 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
 
   // 3b) Revisor: en Claude Code va como SUBAGENTE propio, no como un párrafo más de CLAUDE.md.
   // Así se invoca a voluntad al cerrar cada tarea, y sus herramientas son de solo lectura (R12).
-  for (const role of roles) await kit.writeRole(projectPath, CATALOG, role, { skills, specLang, kind: 'agent' });
+  for (const role of roles) await kit.writeRole(projectPath, CATALOG, role, { skills, specLang });
 
   // 3c) Hook de cierre de turno: se DOCUMENTA, no se instala. `.claude/settings.json` va commiteado,
   // así que activarlo aquí le ejecutaría un comando a todo el que clone el repo (R19).
@@ -59,6 +73,9 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
 
   // 4) CLAUDE.md (bloque gestionado)
   await kit.writeManagedBlock(join(projectPath, 'CLAUDE.md'), managedBlock({ projectPath, skills, mcps, methods, architecture, specLang }));
+
+  // 4b) El comando explícito que levanta el tablero (spec 021, R9): `/chalc-live`.
+  await kit.writeLiveCommand(projectPath, 'claude', specLang);
 
   // 5) Manifiesto
   await kit.writeManifest(projectPath, 'claude', { stacks, skills, mcps, methods, specLang, architecture });

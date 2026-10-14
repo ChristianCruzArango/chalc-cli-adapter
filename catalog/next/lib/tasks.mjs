@@ -18,6 +18,12 @@ export function tasksProgress(markdown) {
   return { done, total: boxes.length };
 }
 
+// Todas las tareas, en orden, con si están hechas (spec 020): el tablero las lista. Mismo criterio de
+// checkbox que `tasksProgress`, para que no haya dos.
+export function taskList(markdown) {
+  return [...String(markdown ?? '').matchAll(/^\s*[-*]\s*\[([ xX])\]\s*(.+)$/gm)].map((m) => ({ done: m[1] !== ' ', text: m[2].trim() }));
+}
+
 // La tarea EN CURSO: texto de la PRIMERA pendiente. Todo hecho o vacío → ''. Ese vacío es la señal
 // de "feature terminada" que el advisor usa para `done`, así que no puede significar otra cosa.
 export function currentTask(markdown) {

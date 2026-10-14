@@ -20,7 +20,7 @@ const TARGETS = {
   codex: '.chalc/skills',
   copilot: '.chalc/skills',
   cursor: '.chalc/skills',
-  gemini: '.chalc/skills'
+  antigravity: '.agents/skills'
 };
 
 async function project(files = {}) {

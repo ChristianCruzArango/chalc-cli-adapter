@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { lintSource } from '../catalog/gate/lib/smells.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const DIRS = ['bin', 'cli', 'lib', 'targets', 'catalog/gate', 'catalog/next', 'catalog/memory', 'catalog/mail'];
+const DIRS = ['bin', 'cli', 'lib', 'targets', 'catalog/gate', 'catalog/next', 'catalog/memory', 'catalog/mail', 'catalog/live'];
 const LIMITS = { maxFileLines: 300, maxFunctionLines: 40, maxParams: 4, maxDepth: 3 };
 
 async function* sources(dir) {

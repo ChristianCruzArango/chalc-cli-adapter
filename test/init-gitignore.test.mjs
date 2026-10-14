@@ -75,6 +75,9 @@ const COMMON = [
   '# Salidas de la mutación (el portón las regenera)',
   'reports/mutation/', '.stryker-tmp/', 'StrykerOutput/', 'mutants/',
   '',
+  '# Tablero en vivo: su anuncio (puerto y pid), la actividad y los tokens de la sesión',
+  '.chalc/live.json', '.chalc/activity.jsonl', '.chalc/usage.json',
+  '',
   '# Sistema',
   '.DS_Store', 'Thumbs.db',
   ''
@@ -97,4 +100,13 @@ test('R5: what is written is exactly that content', async () => {
   const root = await dir();
   await ensureGitignore(root, 'dotnet');
   assert.equal(await readFile(join(root, '.gitignore'), 'utf8'), gitignoreFor('dotnet'));
+});
+
+// Encontrado en el E2E de la spec 020 (R14): el anuncio del tablero (puerto y pid de esta máquina), la
+// bitácora de actividad y los tokens de la sesión quedaban como cambios sin commitear. Son efímeros.
+test('R5 (spec 020, R14): the live board announcement, activity and token counts stay out of git', () => {
+  for (const stack of ['angular', 'nestjs', 'dotnet', 'flutter', 'otro']) {
+    const ignored = lines(gitignoreFor(stack));
+    for (const entry of ['.chalc/live.json', '.chalc/activity.jsonl', '.chalc/usage.json']) assert.ok(ignored.includes(entry), `${stack}: ${entry}`);
+  }
 });

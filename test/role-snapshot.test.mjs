@@ -67,23 +67,20 @@ test('R14 — las herramientas concedidas hoy son exactamente estas', async () =
   assert.deepEqual(tools, ['Bash', 'Glob', 'Grep', 'Read', 'Write']);
 });
 
-// ── Cursor: regla ─────────────────────────────────────────────────────────────────────────────
-
-// ÚNICO cambio deliberado respecto de la instantánea original: el archivo pasa de
-// `chalc-reviewer.mdc` —un nombre en inglés cableado— a `chalc-<id>.mdc`, derivado del contrato.
-// Con varios roles, un nombre fijo no serviría. El huérfano no es un problema: `cleanPrefixed` ya
-// barre las reglas `chalc-*` obsoletas antes de escribir, así que re-equipar un repo de la spec 007
-// se lleva el archivo viejo.
-test('R14 — cursor proyecta el revisor como regla propia, nombrada por su contrato', async () => {
+// ── Cursor: desde la spec 021 (R4), el revisor va en el bloque de AGENTS.md, como en el resto ──────
+//
+// Cursor lee AGENTS.md; una regla `.mdc` aparte por rol duplicaba lo mismo en otro formato. Re-equipar un repo
+// de antes se lleva la regla vieja: `cleanPrefixed` barre las `chalc-*` que no sean de skills.
+test('R14 — cursor proyecta el revisor dentro del bloque de AGENTS.md, sin regla propia', async () => {
   const proj = await equipped('cursor');
 
-  assert.ok(existsSync(join(proj, '.cursor', 'rules', 'chalc-revisor.mdc')));
-  assert.ok(!existsSync(join(proj, '.cursor', 'rules', 'chalc-reviewer.mdc')), 'no puede quedar el nombre viejo');
+  assert.match(await readFile(join(proj, 'AGENTS.md'), 'utf8'), /Agente revisor|Reviewer agent/i);
+  assert.ok(!existsSync(join(proj, '.cursor', 'rules', 'chalc-revisor.mdc')), 'no puede quedar la regla vieja');
 });
 
-// ── Codex, Copilot y Gemini: sección del bloque gestionado ────────────────────────────────────
+// ── Codex, Copilot, Antigravity y Cursor: sección del bloque gestionado (AGENTS.md) ────────────────────────────────────
 
-for (const target of ['codex', 'copilot', 'gemini']) {
+for (const target of ['codex', 'copilot', 'antigravity', 'cursor']) {
   test(`R14 — ${target} proyecta el revisor dentro de su bloque gestionado`, async () => {
     const text = await emittedText(await equipped(target));
 

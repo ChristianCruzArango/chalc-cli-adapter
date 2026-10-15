@@ -14,7 +14,7 @@
 // Devuelve `{ decision, rule, data }`: `rule` es un id de `RULES` que `i18n.mjs` convierte en frase, y
 // `data` lo que esa frase necesita. Aquí no hay idioma.
 
-import { gitSubcommand, programOf, shellJoin, simpleCommands } from './shellwords.mjs';
+import { gitSubcommand, programOf, shellJoin, shellScript, simpleCommands } from './shellwords.mjs';
 import { isEnvTemplate, isSecretFile } from './secret-files.mjs';
 import { deleteRule } from './guard-delete.mjs';
 import { RULES } from './rules.mjs';
@@ -115,11 +115,21 @@ function placeOf(event, { root } = {}) {
   return { root: root || cwd, cwd: cwd || root || '' };
 }
 
+// R10 (spec 023): `bash -c "git push"` ejecuta el push dentro de una cadena. A cada comando simple se le suman
+// los de su script, hasta MAX_SHELL_DEPTH niveles para no recorrer sin fin. Solo para las reglas de comando:
+// un `cd` dentro del script no mueve la shell de fuera, así que el borrado sigue leyendo la cadena original.
+const MAX_SHELL_DEPTH = 3;
+
+// Sin script, `shellScript` da null y `simpleCommands(null)` ningún comando: no hace falta otra rama.
+const withScripts = (commands, depth = 0) => commands.flatMap((words) => (depth < MAX_SHELL_DEPTH
+  ? [words, ...withScripts(simpleCommands(shellScript(words)), depth + 1)]
+  : [words]));
+
 /** El veredicto de la guarda para un evento `PreToolUse`: `{ decision: 'allow'|'ask'|'deny', rule, data }`. */
 export function decide(event, options = {}) {
   const commands = simpleCommands(commandOf(event));
   const byTool = TOOL_RULES.map((rule) => rule(event));
-  const byCommand = commands.flatMap((words) => COMMAND_RULES.map((rule) => rule(words)));
+  const byCommand = withScripts(commands).flatMap((words) => COMMAND_RULES.map((rule) => rule(words)));
   const byChain = deleteRule(commands, placeOf(event, options));
   return [...byTool, ...byCommand, byChain].filter(Boolean).reduce(mostSevere, ALLOW);
 }

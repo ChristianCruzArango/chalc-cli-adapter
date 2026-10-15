@@ -414,7 +414,7 @@ chalc/
 │   ├── profiles/            per-task model profiles (chalc-default.json: spec/qa/repair)
 │   ├── methods/sdd/         the SDD method (constitution, es/en templates, rules, graphic)
 │   ├── agents/              the review roles: contract + prompt (es/en) per folder; `_shared/` is the text they all get
-│   ├── hooks/               the opt-in hooks (recorder, turn-end check, guards), documented — never installed
+│   ├── hooks/               the opt-in hooks (recorder, turn-end check, guards), documented — only the guard is installed, and only with --guard
 │   ├── gate/                the quality gate: real code copied into `.chalc/` when equipping
 │   ├── next/                the flow advisor: decides the ONE next action of the task cycle
 │   ├── live/                the live board: local page with the state and each agent's activity
@@ -1001,6 +1001,7 @@ looks at every action before it happens:
 |---|---|
 | `git commit`, `git push` | it asks you: the go-ahead is yours, at the exact moment |
 | forced push (`--force`, `-f`, `--force-with-lease`, `+branch`) | blocked |
+| the same inside a shell (`bash -c "git push"`, `sh -c`, `zsh -c`) | same as typed directly |
 | reading credentials (`.env`, `.envrc`, SSH keys, `.npmrc`, `*.pem`, `*.tfvars`, `kubeconfig`, `.docker/config.json`…) by any tool or command | blocked; `.env.example` and other value-less templates can be read |
 | `Grep` that returns content over a whole folder (it could pull a secret line by line) | it asks you; narrowed by `type` or a concrete `glob` it passes |
 | `rm`, `rmdir`, `find -delete` outside the project, on the whole project, or on an unresolvable target (`$VAR`, `$(…)`, `~`, `{a,b}`) | blocked; deleting inside the project works as usual |
@@ -1008,8 +1009,22 @@ looks at every action before it happens:
 When the action passes it answers nothing (answering `allow` would bypass your permissions), it never
 breaks or hangs the turn, and the reason comes in the repo's language. **Honest limit:** it reads
 commands without running them, so it raises the bar but is not unbreakable — it is a net for the
-assistant's slips, not a security boundary. Like the other hooks, chalc documents it and never
-installs it.
+assistant's slips, not a security boundary.
+
+Unlike the other hooks, chalc can install this one, **only if you ask for it**, and only in your local
+file `.claude/settings.local.json` (never in the committed `.claude/settings.json`). `chalc init` asks you,
+with yes by default; elsewhere it takes the flag:
+
+```bash
+chalc --guard        # enables the guard + "ask" permissions for git commit / git push
+chalc --no-guard     # removes only what chalc added; the rest of your settings stays
+```
+
+Next to the hook it writes two native `ask` permissions (`Bash(git commit *)`, `Bash(git push *)`), which
+Claude Code applies even inside a chain (`npm test && git push`). When you tell it to commit or push, you
+accept the prompt and it happens; if you did not, you reject it. Whatever was already in the file is kept, a
+file that is not valid JSON is left untouched with a warning, and the file is added to the `.gitignore`.
+Claude Code only: with another assistant `--guard` warns and writes nothing.
 
 ### Live board: see where it is while it works
 

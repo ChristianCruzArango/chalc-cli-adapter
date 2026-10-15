@@ -97,8 +97,15 @@ function substitution(r, ch) {
   return false;
 }
 
-function quoted(r, ch) {
+// Entre comillas dobles, `\` solo escapa estos (POSIX); ante cualquier otro carácter la barra se queda. Sin
+// esto, `sh -c "bash -c \"git push\""` se partía y el comando de dentro no se veía (spec 023, R10).
+// Al final del texto, `text[i + 1]` no existe y `test(undefined)` da false: la barra se queda.
+const DOUBLE_QUOTE_ESCAPABLE = /["\\$`\n]/;
+
+function quoted(r, text, i) {
+  const ch = text[i];
   if (ch === r.quote) r.quote = '';
+  else if (r.quote === '"' && ch === '\\' && DOUBLE_QUOTE_ESCAPABLE.test(text[i + 1])) r.escape = true;
   else if (r.quote === "'" || !substitution(r, ch)) r.cur += ch;
 }
 
@@ -119,9 +126,10 @@ export function simpleCommands(cmd) {
   const text = String(cmd ?? '');
   for (let i = 0; i < text.length; i++) {
     // `${NAME}` es UNA palabra: sus llaves no son las de un grupo `{ …; }`.
-    // Tras `\` fuera de comillas, el carácter es literal: `find . \( -name a \)` no abre un subshell.
+    // Tras `\` fuera de comillas (o dentro de dobles, ver `quoted`), el carácter es literal:
+    // `find . \( -name a \)` no abre un subshell.
     if (r.escape) { r.cur += text[i]; r.escape = false; }
-    else if (r.quote) quoted(r, text[i]);
+    else if (r.quote) quoted(r, text, i);
     else unquoted(r, text, i);
   }
   // Una comilla o una sustitución sin cerrar no se rechaza: aquí no se ejecuta nada, y lo leído hasta el
@@ -157,4 +165,24 @@ export function programOf(words) {
     break;
   }
   return i < words.length ? [baseName(words[i]), ...words.slice(i + 1)] : [];
+}
+
+// Una shell lanzada con `-c` ejecuta la cadena que sigue a sus opciones (spec 023, R10): `bash -c "git push"`
+// es un push aunque el programa sea `bash`. La `c` cuenta también agrupada (`-lc`). `-o`/`-O` consumen su
+// valor: en `bash -o c x.sh` la `c` es una opción de `set`, no un script.
+const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash']);
+const SHELL_OPTION_WITH_VALUE = new Set(['-o', '+o', '-O', '+O']);
+const COMMAND_OPTION = /^-[a-zA-Z]*c[a-zA-Z]*$/;
+
+/** La cadena que ejecuta una shell lanzada con `-c` (`bash -c "git push"` → `git push`), o null. */
+export function shellScript(words) {
+  const [program, ...args] = programOf(words);
+  if (!SHELLS.has(program)) return null;
+  let command = false;
+  for (let i = 0; i < args.length; i++) {
+    if (SHELL_OPTION_WITH_VALUE.has(args[i])) { i++; continue; }
+    if (!/^[-+]/.test(args[i])) return command ? args[i] : null;
+    command ||= COMMAND_OPTION.test(args[i]);
+  }
+  return null;
 }

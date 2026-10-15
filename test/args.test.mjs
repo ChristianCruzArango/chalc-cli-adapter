@@ -106,3 +106,27 @@ test('parseArgs accepts the dashboard console/watch flags (spec 006)', () => {
   assert.equal(flags.console, true);
   assert.equal(flags.watch, false);
 });
+
+// spec 023 (R14, R15) — --guard activa la guarda de commit y push, --no-guard la quita; sin el flag no hay
+// clave (la guarda no se toca). Es booleana: no se come la ruta que va detrás.
+test('parseArgs maps --guard to true and --no-guard to false (spec 023)', () => {
+  const { flags, positional } = parseArgs(['init', '--guard', 'node', 'demo']);
+  assert.equal(flags.guard, true);
+  assert.deepEqual(positional, ['init', 'node', 'demo']);
+  assert.equal(parseArgs(['./app', '--no-guard']).flags.guard, false);
+  assert.equal(parseArgs(['--guard=false']).flags.guard, false);
+  assert.equal('guard' in parseArgs(['./app']).flags, false);
+});
+
+// Refuerzo de mutación (spec 023, T9): cada flag booleana se reconoce, vale `true` y deja la ruta que va
+// detrás como posicional. Antes de la guarda, una docena de estas no tenía ningún test que las nombrara.
+test('every boolean flag is known, is true and does not swallow the path after it', () => {
+  const booleans = ['help', 'skip-qa-inputs', 'dry-run', 'yes', 'y', 'force', 'allow-exec', 'allow-login', 'allow-external-login',
+    'plan', 'up', 'agent', 'ccr', 'repair-plan', 'rerun', 'doctor', 'verify', 'ai', 'strict', 'branch', 'full', 'json', 'check',
+    'screenshots', 'worktree', 'terminals', 'console', 'watch', 'judge', 'questions', 'guard'];
+  for (const flag of booleans) {
+    const { flags, positional } = parseArgs([`--${flag}`, './app']);
+    assert.deepEqual({ ...flags }, { [flag]: true }, flag);
+    assert.deepEqual(positional, ['./app'], flag);
+  }
+});

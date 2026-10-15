@@ -34,3 +34,7 @@ output/
 
 # Informe de revisión técnica: solo local, no se versiona
 INFORME_REVISION_TECNICA.md
+
+# Stryker (temporales y reportes de mutación)
+.stryker-tmp/
+**/reports/mutation/

@@ -9,6 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decide } from '../catalog/gate/lib/guard-rules.mjs';
+import { shellJoin } from '../catalog/gate/lib/shellwords.mjs';
 
 const bash = (command) => ({ tool_name: 'Bash', tool_input: { command } });
 const verdict = (command) => decide(bash(command));
@@ -111,4 +112,51 @@ test('R5: only the Bash tool and only a string command are read', () => {
 
 test('R11 (018): the reason quotes the command as it was written', () => {
   assert.equal(verdict('git commit -m "feat: saludo"').data.command, "git commit -m 'feat: saludo'");
+});
+
+// T2 (spec 023, R10): un comando dentro de `bash -c "…"` es tan push como uno suelto. La guarda lee la cadena
+// de la shell con las mismas reglas; hasta tres niveles de anidamiento, para no recorrer sin fin.
+const nested = (command, levels) => (levels ? nested(shellJoin(['bash', '-c', command]), levels - 1) : command);
+
+test('R10 (023): a commit or a push run through a shell with -c asks the user', () => {
+  for (const command of ['bash -c "git push"', 'sh -c "git commit -m x"', 'zsh -lc "git push origin main"', 'env bash -c "git push"']) {
+    assert.equal(verdict(command).decision, 'ask', command);
+  }
+  assert.deepEqual(verdict('bash -c "git push origin main"').data, { command: 'git push origin main' });
+});
+
+test('R10 (023): a forced push through a shell is denied', () => {
+  assert.equal(verdict('sh -c "git push -f"').decision, 'deny');
+  assert.equal(verdict('bash -c "npm test && git push --force"').decision, 'deny');
+});
+
+test('R10 (023): a chain inside the script, and a script inside a chain, are both read', () => {
+  assert.equal(verdict('bash -c "git add . && git commit -m x"').data.command, 'git commit -m x');
+  assert.equal(verdict('npm test && bash -c "git push"').decision, 'ask');
+});
+
+test('R10 (023): up to three nested shells are read; a fourth is not', () => {
+  assert.equal(verdict(nested('git push', 3)).decision, 'ask');
+  assert.equal(verdict(nested('git push', 4)).decision, 'allow');
+});
+
+// Como se escribe a mano: el nivel de dentro va entre comillas dobles escapadas (lo encontró el E2E).
+test('R10 (023): nested shells written with escaped double quotes are read too', () => {
+  assert.equal(verdict('sh -c "bash -c \\"git commit -m x\\""').decision, 'ask');
+  assert.equal(verdict('bash -c "sh -c \\"git push --force\\""').decision, 'deny');
+});
+
+test('R10 (023): a shell whose script does nothing guarded, or that runs a file, is allowed', () => {
+  for (const command of ['bash -c "ls -la"', 'bash deploy.sh', 'bash -c']) {
+    assert.equal(verdict(command).decision, 'allow', command);
+  }
+});
+
+test('R10 (023): reading a credentials file through a shell is denied like a direct read', () => {
+  assert.equal(verdict('bash -c "cat .env"').decision, 'deny');
+});
+
+test('R10 (023): a cd inside the script does not move the outer shell for the delete rule', () => {
+  const event = { ...bash('bash -c "cd /" && rm -rf dist'), cwd: process.cwd() };
+  assert.equal(decide(event).decision, 'allow');
 });

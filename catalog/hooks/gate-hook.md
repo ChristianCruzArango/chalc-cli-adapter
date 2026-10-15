@@ -10,7 +10,8 @@ Cuatro hooks, y el segundo importa más de lo que parece:
 
 **chalc no los instala.** Un hook se ejecuta solo, y `.claude/settings.json` va commiteado: activarlo
 desde aquí se lo impondría a todo el que clone este repo, que no pidió nada. Así que los bloques
-quedan aquí y los pegas tú.
+quedan aquí y los pegas tú. La única excepción es la guarda, y solo si la pides (`chalc --guard`,
+sección 3): va a tu archivo local, nunca al compartido.
 
 ## Dónde se pegan
 
@@ -124,6 +125,7 @@ antes de cada acción, la guarda la mira y decide.
 | --- | --- |
 | `git commit`, `git push` | **Te pregunta.** La orden es tuya, en el momento exacto. |
 | `git push --force`, `-f`, `--force-with-lease`, `+rama` | **Se bloquea.** Reescribe historia que otros ya tienen. |
+| Lo mismo dentro de una shell: `bash -c "git push"`, `sh -c`, `zsh -c`, `dash -c` (hasta tres niveles) | **Igual que escrito directo.** La guarda lee el comando de la cadena. |
 | Leer `.env`, `.envrc`, llaves SSH, `.npmrc`, `.pypirc`, `.netrc`, `*.pem`, `*.tfvars`, `kubeconfig`, `.docker/config.json`… cuando se NOMBRAN: `Read`, la ruta o el `glob` de `Grep`/`Glob`, o una palabra de un comando de shell | **Se bloquea.** Su contenido entraría al contexto del modelo. Las plantillas sin valores (`.env.example`, `.env.sample`, `.env.template`) sí se leen. |
 | `Grep` con `output_mode: content` sobre una carpeta (sin ruta, `.`, `src/`…) sin acotar con `glob` o `type` | **Te pregunta.** Podría volcar líneas de un `.env` que no nombra. |
 | `rm`, `rmdir` o `find … -delete` fuera del proyecto, sobre el proyecto entero, o con un destino que no se puede saber (`$VAR`, `$(…)`, `~`, `{a,b}`) | **Se bloquea.** Dentro del proyecto se borra con normalidad. |
@@ -141,7 +143,34 @@ esquivarla. Es una red para los olvidos del asistente, no una frontera de seguri
 
 Lo que **no** cubre: un comando que lee un secreto sin nombrarlo (`grep -r PASSWORD .`, `cat $(ls -a)`),
 un `Grep` que solo lista archivos o cuenta coincidencias, y cualquier archivo de credenciales con un nombre
-fuera de la lista de arriba.
+fuera de la lista de arriba. Tampoco lo que llega a git por otro camino: `eval "git push"`,
+`xargs git push` o un script en archivo (`bash deploy.sh`). Y la regla de borrados no mira dentro de
+`bash -c`.
+
+### Activarla con `--guard`
+
+En vez de pegar el bloque, `chalc --guard` lo deja en `.claude/settings.local.json` —solo tuyo, nunca
+`.claude/settings.json`—. `chalc init` te lo pregunta (con **sí** por defecto); sin terminal, solo con
+`--guard`. Junto al hook escribe dos permisos `ask`:
+
+```json
+{
+  "permissions": {
+    "ask": ["Bash(git commit *)", "Bash(git push *)"]
+  }
+}
+```
+
+Son dos capas fuera del modelo: Claude Code aplica los permisos `ask` aunque un hook diga `allow`, también
+dentro de una cadena (`npm test && git push`); el hook ve lo que un permiso por prefijo no ve
+(`git -C . push`, `/usr/bin/git push`, `bash -c "git push"`). Cuando le ordenas commitear o subir, aceptas
+el aviso y se hace; si no se lo ordenaste, lo rechazas.
+
+- Lo que ya tengas en el archivo se conserva; repetirlo no duplica nada. Si no es un JSON válido, chalc
+  no lo toca y te avisa.
+- Añade `.claude/settings.local.json` al `.gitignore`.
+- `chalc --no-guard` quita solo lo que chalc añadió; si no queda nada más, el archivo desaparece.
+- `--dry-run` lo lista sin escribir. Solo Claude Code: con otro asistente avisa y no escribe nada.
 
 ## 4. Actividad para el tablero en vivo
 

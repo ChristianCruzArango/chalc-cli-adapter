@@ -124,3 +124,11 @@ test('R5: the project root comes from CLAUDE_PROJECT_DIR, not from where the she
   const unset = await run({ stdin: bash('rm -rf ../lib', src), cwd: src });
   assert.equal(JSON.parse(unset.out).hookSpecificOutput.permissionDecision, 'deny');
 });
+
+// T2 (spec 023, R10): el caso que se escapaba, ahora desde el proceso real, como lo lanza Claude Code.
+test('R10 (023): as a process, a push wrapped in bash -c asks the user', async () => {
+  const root = await project();
+  const { code, out } = await run({ stdin: bash('bash -c "git push"', root), cwd: root, env: { CLAUDE_PROJECT_DIR: root } });
+  assert.equal(code, 0);
+  assert.equal(JSON.parse(out).hookSpecificOutput.permissionDecision, 'ask');
+});

@@ -73,3 +73,32 @@ test('R7: the document counts four hooks now', async () => {
   assert.match(await read('gate-hook.md'), /^Cuatro hooks/m);
   assert.match(await read('gate-hook.en.md'), /^Four hooks/m);
 });
+
+// spec 023 (R12) — la guarda ya no solo se pega: `--guard` la activa en el archivo LOCAL con dos permisos `ask`,
+// `--no-guard` la quita, ve dentro de `bash -c`, y el documento dice hasta dónde llega eso.
+test('spec 023 R12: the document explains --guard, --no-guard, the local file and the bash -c case', async () => {
+  for (const file of DOCS) {
+    const doc = await read(file);
+    for (const pattern of [/chalc --guard/, /--no-guard/, /\.claude\/settings\.local\.json/, /bash -c/, /eval/, /xargs/, /bash deploy\.sh/]) {
+      assert.match(doc, pattern, `${file}: ${pattern}`);
+    }
+  }
+});
+
+test('spec 023 R12: the documented ask permissions are exactly the ones --guard writes', async () => {
+  const { GUARD_ASK } = await import(new URL('../lib/guardsettings.mjs', import.meta.url).href);
+  for (const file of DOCS) {
+    const block = jsonBlocks(await read(file)).map((b) => JSON.parse(b)).find((b) => b.permissions);
+    assert.deepEqual(block?.permissions, { ask: [...GUARD_ASK] }, file);
+  }
+});
+
+// spec 023 (R12) — los dos README cuentan lo mismo: cómo se activa, cómo se quita y dónde queda.
+test('spec 023 R12: both READMEs explain how to enable and remove the guard, and where it goes', async () => {
+  for (const file of ['README.md', 'README.es.md']) {
+    const doc = (await readFile(join(ROOT, file), 'utf8')).replace(/\r\n/g, '\n');
+    for (const pattern of [/chalc --guard/, /chalc --no-guard/, /\.claude\/settings\.local\.json/, /bash -c/]) {
+      assert.match(doc, pattern, `${file}: ${pattern}`);
+    }
+  }
+});

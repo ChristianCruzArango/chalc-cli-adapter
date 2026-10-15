@@ -8,7 +8,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { commandTokens, gitSubcommand, simpleCommands, programOf, shellJoin } from '../catalog/gate/lib/shellwords.mjs';
+import { commandTokens, gitSubcommand, simpleCommands, programOf, shellJoin, shellScript } from '../catalog/gate/lib/shellwords.mjs';
 import { readFileSync } from 'node:fs';
 
 // T12 (spec 022, R19, C8) — la shell y la política importan el tokenizador del origen, sin cadena de re-exports.
@@ -184,4 +184,55 @@ test('R11 (018): a substitution marker is shown as it is, not as quoted text', (
 
 test('R11 (018): what shellJoin writes reads back as the same words', () => {
   assert.deepEqual(commandTokens(shellJoin(['git', 'commit', '-m', 'feat: saludo', 'a b'])), ['git', 'commit', '-m', 'feat: saludo', 'a b']);
+});
+
+// T1 (spec 023, R10): `bash -c "git push"` pasaba sin decisión: el programa es `bash` y el push va dentro de
+// una cadena. `shellScript` devuelve esa cadena para que la guarda la lea como un comando propio.
+
+test('R10 (023): the script of a shell run with -c is returned as it is', () => {
+  for (const shell of ['bash', 'sh', 'zsh', 'dash']) {
+    assert.equal(shellScript([shell, '-c', 'git push']), 'git push', shell);
+  }
+  assert.equal(shellScript(['bash', '-c', 'git add . && git commit -m x']), 'git add . && git commit -m x');
+});
+
+test('R10 (023): -c also counts inside a group of short options and after other options', () => {
+  assert.equal(shellScript(['bash', '-lc', 'git push']), 'git push');
+  assert.equal(shellScript(['bash', '-cx', 'git push']), 'git push');
+  assert.equal(shellScript(['bash', '--login', '-c', 'git push']), 'git push');
+  // `-o`/`-O` (y sus formas `+`) consumen su valor: `pipefail` no es el script.
+  for (const option of ['-o', '+o', '-O', '+O']) {
+    assert.equal(shellScript(['bash', option, 'pipefail', '-c', 'git push']), 'git push', option);
+  }
+  assert.equal(shellScript(['bash', '-c', '--', 'git push']), 'git push');
+});
+
+test('R10 (023): the shell is found through paths, .exe and wrappers', () => {
+  assert.equal(shellScript(['/bin/bash', '-c', 'git push']), 'git push');
+  assert.equal(shellScript(['C:\\Git\\bin\\bash.exe', '-c', 'git push']), 'git push');
+  assert.equal(shellScript(['env', 'bash', '-c', 'git push']), 'git push');
+  assert.equal(shellScript(['GIT_TRACE=1', 'sudo', 'sh', '-c', 'git push']), 'git push');
+});
+
+test('R10 (023): without -c, without a script or with another program there is no script', () => {
+  assert.equal(shellScript(['bash', 'deploy.sh']), null);
+  assert.equal(shellScript(['bash', '-x', 'deploy.sh']), null);
+  assert.equal(shellScript(['bash', '-c']), null);
+  assert.equal(shellScript(['bash', '--norc', 'deploy.sh']), null);
+  assert.equal(shellScript(['bash', '-c1', 'deploy.sh']), null);
+  assert.equal(shellScript(['fish', '-c', 'git push']), null);
+  assert.equal(shellScript(['echo', '-c', 'git push']), null);
+  assert.equal(shellScript([]), null);
+});
+
+// Dentro de comillas dobles, `\` escapa `"`, `\`, `$`, `` ` `` y el salto de línea (POSIX); con cualquier otro
+// carácter la barra se queda. Entre comillas simples no escapa nada. Sin esto, un `bash -c` anidado con
+// comillas escapadas se partía y su `git commit` no se veía (lo encontró el E2E de la spec 023).
+test('R10 (023): a backslash escapes the special characters inside double quotes, and only there', () => {
+  assert.deepEqual(simpleCommands('git commit -m "say \\"hi\\""'), [['git', 'commit', '-m', 'say "hi"']]);
+  assert.deepEqual(simpleCommands('echo "a\\\\b" "c\\$d" "e\\`f"'), [['echo', 'a\\b', 'c$d', 'e`f']]);
+  assert.deepEqual(simpleCommands('echo "a\\nb"'), [['echo', 'a\\nb']]);
+  assert.deepEqual(simpleCommands("echo 'a\\'"), [['echo', 'a\\']]);
+  assert.deepEqual(simpleCommands("echo 'a\\\"b'"), [['echo', 'a\\"b']]);
+  assert.deepEqual(simpleCommands('echo "a\\'), [['echo', 'a\\']]);
 });

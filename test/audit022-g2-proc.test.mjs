@@ -54,9 +54,9 @@ test('T2 (spec 022, R19, C6): no module keeps its own copy of the live-children 
 });
 
 test('T2 (spec 022, R19, C6): a running shell child is tracked and released when it ends', async () => {
-  // Sin `>` ni llaves: en Windows el hijo pasa por cmd.exe, que los toma como redirección o bloque. El hijo
-  // se registra al lanzarlo (síncrono), así que se comprueba sin esperar a ciegas.
-  const run = execBounded('node -e "setTimeout(Object,300)"', { cwd: process.cwd(), timeoutMs: 5000 });
+  // Sin caracteres que cmd.exe interpreta (`&|<>()^%!`): en Windows windowsCommand los rechaza a propósito y
+  // el hijo ni se lanzaría. El hijo se registra al lanzarlo (síncrono), así que se comprueba sin esperar a ciegas.
+  const run = execBounded('node --version', { cwd: process.cwd(), timeoutMs: 5000 });
   assert.ok(liveChildren() >= 1);
   const result = await run;
   assert.equal(result.code, 0, JSON.stringify(result));

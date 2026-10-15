@@ -68,7 +68,9 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   for (const role of roles) await kit.writeRole(projectPath, CATALOG, role, { skills, specLang });
 
   // 3c) Hook de cierre de turno: se DOCUMENTA, no se instala. `.claude/settings.json` va commiteado,
-  // así que activarlo aquí le ejecutaría un comando a todo el que clone el repo (R19).
+  // así que activarlo aquí le ejecutaría un comando a todo el que clone el repo (R19). La guarda de commit y
+  // push es la única que chalc instala, y no desde aquí: solo con `--guard` y solo en el archivo LOCAL
+  // (`lib/commands/guardstep.mjs`; la spec 023 enmienda 007 R19 / 017 R7).
   await kit.writeGateHookDoc(projectPath, CATALOG, { specLang });
 
   // 4) CLAUDE.md (bloque gestionado)

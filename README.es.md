@@ -415,7 +415,7 @@ chalc/
 │   ├── profiles/            perfiles de modelos por tarea (chalc-default.json: spec/qa/repair)
 │   ├── methods/sdd/         el método SDD (constitución, plantillas es/en, reglas, gráfico)
 │   ├── agents/              los roles de revisión: contrato + prompt (es/en) por carpeta; `_shared/` es el texto que reciben todos
-│   ├── hooks/               los hooks opcionales (anotador, aviso de fin de turno, guardas), documentados — nunca instalados
+│   ├── hooks/               los hooks opcionales (anotador, aviso de fin de turno, guardas), documentados — solo la guarda se instala, y solo con --guard
 │   ├── gate/                el portón de calidad: código real que se copia a `.chalc/` al equipar
 │   ├── next/                el advisor de flujo: decide la ÚNICA acción siguiente del ciclo de tarea
 │   ├── live/                el tablero en vivo: página local con el estado y la actividad de cada agente
@@ -1002,6 +1002,7 @@ que mira cada acción antes de que ocurra:
 |---|---|
 | `git commit`, `git push` | te pregunta: la orden es tuya, en el momento exacto |
 | push forzado (`--force`, `-f`, `--force-with-lease`, `+rama`) | se bloquea |
+| lo mismo dentro de una shell (`bash -c "git push"`, `sh -c`, `zsh -c`) | igual que escrito directo |
 | leer credenciales (`.env`, `.envrc`, llaves SSH, `.npmrc`, `*.pem`, `*.tfvars`, `kubeconfig`, `.docker/config.json`…) con cualquier herramienta o comando | se bloquea; `.env.example` y las demás plantillas sin valores sí se leen |
 | `Grep` que devuelve contenido sobre una carpeta entera (podría sacar un secreto línea a línea) | te pregunta; acotado con `type` o con un `glob` concreto, pasa |
 | `rm`, `rmdir`, `find -delete` fuera del proyecto, sobre el proyecto entero o con un destino que no se puede resolver (`$VAR`, `$(…)`, `~`, `{a,b}`) | se bloquea; dentro del proyecto se borra con normalidad |
@@ -1009,7 +1010,22 @@ que mira cada acción antes de que ocurra:
 Cuando la acción pasa no responde nada (responder `allow` se saltaría tus permisos), nunca rompe ni
 cuelga el turno, y el motivo sale en el idioma del repo. **Límite honesto:** lee los comandos sin
 ejecutarlos, así que sube el listón pero no es inviolable: es una red para los olvidos del asistente,
-no una frontera de seguridad. Como los otros hooks, chalc la documenta y nunca la instala.
+no una frontera de seguridad.
+
+A diferencia de los otros hooks, esta chalc sí puede instalarla, **solo si la pides**, y solo en tu archivo
+local `.claude/settings.local.json` (nunca en `.claude/settings.json`, que va commiteado). `chalc init` te lo
+pregunta, con sí por defecto; en lo demás manda el flag:
+
+```bash
+chalc --guard        # activa la guarda + permisos "ask" para git commit / git push
+chalc --no-guard     # quita solo lo que añadió chalc; el resto de tus ajustes se queda
+```
+
+Junto al hook escribe dos permisos nativos `ask` (`Bash(git commit *)`, `Bash(git push *)`), que Claude Code
+aplica incluso dentro de una cadena (`npm test && git push`). Cuando le ordenas commitear o subir, aceptas el
+aviso y se hace; si no se lo ordenaste, lo rechazas. Lo que ya hubiera en el archivo se conserva, un archivo
+que no es JSON válido no se toca y te avisa, y el archivo se añade al `.gitignore`. Solo Claude Code: con otro
+asistente `--guard` avisa y no escribe nada.
 
 ### Tablero en vivo: ver en qué paso va mientras trabaja
 

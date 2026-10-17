@@ -38,3 +38,7 @@ INFORME_REVISION_TECNICA.md
 # Stryker (temporales y reportes de mutación)
 .stryker-tmp/
 **/reports/mutation/
+
+# Archivos solo locales: no se suben
+stryker.config.mjs
+package-lock.json

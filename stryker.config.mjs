@@ -16,7 +16,8 @@ const STATIC_POLICY_TESTS = new Set([
   'code-size.test.mjs',
   'package-hygiene.test.mjs',
   'revision-c05.test.mjs',
-  'audit022-g3-apply.test.mjs'   // lee apply.mjs como texto (importarlo lee argv y la terminal)
+  'audit022-g3-apply.test.mjs',  // lee apply.mjs como texto (importarlo lee argv y la terminal)
+  'catalog-windowshide.test.mjs' // lee el código emitido como texto (windowsHide en cada proceso)
 ]);
 
 // Lista calculada (el glob del runner tap no admite negaciones): todo test nuevo entra solo.

@@ -23,12 +23,15 @@ import { parseHunks, removedByFile } from './hunks.mjs';
 // `core.fsmonitor=false` y, en `diff`, `--no-ext-diff --no-textconv`: una `.git/config` hostil no
 // ejecuta nada cuando el portón inspecciona, y un diff externo no sustituye al unificado que el
 // portón parsea (sin hunks, la tarea no tendría líneas atribuidas). Ver spec 016, R5.
+//
+// `windowsHide`: el tablero corre desacoplado y sin consola; en Windows cada `git` abría una ventana de cmd
+// nueva en cada refresco de la página (cada 2 s), sin fin.
 function git([sub, ...rest], cwd) {
   const noExternal = sub === 'diff' ? ['--no-ext-diff', '--no-textconv'] : [];
   return new Promise((resolve) => {
     let out = '';
     const args = ['-c', 'core.quotePath=false', '-c', 'core.fsmonitor=false', sub, ...noExternal, ...rest];
-    const child = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'ignore'] });
+    const child = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { out += chunk; });
     child.on('error', () => resolve(null));

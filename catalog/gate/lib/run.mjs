@@ -33,7 +33,7 @@ export function killTree(child, sys = SYSTEM) {
   if (WINDOWS) {
     // Síncrono a propósito: esto también corre desde el manejador de `exit`, donde nada asíncrono
     // llega a completarse.
-    try { spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* ya no está */ }
+    try { spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }); } catch { /* ya no está */ }
     return;
   }
 
@@ -121,7 +121,7 @@ export function runCommand(command, { cwd } = {}) {
     // stdin cerrado: el hijo va en su propio grupo (`detached`, para poder matar el árbol) y por eso no
     // tiene la terminal; si heredara stdin, un prompt interactivo daría EIO o colgaría. Sin stdin,
     // recibe EOF y la herramienta falla con su propio mensaje. La salida sí se hereda.
-    const child = spawn(command, { cwd, shell: true, stdio: ['ignore', 'inherit', 'inherit'], detached: !WINDOWS });
+    const child = spawn(command, { cwd, shell: true, stdio: ['ignore', 'inherit', 'inherit'], detached: !WINDOWS, windowsHide: true });
     running.add(child);
 
     const done = (code) => {

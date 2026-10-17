@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { request } from 'node:http';
 import { LIVE_REL, announce, idleTimer, isAlive, readAnnouncement, retire } from '../catalog/live/lib/lifecycle.mjs';
-import { buildState, createLiveServer, IDLE_MS } from '../catalog/live/server.mjs';
+import { buildState, createLiveServer, IDLE_MS, langOf } from '../catalog/live/server.mjs';
 
 const project = () => mkdtemp(join(tmpdir(), 'chalc-live-server-'));
 
@@ -89,7 +89,7 @@ function get(url, { method = 'GET', host } = {}) {
 const VIEW = { lang: 'es', feature: 'specs/001', progress: { done: 1, total: 2 }, tasks: [], next: { action: 'work_task', role: '', reason: '' }, gate: { verdict: 'none', date: '', stages: [] }, roles: [], missing: { tasks: [], roles: [], next: 'work_task' }, activity: [] };
 
 test('R1: the board serves its page and its state on 127.0.0.1 only, read-only', async () => {
-  const live = await createLiveServer({ root: '/x', idleMs: 60_000, state: async () => VIEW });
+  const live = await createLiveServer({ root: '/x', idleMs: 60_000, state: async () => VIEW, lang: async () => 'es' });
   try {
     assert.match(live.url, /^http:\/\/127\.0\.0\.1:\d+\/$/);
     const page = await get(live.url);
@@ -124,8 +124,33 @@ test('R1: if the state cannot be built, it answers 500 instead of crashing', asy
     const broken = await get(`${live.url}state.json`);
     assert.deepEqual([broken.status, broken.body], [500, 'state unavailable']);
     assert.match(broken.headers['content-type'], /^text\/plain; charset=utf-8/);
-    assert.equal((await get(live.url)).status, 500);
+    assert.equal((await get(live.url)).status, 200, 'R2b: la página no depende del estado');
   } finally { await live.close(); }
+});
+
+// R2b: `live.mjs` pregunta a la página si el tablero vive. Si la página armara el estado (git incluido), en una
+// máquina lenta (Windows) pasaría del plazo, el tablero se daría por muerto y se levantaría otro en cada llamada.
+test('R2b: the page never builds the repo state; only /state.json does', async () => {
+  let built = 0;
+  const live = await createLiveServer({ root: '/x', idleMs: 60_000, state: async () => { built += 1; return VIEW; }, lang: async () => 'es' });
+  try {
+    const page = await get(live.url);
+    assert.deepEqual([page.status, built], [200, 0]);
+    assert.match(page.body, /<html lang="es">/);
+    await get(`${live.url}state.json`);
+    assert.equal(built, 1);
+  } finally { await live.close(); }
+});
+
+test('R2b/R7: the page language is gate.json, then .chalc.json, then English', async () => {
+  const root = await project();
+  await mkdir(join(root, '.chalc'), { recursive: true });
+  await writeFile(join(root, '.chalc', 'gate.json'), JSON.stringify({ language: '' }));
+  assert.equal(await langOf(root), 'en');
+  await writeFile(join(root, '.chalc.json'), JSON.stringify({ lang: 'es' }));
+  assert.equal(await langOf(root), 'es');
+  await writeFile(join(root, '.chalc', 'gate.json'), JSON.stringify({ language: 'en' }));
+  assert.equal(await langOf(root), 'en');
 });
 
 test('R3: with nobody looking, it calls its idle handler', async () => {

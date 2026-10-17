@@ -30,15 +30,22 @@ export const IDLE_MS = 15 * 60 * 1000;
 const textOr = async (path, fallback) => { try { return await readFile(path, 'utf8'); } catch { return fallback; } };
 const jsonOr = async (path) => { try { return JSON.parse(await readFile(path, 'utf8')); } catch { return null; } };
 
+// El idioma: el de gate.json; si lo deja vacío, el que se eligió al equipar (R22); si no, inglés.
+const languageOf = (config, project) => config.language || project.lang || 'en';
+
+/** El idioma del tablero de `root`. Solo lee dos archivos: la página lo pide sin armar el estado (R2b). */
+export async function langOf(root) {
+  return languageOf((await loadConfig(root)).config, await readProject(root));
+}
+
 /** El estado del repo en `root`, listo para la página. */
 export async function buildState(root) {
   const s = await snapshot(root);
   const decision = decide(s);
   const { config } = await loadConfig(root);
   const specDir = config.spec?.dir || 'specs';
-  // El idioma: el de gate.json; si lo deja vacío, el que se eligió al equipar (R22); si no, inglés.
   const project = await readProject(root);
-  const lang = config.language || project.lang || 'en';
+  const lang = languageOf(config, project);
   return viewOf({
     snapshot: { ...s, lang }, decision, reason: reasonOf(decision.action, decision.facts, lang),
     state: await jsonOr(join(root, STATE_REL)), tasksText: s.tasks?.text || '', activityText: await textOr(join(root, ACTIVITY_REL), ''),
@@ -64,25 +71,27 @@ function failed(res) {
   try { if (res.headersSent) res.end(); else send(res, 500, 'text/plain', 'page unavailable'); } catch { /* conexión ya cerrada */ }
 }
 
-// Lo que contesta a UNA petición.
-async function answer(req, res, { port, state, root, page }) {
+// Lo que contesta a UNA petición. La página no arma el estado (git incluido): con ella pregunta `live.mjs` si el
+// tablero vive, y en una máquina lenta el estado pasaba del plazo y se levantaba otro tablero (R2b).
+async function answer(req, res, { port, state, lang, root, page }) {
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'text/plain', 'read-only');
   if (![`127.0.0.1:${port}`, `localhost:${port}`].includes(req.headers.host)) return send(res, 403, 'text/plain', 'forbidden');
-  if (req.url !== '/' && req.url !== '/state.json') return send(res, 404, 'text/plain', 'not found');
+  if (req.url === '/') return send(res, 200, 'text/html', page(await lang(root)));
+  if (req.url !== '/state.json') return send(res, 404, 'text/plain', 'not found');
   let view;
   try { view = await state(root); } catch { return send(res, 500, 'text/plain', 'state unavailable'); }
-  return req.url === '/' ? send(res, 200, 'text/html', page(view.lang)) : send(res, 200, 'application/json', JSON.stringify(view));
+  return send(res, 200, 'application/json', JSON.stringify(view));
 }
 
 /** Levanta el tablero en un puerto libre de `127.0.0.1`. Devuelve `{ url, close }`. */
-export function createLiveServer({ root, idleMs = IDLE_MS, state = buildState, page = pageHtml, onIdle = () => {}, makeIdle = idleTimer }) {
+export function createLiveServer({ root, idleMs = IDLE_MS, state = buildState, lang = langOf, page = pageHtml, onIdle = () => {}, makeIdle = idleTimer }) {
   return new Promise((done) => {
     const idle = makeIdle(idleMs, onIdle);
     // Un fallo al responder (la página que no se arma, una respuesta ya enviada) es un 500 de ESA petición:
     // como rechazo sin atender tumbaría el servidor entero.
     const server = createServer((req, res) => {
       idle.touch();
-      answer(req, res, { port: server.address().port, state, root, page }).catch(() => failed(res));
+      answer(req, res, { port: server.address().port, state, lang, root, page }).catch(() => failed(res));
     });
     // La URL sale de la dirección en la que escucha DE VERDAD: si algún día dejara de ser solo local, se vería.
     server.listen(0, '127.0.0.1', () => done({

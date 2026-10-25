@@ -1,0 +1,8 @@
+{
+  "id": "vercel-composition-patterns",
+  "source": "npx skills add https://github.com/vercel-labs/agent-skills --skill vercel-composition-patterns -y",
+  "sourceType": "skillssh",
+  "contentSha256": "f711ed8b16162eaa712abbcdbbae6c926f86c57e60127735fecc3ad0dd85b3fa",
+  "hashVersion": 2,
+  "installedAt": "2026-10-25T18:41:23.908Z"
+}

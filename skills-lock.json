@@ -26,11 +26,23 @@
       "contentSha256": "6cfda494d696d4de7ece02888729a58eae14bd64cda8015c9153573efc25d8e5",
       "installedAt": "2026-09-29T19:32:20.242Z"
     },
+    "fastify-best-practices": {
+      "source": "npx skills add https://github.com/mcollina/skills --skill fastify-best-practices -y",
+      "sourceType": "skillssh",
+      "contentSha256": "1e47aea2fa16ccb263e95202224d5d50cf7c782ddffa1fe1be40b98a2bd1e815",
+      "installedAt": "2026-10-25T18:41:31.180Z"
+    },
     "frontend-design": {
       "source": "npx skills add https://github.com/anthropics/skills --skill frontend-design",
       "sourceType": "skillssh",
       "contentSha256": "e1481fcd7484d1bc55f2ca7170b788d7357821f5595d27e7132ec7df6841b0cf",
       "installedAt": "2026-08-21T18:20:56.030Z"
+    },
+    "node": {
+      "source": "npx skills add https://github.com/mcollina/skills --skill node -y",
+      "sourceType": "skillssh",
+      "contentSha256": "d4f552c6ee0864872d38e1d95960da980873e388ee2f0d2b6f177dfe21e70ded",
+      "installedAt": "2026-10-25T19:37:47.747Z"
     },
     "python-code-style": {
       "source": "npx skills add https://github.com/wshobson/agents --skill python-code-style -y",
@@ -67,6 +79,30 @@
       "sourceType": "skillssh",
       "contentSha256": "6d66f27a8e4353f49264547acf4e541efd835f2e3a2d91f5a43e2104be5bd65e",
       "installedAt": "2026-10-05T16:14:29.788Z"
+    },
+    "vercel-composition-patterns": {
+      "source": "npx skills add https://github.com/vercel-labs/agent-skills --skill vercel-composition-patterns -y",
+      "sourceType": "skillssh",
+      "contentSha256": "f711ed8b16162eaa712abbcdbbae6c926f86c57e60127735fecc3ad0dd85b3fa",
+      "installedAt": "2026-10-25T18:41:23.908Z"
+    },
+    "vercel-react-best-practices": {
+      "source": "npx skills add https://github.com/vercel-labs/agent-skills --skill vercel-react-best-practices -y",
+      "sourceType": "skillssh",
+      "contentSha256": "7991ed4fbecdac23f47c1a40c243e00a212a9e7f3604db93959b3ae11dffe299",
+      "installedAt": "2026-10-25T18:41:19.688Z"
+    },
+    "vercel-react-native-skills": {
+      "source": "npx skills add https://github.com/vercel-labs/agent-skills --skill vercel-react-native-skills -y",
+      "sourceType": "skillssh",
+      "contentSha256": "4c160f1f4e623b989cadb71f42a0813be574d172acf5e32a6411c87f3e28c05a",
+      "installedAt": "2026-10-25T18:41:28.276Z"
+    },
+    "vitest": {
+      "source": "npx skills add https://github.com/antfu/skills --skill vitest -y",
+      "sourceType": "skillssh",
+      "contentSha256": "bd95e41d66d76da9008893c9bc48c30f0a68f352cd2b00017767f5e4c129501d",
+      "installedAt": "2026-10-25T18:41:44.544Z"
     }
   },
   "builtins": {

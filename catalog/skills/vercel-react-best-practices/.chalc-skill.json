@@ -1,0 +1,8 @@
+{
+  "id": "vercel-react-best-practices",
+  "source": "npx skills add https://github.com/vercel-labs/agent-skills --skill vercel-react-best-practices -y",
+  "sourceType": "skillssh",
+  "contentSha256": "7991ed4fbecdac23f47c1a40c243e00a212a9e7f3604db93959b3ae11dffe299",
+  "hashVersion": 2,
+  "installedAt": "2026-10-25T18:41:19.688Z"
+}

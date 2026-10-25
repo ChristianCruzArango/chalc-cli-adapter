@@ -1,0 +1,8 @@
+{
+  "id": "fastify-best-practices",
+  "source": "npx skills add https://github.com/mcollina/skills --skill fastify-best-practices -y",
+  "sourceType": "skillssh",
+  "contentSha256": "1e47aea2fa16ccb263e95202224d5d50cf7c782ddffa1fe1be40b98a2bd1e815",
+  "hashVersion": 2,
+  "installedAt": "2026-10-25T18:41:31.180Z"
+}

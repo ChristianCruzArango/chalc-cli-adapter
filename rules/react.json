@@ -1,0 +1,18 @@
+{
+  "id": "react",
+  "name": "React",
+  "language": "TypeScript",
+  "implies": ["javascript", "typescript"],
+  "detect": {
+    "anyDependency": ["react-dom"]
+  },
+  "skills": [
+    "vercel-react-best-practices",
+    "vercel-composition-patterns",
+    "tailwind-best-practices",
+    "responsive-design",
+    "interface-design"
+  ],
+  "mcp": [],
+  "optionalMcp": []
+}

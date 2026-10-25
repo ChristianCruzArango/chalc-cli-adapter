@@ -126,8 +126,9 @@ The AI is never the authority: if it proposes something outside the catalog, Cha
 to a deterministic recommendation.
 
 Minimal implementation, Clean Code, SOLID, and modular architecture are **mandatory principles** in every project.
-What the user chooses is the concrete architecture. It supports **Angular, NestJS, and .NET**, orchestrating
-each one's **official** scaffolder (`ng new`, `nest new`, `dotnet new`). If the scaffolder leaves no
+What the user chooses is the concrete architecture. It supports **Angular, NestJS, React, Fastify, .NET, and Flutter**,
+orchestrating each one's **official** scaffolder (`ng new`, `nest new`, `create-vite`, `fastify generate`,
+`dotnet new`, `flutter create`). If the scaffolder leaves no
 `.gitignore` (`nest new` and `dotnet new` don't with `--skip-git`), Chalc writes one per stack —no
 secrets, no dependencies or mutation output— so the first commit does not take `node_modules` with it:
 
@@ -137,11 +138,13 @@ chalc init angular
 chalc init angular mi-admin --description "admin dashboard with users, roles, permissions, and API"
 chalc init angular mi-admin --doc proposal.docx --architecture modular-clean-architecture --target claude
 chalc init nestjs mi-api --description "ticketing API with authentication and queues"
+chalc init react mi-web --description "orders panel with filters and charts"
+chalc init fastify mi-api --architecture clean-hexagonal --verify
 chalc init dotnet mi-svc --architecture clean-architecture --verify   # --verify compiles at the end
 ```
 
 #### Step by step (interactive flow)
-1. **Stack** — you pick Angular / NestJS / .NET.
+1. **Stack** — you pick Angular / NestJS / React / Fastify / .NET / Flutter.
 2. **Name and folder** — where the project is created (`--dir` to set it without asking).
 3. **Proposal** — you describe the idea in text or attach a document (`--doc` reads Word/Excel/PDF/Markdown/TXT;
    only legacy `.doc` and scanned PDFs need system tools — see the note under `spec-ia`).
@@ -156,12 +159,14 @@ Available architectures (the AI recommends the lightest one that fits; you decid
 |---|---|---|
 | **Angular** | `ng new` | `modular-feature-first` (MVPs/dashboards) · `modular-clean-architecture` (domain/long-lived) · `enterprise-modular` (large teams) |
 | **NestJS** | `nest new` | `modular-feature` · `clean-hexagonal` · `enterprise-microservices` |
+| **React** | `create-vite` (`react-ts` template) | `feature-first` · `clean-architecture` · `enterprise-modular` |
+| **Fastify** | `fastify generate --lang=ts` (fastify-cli) | `modular-plugins` · `clean-hexagonal` · `enterprise-modular` |
 | **.NET** | `dotnet new` | `webapi-simple` · `clean-architecture` (solution + Domain/Application/Infrastructure/Api layers) |
 | **Flutter** | `flutter create` | `feature-first` · `clean-architecture` (`presentation/domain/data` layers) · `enterprise-modular` |
 
 #### What makes `chalc init` special
-- **It adapts to your machine:** it uses the version of the tool you **already have installed**. On Angular/NestJS
-  it picks the CLI major **compatible with your Node** (e.g. Node 22.20 → `@angular/cli@20`, not 22 which aborts);
+- **It adapts to your machine:** it uses the version of the tool you **already have installed**. On Angular/NestJS/React/Fastify
+  it picks an **exact** CLI version **compatible with your Node** (e.g. Node 22.20 → `@angular/cli@20`, not 22 which aborts);
   on **Flutter** and **.NET** it directly uses the **installed SDK** (`flutter create` / `dotnet new`), and shows
   that version in the summary. It doesn't force you to update anything.
 - **Every folder is born documented:** instead of an empty `.gitkeep`, each folder ships a `README.md` that
@@ -170,7 +175,11 @@ Available architectures (the AI recommends the lightest one that fits; you decid
 - **The assistant reads it first:** `CLAUDE.md` (and equivalents) opens with a **Mandatory principles
   (always)** block and a reference to `docs/architecture.md` so the AI respects the architecture before creating files.
 - **Automatic verification at the end** (no tokens): checks that everything is in place (folders with README, `docs/architecture.md`, `specs/`, manifest, assistant file) and the **architecture boundaries**, closing with a **✓ Project created successfully**. The same runs later with `chalc verify` on any project.
-- **`--verify`** runs the build/analysis (`npm run build` / `dotnet build` / `flutter analyze`) to confirm the project compiles at birth.
+- **`--verify`** runs the build/analysis (`npm run build` —`npm run build:ts` on Fastify— / `dotnet build` / `flutter analyze`) to confirm the project compiles at birth.
+- **React is born with tests:** `create-vite` ships no test runner, so `chalc init react` adds Vitest + Testing Library
+  (exact versions), the `test` script, `vitest.config.ts` (extends the Vite config) and a first passing test.
+  Fastify already brings its own (`node:test` + `c8`). The `README.md` files the scaffolder leaves (Fastify's in
+  `src/plugins` and `src/routes`) are kept: chalc only rewrites the ones it generated.
 - **Bilingual (es/en)** following `chalc lang` or the system language.
 
 When creating, Chalc generates the official scaffolder's base project, the architecture's folders with their
@@ -181,7 +190,7 @@ When creating, Chalc generates the official scaffolder's base project, the archi
 
 #### Extensible to any framework
 
-`chalc init` isn't married to Angular/NestJS/.NET/Flutter: each stack is **a declarative entry** in
+`chalc init` isn't married to Angular/NestJS/React/Fastify/.NET/Flutter: each stack is **a declarative entry** in
 the stack registry (`lib/init.mjs`). Adding Vue, Django, Spring, Go, Rails… is a matter of defining its official
 scaffolder, its architectures, and its folders — **the engine isn't touched**.
 
@@ -201,7 +210,7 @@ chalc init <stack>
 To finish equipping the new stack: create its skills in `catalog/skills/`, (optionally) its MCP in
 `catalog/mcp/`, and wire them in `rules/<stack>.json`. Each architecture folder documents itself
 via `lib/init-folders.mjs` (if you use a new folder role, add its guide there). Tool
-versioning: if it's an npm CLI, add its Node→version table as in Angular/NestJS; if it's a local SDK
+versioning: if it's an npm CLI, add its Node→version table in `lib/init-cli.mjs` as in Angular/NestJS/React/Fastify; if it's a local SDK
 (like Flutter/.NET), just use the installed one.
 
 ### Understand before applying
@@ -212,7 +221,8 @@ chalc inspect /path/to/project
 `inspect` is interactive by default and writes no files: it asks you which detail you want to see,
 lists the rules that apply, the signals that triggered them (`package.json`, root files, or globs
 like `*.csproj`), and the base plan that `chalc --yes` would set up. In non-interactive environments it prints the
-full diagnosis.
+full diagnosis. It uses the same criterion as equipping: a rule another one already includes (e.g. `react` inside
+`react-native`) shows as *included in …* and is not announced as applied.
 
 ### QA agent: actually test the app (`chalc qa --agent`)
 With `--agent`, chalc **brings up your app, tests it like a person, and reports** each `R#` requirement:
@@ -455,11 +465,27 @@ Chalc detects the **language/stack** by real signals and adapts:
 
 | Group | Included rules | Status |
 |---|---|---|
-| Web/TypeScript | JavaScript, TypeScript, Angular, NestJS | Angular/NestJS with skills; JS/TS detected |
-| Mobile | Flutter, Dart, Swift, Kotlin | Flutter with skills + MCP (`dart`); Dart/Swift/Kotlin detected |
+| Web/TypeScript | JavaScript, TypeScript, Angular, NestJS, React, Next.js, Fastify, Vitest | Angular/NestJS/React/Fastify/Vitest with skills; Angular and Next.js with MCP; JS/TS detected |
+| Mobile | Flutter, Dart, React Native, Swift, Kotlin | Flutter with skills + MCP (`dart`); React Native with skills; Dart/Swift/Kotlin detected |
 | Backend/General | .NET, Go, Java, PHP, Ruby, Python, Rust, Elixir | detected |
 | Systems/IaC | C, C++, Shell, Terraform, Zig | detected |
 | Other ecosystems | Clojure, Erlang, Haskell, Julia, Lua, Perl, R, Scala | detected |
+
+### Web stack skills and MCP
+
+Chosen by their source (the framework team or its lead maintainer) and by their use on [skills.sh](https://skills.sh);
+vendored in `catalog/skills/` and pinned in `skills-lock.json` (`chalc update` keeps them current).
+
+| Detected | Skills | MCP | Source |
+|---|---|---|---|
+| Angular (`@angular/core`) | `angular-developer` + design | `angular-cli` | Angular team |
+| React web (`react-dom`) | `vercel-react-best-practices`, `vercel-composition-patterns` + design | — | Vercel |
+| Next.js (`next`, `next.config.*`) | the React ones | `next-devtools` (`next-devtools-mcp`, pinned version) | Vercel |
+| React Native / Expo | `vercel-react-native-skills` (without the web skills, even with `react-dom`) | — | Vercel |
+| Fastify (`fastify`) | `fastify-best-practices`, `node` | `postgres` (optional) | Matteo Collina (Fastify maintainer) |
+| Vitest (`vitest`, `vitest.config.*`) | `vitest` | — | Anthony Fu (Vite/Vitest team) |
+
+React and Fastify have no official MCP; community ones are not included.
 
 Adding a language = creating `rules/<lang>.json` with its `detect`. It supports:
 - `anyDependency`, `anyFile`, `anyGlob`: a single signal is enough.

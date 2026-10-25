@@ -1,0 +1,13 @@
+{
+  "id": "nextjs",
+  "name": "Next.js",
+  "language": "TypeScript",
+  "implies": ["javascript", "typescript"],
+  "detect": {
+    "anyDependency": ["next"],
+    "anyGlob": ["next.config.*"]
+  },
+  "skills": [],
+  "mcp": ["next-devtools"],
+  "optionalMcp": []
+}

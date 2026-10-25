@@ -1,0 +1,8 @@
+{
+  "id": "node",
+  "source": "npx skills add https://github.com/mcollina/skills --skill node -y",
+  "sourceType": "skillssh",
+  "contentSha256": "d4f552c6ee0864872d38e1d95960da980873e388ee2f0d2b6f177dfe21e70ded",
+  "hashVersion": 2,
+  "installedAt": "2026-10-25T19:37:47.747Z"
+}

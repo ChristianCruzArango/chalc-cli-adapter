@@ -1,0 +1,10 @@
+{
+  "name": "chalc-expo-web-fixture",
+  "version": "0.1.0",
+  "dependencies": {
+    "expo": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-native-web": "latest"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "fastify",
+  "name": "Fastify",
+  "language": "TypeScript",
+  "implies": ["javascript", "typescript"],
+  "detect": {
+    "anyDependency": ["fastify"]
+  },
+  "skills": ["fastify-best-practices", "node"],
+  "mcp": [],
+  "optionalMcp": ["postgres"]
+}

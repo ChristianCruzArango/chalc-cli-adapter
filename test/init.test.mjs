@@ -25,8 +25,8 @@ test('mandatory principles always include Clean Code, SOLID and modular architec
   assert.ok(MANDATORY_DESIGN_PRINCIPLES.some((p) => /modular/i.test(p)));   // 'arquitectura modular' / 'modular architecture'
 });
 
-test('init supports Angular, NestJS, .NET and Flutter stacks', () => {
-  assert.deepEqual(listStacks().map((s) => s.id), ['angular', 'nestjs', 'dotnet', 'flutter']);
+test('init supports Angular, NestJS, React, Fastify, .NET and Flutter stacks', () => {
+  assert.deepEqual(listStacks().map((s) => s.id), ['angular', 'nestjs', 'react', 'fastify', 'dotnet', 'flutter']);
 });
 
 test('Flutter scaffolds with the official CLI (uses the machine SDK) and a valid Dart package name', () => {

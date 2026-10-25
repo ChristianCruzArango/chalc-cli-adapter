@@ -1,0 +1,13 @@
+{
+  "id": "next-devtools",
+  "kind": "npx",
+  "description": "Servidor MCP oficial de Next.js (Vercel): errores, rutas y logs del servidor de desarrollo, docs de Next y migraciones. Versión fijada.",
+  "requiresSecret": false,
+  "server": {
+    "command": "npx",
+    "args": [
+      "-y",
+      "next-devtools-mcp@0.4.0"
+    ]
+  }
+}

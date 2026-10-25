@@ -2,11 +2,11 @@
   "id": "react-native",
   "name": "React Native",
   "language": "JavaScript/TypeScript",
-  "implies": ["javascript", "typescript"],
+  "implies": ["javascript", "typescript", "react", "frontend"],
   "detect": {
     "anyDependency": ["react-native", "expo"]
   },
-  "skills": [],
+  "skills": ["vercel-react-native-skills"],
   "mcp": [],
   "optionalMcp": []
 }

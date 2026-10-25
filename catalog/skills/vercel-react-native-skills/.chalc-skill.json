@@ -1,0 +1,8 @@
+{
+  "id": "vercel-react-native-skills",
+  "source": "npx skills add https://github.com/vercel-labs/agent-skills --skill vercel-react-native-skills -y",
+  "sourceType": "skillssh",
+  "contentSha256": "4c160f1f4e623b989cadb71f42a0813be574d172acf5e32a6411c87f3e28c05a",
+  "hashVersion": 2,
+  "installedAt": "2026-10-25T18:41:28.276Z"
+}

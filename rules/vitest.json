@@ -1,0 +1,11 @@
+{
+  "id": "vitest",
+  "name": "Vitest",
+  "detect": {
+    "anyDependency": ["vitest"],
+    "anyGlob": ["vitest.config.*"]
+  },
+  "skills": ["vitest"],
+  "mcp": [],
+  "optionalMcp": []
+}

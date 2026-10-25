@@ -65,3 +65,26 @@ test('init dry-run summarizes the selected Angular architecture', async () => {
   assert.match(result.output, /Angular Modular Clean Architecture/);
   assert.match(result.output, /(implementación mínima|minimal implementation), Clean Code, SOLID, (arquitectura modular|modular architecture)/);
 });
+
+// Spec 025, R17: inspect cuenta lo mismo que el equipamiento instala.
+test('inspect shows the React rules an Expo web project does not apply, and why', async () => {
+  const result = await runChalc(['inspect', 'test/fixtures/expo-web', '--yes']);
+
+  assert.equal(result.code, 0, result.output);
+  assert.match(result.output, /react — (incluida en|included in) react-native/);
+  assert.match(result.output, /frontend — (incluida en|included in) react-native/);
+  assert.doesNotMatch(result.output, /✓ react \(React\)/);
+});
+
+// Spec 025, R9, R10, R13: el resumen del init nombra el scaffolder con su versión exacta.
+test('init dry-run for react and fastify names the pinned scaffolder and the architecture', async () => {
+  const react = await runChalc(['init', 'react', 'demo-web', '--architecture', 'feature-first', '--dry-run', '--yes', '--no-ai']);
+  assert.equal(react.code, 0, react.output);
+  assert.match(react.output, /create-vite@9\.2\.1/);
+  assert.match(react.output, /React Feature-First/);
+
+  const fastify = await runChalc(['init', 'fastify', 'demo-api', '--architecture', 'clean-hexagonal', '--dry-run', '--yes', '--no-ai']);
+  assert.equal(fastify.code, 0, fastify.output);
+  assert.match(fastify.output, /fastify-cli@7\.4\.1/);
+  assert.match(fastify.output, /Fastify Clean \/ Hexagonal/);
+});

@@ -1,0 +1,8 @@
+{
+  "id": "vitest",
+  "source": "npx skills add https://github.com/antfu/skills --skill vitest -y",
+  "sourceType": "skillssh",
+  "contentSha256": "bd95e41d66d76da9008893c9bc48c30f0a68f352cd2b00017767f5e4c129501d",
+  "hashVersion": 2,
+  "installedAt": "2026-10-25T18:41:44.544Z"
+}

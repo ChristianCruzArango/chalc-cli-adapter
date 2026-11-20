@@ -7,7 +7,7 @@
     "anyDependency": ["@nestjs/core"],
     "anyFile": ["nest-cli.json"]
   },
-  "skills": ["nestjs-best-practices"],
+  "skills": ["nestjs", "nestjs-feature", "nestjs-auth", "nestjs-data", "nestjs-testing", "nestjs-production"],
   "mcp": [],
   "optionalMcp": ["postgres"]
 }

@@ -38,6 +38,42 @@
       "contentSha256": "e1481fcd7484d1bc55f2ca7170b788d7357821f5595d27e7132ec7df6841b0cf",
       "installedAt": "2026-08-21T18:20:56.030Z"
     },
+    "nestjs": {
+      "source": "npx skills add https://github.com/nestjs/agent-skills --skill nestjs -y",
+      "sourceType": "skillssh",
+      "contentSha256": "7e8020077ee6b03a9e95b51084a480c1b6ba63b0a6b6f609d2c9773761c76cee",
+      "installedAt": "2026-11-20T14:02:37.990Z"
+    },
+    "nestjs-auth": {
+      "source": "npx skills add https://github.com/nestjs/agent-skills --skill nestjs-auth -y",
+      "sourceType": "skillssh",
+      "contentSha256": "868f0cd3611dd8d6073e3b3e59fab1ad2c11cecab50c7eb864ea4c0ab383ce1f",
+      "installedAt": "2026-11-20T14:03:07.364Z"
+    },
+    "nestjs-data": {
+      "source": "npx skills add https://github.com/nestjs/agent-skills --skill nestjs-data -y",
+      "sourceType": "skillssh",
+      "contentSha256": "56d73232e867fa67a60d668fb923569d9f9d6faaee4b060e1bcc6b1a90ce66df",
+      "installedAt": "2026-11-20T14:03:12.577Z"
+    },
+    "nestjs-feature": {
+      "source": "npx skills add https://github.com/nestjs/agent-skills --skill nestjs-feature -y",
+      "sourceType": "skillssh",
+      "contentSha256": "8831f1049023a69412b23ed5680525f56855ceb911085d9790042e2dbd8e7e78",
+      "installedAt": "2026-11-20T14:03:01.877Z"
+    },
+    "nestjs-production": {
+      "source": "npx skills add https://github.com/nestjs/agent-skills --skill nestjs-production -y",
+      "sourceType": "skillssh",
+      "contentSha256": "8c764e23242b00967a19083760323dc87dd8bd25b771ba6bf58a1dca11cd9a66",
+      "installedAt": "2026-11-20T14:03:23.657Z"
+    },
+    "nestjs-testing": {
+      "source": "npx skills add https://github.com/nestjs/agent-skills --skill nestjs-testing -y",
+      "sourceType": "skillssh",
+      "contentSha256": "8fe4c16f00372cb49e98296db2eb029b473065a83492062e781004f9eccc17d5",
+      "installedAt": "2026-11-20T14:03:17.667Z"
+    },
     "node": {
       "source": "npx skills add https://github.com/mcollina/skills --skill node -y",
       "sourceType": "skillssh",
@@ -156,9 +192,6 @@
     },
     "mutation-testing": {
       "contentSha256": "9bbcac87138bb2d81ae9b3fd4f2105228bc2eb3935f27b49739d25bce58ca422"
-    },
-    "nestjs-best-practices": {
-      "contentSha256": "d9e7eb3819e92038b7a72298bb38d246bc7e57a6471c5089004bd9d639a1c3ac"
     },
     "python-best-practices": {
       "contentSha256": "2317146d3716f432df1f008d772b949783668e828c88ca9577b137c1de3eb2e0"

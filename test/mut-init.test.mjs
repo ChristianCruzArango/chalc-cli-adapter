@@ -79,10 +79,16 @@ test('pickCliTag: cada rama de Node de la tabla de Angular elige su CLI', () => 
 });
 
 test('pickCliTag: cada rama de Node de la tabla de Nest elige su CLI', () => {
+  assert.equal(pickCliTag(NEST_CLI_NODE, 'v22.22.3'), '12.0.12');
+  assert.equal(pickCliTag(NEST_CLI_NODE, 'v22.22.2'), '11.0.24');
+  assert.equal(pickCliTag(NEST_CLI_NODE, 'v24.15.0'), '12.0.12');
+  assert.equal(pickCliTag(NEST_CLI_NODE, 'v24.14.9'), '11.0.24');
+  assert.equal(pickCliTag(NEST_CLI_NODE, 'v26.0.0'), '12.0.12');
+  assert.equal(pickCliTag(NEST_CLI_NODE, 'v25.9.0'), '11.0.24');
   assert.equal(pickCliTag(NEST_CLI_NODE, 'v20.11.0'), '11.0.24');
   assert.equal(pickCliTag(NEST_CLI_NODE, 'v20.10.0'), '10.4.9');
   assert.equal(pickCliTag(NEST_CLI_NODE, 'v16.14.0'), '10.4.9');
-  assert.equal(pickCliTag(NEST_CLI_NODE, 'v16.13.0'), '11.0.24');
+  assert.equal(pickCliTag(NEST_CLI_NODE, 'v16.13.0'), '12.0.12');   // ninguna encaja: la más nueva
 });
 
 test('pickCliTag y la nota solo quitan la `v` inicial de la versión de Node', () => {

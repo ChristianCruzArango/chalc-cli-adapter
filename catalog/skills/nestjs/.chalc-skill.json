@@ -1,0 +1,8 @@
+{
+  "id": "nestjs",
+  "source": "npx skills add https://github.com/nestjs/agent-skills --skill nestjs -y",
+  "sourceType": "skillssh",
+  "contentSha256": "7e8020077ee6b03a9e95b51084a480c1b6ba63b0a6b6f609d2c9773761c76cee",
+  "hashVersion": 2,
+  "installedAt": "2026-11-20T14:02:37.990Z"
+}

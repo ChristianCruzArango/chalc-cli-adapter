@@ -23,7 +23,7 @@ test('T4 (spec 022, R3, S3) npx recibe el paquete con versión exacta', () => {
 
 test('T4 (spec 022, R3, S3) el resumen del init siempre muestra la versión exacta que se ejecutará', () => {
   const nest = scaffoldToolSummary('nestjs', 'v22.20.0');
-  assert.equal(nest.spec, `@nestjs/cli@${NEST_CLI_NODE[0].tag}`);
+  assert.equal(nest.spec, `@nestjs/cli@${NEST_CLI_NODE[1].tag}`);   // 22.20 < 22.22.3: aún no Nest 12
   assert.equal(nest.note, t('initToolPinned', '22.20.0'));
   const ng = scaffoldToolSummary('angular', 'v22.20.0');
   assert.equal(ng.spec, `@angular/cli@${ANGULAR_CLI_NODE[1].tag}`);

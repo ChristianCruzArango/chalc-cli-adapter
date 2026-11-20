@@ -1,0 +1,8 @@
+{
+  "id": "nestjs-production",
+  "source": "npx skills add https://github.com/nestjs/agent-skills --skill nestjs-production -y",
+  "sourceType": "skillssh",
+  "contentSha256": "8c764e23242b00967a19083760323dc87dd8bd25b771ba6bf58a1dca11cd9a66",
+  "hashVersion": 2,
+  "installedAt": "2026-11-20T14:03:23.657Z"
+}

@@ -480,13 +480,17 @@ vendorizadas en `catalog/skills/` y fijadas en `skills-lock.json` (`chalc update
 | Se detecta | Skills | MCP | Fuente |
 |---|---|---|---|
 | Angular (`@angular/core`) | `angular-developer` + diseño | `angular-cli` | equipo de Angular |
+| NestJS (`@nestjs/core`, `nest-cli.json`) | `nestjs`, `nestjs-feature`, `nestjs-auth`, `nestjs-data`, `nestjs-testing`, `nestjs-production` | `postgres` (opcional) | equipo de NestJS ([nestjs/agent-skills](https://github.com/nestjs/agent-skills)) |
 | React web (`react-dom`) | `vercel-react-best-practices`, `vercel-composition-patterns` + diseño | — | Vercel |
 | Next.js (`next`, `next.config.*`) | las de React | `next-devtools` (`next-devtools-mcp`, versión fijada) | Vercel |
 | React Native / Expo | `vercel-react-native-skills` (sin las skills web, aunque haya `react-dom`) | — | Vercel |
 | Fastify (`fastify`) | `fastify-best-practices`, `node` | `postgres` (opcional) | Matteo Collina (mantenedor de Fastify) |
 | Vitest (`vitest`, `vitest.config.*`) | `vitest` | — | Anthony Fu (equipo de Vite/Vitest) |
 
-React y Fastify no tienen MCP oficial; los de la comunidad no se incluyen.
+React, NestJS y Fastify no tienen MCP oficial; los de la comunidad no se incluyen. Las skills de NestJS están escritas
+para NestJS 12: `chalc init nestjs` usa `@nestjs/cli@12` cuando tu Node lo permite (`^22.22.3 || ^24.15.0 || >=26`,
+lo que piden sus schematics) y pasa `--observe`, así `@nestjs/observe` queda igual con o sin terminal;
+con un Node más viejo cae a `@nestjs/cli@11` o `@10`.
 
 Agregar un lenguaje = crear `rules/<lang>.json` con su `detect`. Soporta:
 - `anyDependency`, `anyFile`, `anyGlob`: basta con una señal.

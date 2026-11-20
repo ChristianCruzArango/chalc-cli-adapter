@@ -12,7 +12,8 @@
     "security-and-hardening",
     "security-review",
     "code-security",
-    "security-threat-model"
+    "security-threat-model",
+    "hallmark"
   ],
   "mcp": [],
   "optionalMcp": []

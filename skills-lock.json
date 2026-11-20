@@ -38,6 +38,12 @@
       "contentSha256": "e1481fcd7484d1bc55f2ca7170b788d7357821f5595d27e7132ec7df6841b0cf",
       "installedAt": "2026-08-21T18:20:56.030Z"
     },
+    "hallmark": {
+      "source": "npx skills add nutlope/hallmark",
+      "sourceType": "skillssh",
+      "contentSha256": "2826125dff3bfe09af1ef0fd2c166bd6688c8fa3b308604df2d79e08d875f829",
+      "installedAt": "2026-11-20T18:56:24.881Z"
+    },
     "nestjs": {
       "source": "npx skills add https://github.com/nestjs/agent-skills --skill nestjs -y",
       "sourceType": "skillssh",

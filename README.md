@@ -185,7 +185,7 @@ Available architectures (the AI recommends the lightest one that fits; you decid
 When creating, Chalc generates the official scaffolder's base project, the architecture's folders with their
 `README.md`, `docs/architecture.md`, `specs/` (SDD method), the global skills (`minimal-implementation`,
 `clean-code`, `solid-principles`, `modular-architecture`, `mutation-testing`, `secure-coding`, plus the OWASP security ones
-`security-and-hardening`, `security-review`, `code-security`, `security-threat-model`), the stack's skills, the MCP, and the chosen AI target
+`security-and-hardening`, `security-review`, `code-security`, `security-threat-model`, and the `hallmark` design skill), the stack's skills, the MCP, and the chosen AI target
 (`CLAUDE.md` for Claude Code; `AGENTS.md` for Codex, Antigravity, Cursor and Copilot).
 
 #### Extensible to any framework

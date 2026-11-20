@@ -6,10 +6,14 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-/** Crea un temporal con `prefix` y lo borra (recursivo, forzado) cuando termina el test `t`. */
+// En Windows, un proceso hijo que acaba de salir puede retener su carpeta (cwd) un instante: el borrado da
+// EBUSY y el hook `after` hace fallar el test. `rm` reintenta solo ante EBUSY/EPERM/ENOTEMPTY/EMFILE.
+const RM_OPTIONS = { recursive: true, force: true, maxRetries: 10, retryDelay: 100 };
+
+/** Crea un temporal con `prefix` y lo borra (recursivo, forzado, con reintentos) cuando termina el test `t`. */
 export async function tempDir(t, prefix = 'chalc-test-') {
   const dir = await mkdtemp(join(tmpdir(), prefix));
-  t.after(() => rm(dir, { recursive: true, force: true }));
+  t.after(() => rm(dir, RM_OPTIONS));
   return dir;
 }
 

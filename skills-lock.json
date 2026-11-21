@@ -44,6 +44,12 @@
       "contentSha256": "2826125dff3bfe09af1ef0fd2c166bd6688c8fa3b308604df2d79e08d875f829",
       "installedAt": "2026-11-20T18:56:24.881Z"
     },
+    "modern-web-guidance": {
+      "source": "npx skills add https://github.com/GoogleChrome/modern-web-guidance --skill modern-web-guidance -y",
+      "sourceType": "skillssh",
+      "contentSha256": "d9f3ceba8b5c77b12ae6f852932a349843ce086d03ce76ab5e2257e7e5acd16d",
+      "installedAt": "2026-11-21T17:50:27.278Z"
+    },
     "nestjs": {
       "source": "npx skills add https://github.com/nestjs/agent-skills --skill nestjs -y",
       "sourceType": "skillssh",

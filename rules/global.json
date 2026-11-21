@@ -13,7 +13,8 @@
     "security-review",
     "code-security",
     "security-threat-model",
-    "hallmark"
+    "hallmark",
+    "modern-web-guidance"
   ],
   "mcp": [],
   "optionalMcp": []

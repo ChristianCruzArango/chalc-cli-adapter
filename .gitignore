@@ -17,6 +17,8 @@ CLAUDE.md
 
 # specs de trabajo y plan del CLI: solo locales (no se publican ni se versionan)
 specs/
+# …salvo las plantillas del método SDD, que son parte del producto (se emiten al equipar)
+!catalog/methods/sdd/*/specs/
 cli/PLAN.md
 
 # sistema
@@ -42,3 +44,9 @@ INFORME_REVISION_TECNICA.md
 # Archivos solo locales: no se suben
 stryker.config.mjs
 package-lock.json
+
+# entregables locales del equipo autónomo (diagrama, carrusel y texto para LinkedIn): se quedan en la raíz, no se versionan
+FLUJO-EQUIPO.html
+chalc-equipo-autonomo.es.pdf
+chalc-equipo-autonomo.en.pdf
+LINKEDIN.md

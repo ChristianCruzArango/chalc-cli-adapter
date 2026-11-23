@@ -33,15 +33,45 @@ const FORCE_REFSPEC = /^\+/;
 
 const forced = (args) => args.some((arg) => FORCE_OPTION.test(arg) || FORCE_SHORT.test(arg) || FORCE_REFSPEC.test(arg));
 
+// Saltarse los hooks (spec 029, R6). En `commit`, `-n` es `--no-verify`, también dentro de un grupo (`-anm`);
+// pero lo que sigue a `-m`, `-F`, `-C`, `-c` o `-t` es su VALOR pegado (`-mn` es el mensaje «n»). En `push`,
+// `-n` es `--dry-run`: ahí solo cuenta la forma larga.
+const NO_VERIFY_SHORT = /^-[^-mFCct=]*n/;
+// Opciones de `commit` cuyo VALOR va en el argumento siguiente: ese valor no es una opción (`-m "--no-verify"`
+// es un mensaje, no un salto de hooks).
+const TAKES_VALUE = /^(?:-[a-zA-Z]*[mFCct]|--(?:message|file|reuse-message|reedit-message|template|author|date|cleanup|fixup|squash))$/;
+const withoutValues = (args) => args.filter((_, i) => i === 0 || !TAKES_VALUE.test(args[i - 1]));
+const skipsHooks = (name, args) => {
+  const options = name === 'commit' ? withoutValues(args) : args;
+  return options.includes('--no-verify') || (name === 'commit' && options.some((arg) => NO_VERIFY_SHORT.test(arg)));
+};
+
 // R1, R2: commit y push piden la orden del usuario; un push forzado no se hace desde el asistente.
+// Traer la rama de integración a otra rama (spec 035, R11): fusionarla ES aprobar el cierre, y eso es del usuario.
+const BRINGS_IN = new Set(['merge', 'rebase', 'cherry-pick', 'pull']);
+const INTEGRATION_BRANCH = /(?:^|\/)chalc\/int-/;
+
 function gitRule(words) {
   const [program, ...args] = programOf(words);
   if (program !== 'git') return null;
   const { name, rest } = gitSubcommand(args);
   const command = shellJoin(words);
-  if (name === 'push') return forced(rest) ? { decision: 'deny', rule: RULES.guardGitPushForce, data: { command } } : { decision: 'ask', rule: RULES.guardGitPush, data: { command } };
-  if (name === 'commit') return { decision: 'ask', rule: RULES.guardGitCommit, data: { command } };
-  return null;
+  if (BRINGS_IN.has(name) && rest.some((arg) => INTEGRATION_BRANCH.test(arg))) return { decision: 'deny', rule: RULES.guardIntegrationMerge, data: { command } };
+  if (name !== 'push' && name !== 'commit') return null;
+  if (name === 'push' && forced(rest)) return { decision: 'deny', rule: RULES.guardGitPushForce, data: { command } };
+  if (skipsHooks(name, rest)) return { decision: 'deny', rule: RULES.guardNoVerify, data: { command } };
+  return { decision: 'ask', rule: name === 'push' ? RULES.guardGitPush : RULES.guardGitCommit, data: { command } };
+}
+
+// Spec 024, R15: aprobar la spec (o, después, la feature) es del usuario y desde SU terminal. Cualquier
+// comando que invoque la entrada del portón con una opción `--approve-…` se deniega, lo lance como lo lance
+// (`script`, una tubería, `bash -c`): no hay forma de que el asistente lo ejecute con el OK de nadie.
+const APPROVE_OPTION = /^--approve-/;
+const GATE_ENTRY = /(?:^|[\\/])gate\.mjs$/;
+
+function approveRule(words) {
+  if (!words.some((word) => APPROVE_OPTION.test(word)) || !words.some((word) => GATE_ENTRY.test(word))) return null;
+  return { decision: 'deny', rule: RULES.guardApprove, data: { command: shellJoin(words) } };
 }
 
 // R3: el contenido de un archivo de credenciales no entra al contexto del asistente. Las plantillas sin
@@ -98,7 +128,7 @@ function folderGrepRule(event) {
   return looksLikeFile(path) ? null : { decision: 'ask', rule: RULES.guardSecretGrep, data: { path } };
 }
 
-const COMMAND_RULES = [gitRule, secretArgRule];
+const COMMAND_RULES = [gitRule, secretArgRule, approveRule];
 const TOOL_RULES = [secretToolRule, folderGrepRule];
 
 const commandOf = (event) => {

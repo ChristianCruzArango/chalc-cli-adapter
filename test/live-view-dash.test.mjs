@@ -76,7 +76,9 @@ test('R18, R20: the board reads the review log, every spec folder and the consti
   assert.deepEqual(v.specs.map((s) => [s.name, s.plan, s.tasks.total]), [['002-otra', true, 0], ['001-saludo', true, 2]]);
   assert.equal(v.flow[0].state, 'done');
   assert.equal(v.notes.length, 2);
-  assert.equal(v.source.title, 'Saludo');
+  // La carpeta activa es la de número más alto aunque todavía no tenga tareas (spec 024, R1): ya no se
+  // muestra en su lugar la anterior. Sin `spec.md`, su título es el nombre de la carpeta.
+  assert.equal(v.source.title, '002-otra');
 });
 
 // Los casos de abajo salen de la pasada de mutación.

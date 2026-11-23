@@ -12,6 +12,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { keepInvalidCopy } from '../../gate/lib/data.mjs';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { sharedRoot } from './sharedroot.mjs';
 
 export const LEARNED_REL = '.chalc/memory/concepts.json';
 
@@ -72,7 +73,7 @@ const ambiguous = async () => new Set(((await readJson(BASE))._ambiguous?.words 
 export async function loadConcepts(root) {
   const merged = {};
   const skip = await ambiguous();
-  for (const source of [await readJson(BASE), await readJson(join(root, LEARNED_REL))]) {
+  for (const source of [await readJson(BASE), await readJson(join(sharedRoot(root), LEARNED_REL))]) {
     for (const [id, { synonyms = [] } = {}] of Object.entries(source).filter(([key]) => !key.startsWith('_'))) {
       const current = merged[id] || { synonyms: [], words: [] };
       // Lo ambiguo no cuenta aunque un repo lo hubiera aprendido antes de que existiera la lista.
@@ -104,7 +105,7 @@ export async function learnSynonym(root, concept, word) {
   if (!synonym || (await ambiguous()).has(synonym)) return false;
   if ((await loadConcepts(root))[concept]?.synonyms.includes(synonym)) return false;
 
-  const path = join(root, LEARNED_REL);
+  const path = join(sharedRoot(root), LEARNED_REL);
   const learned = await readJson(path);
   learned[concept] = { synonyms: [...(learned[concept]?.synonyms || []), synonym] };
   await writeJsonAtomic(path, learned);

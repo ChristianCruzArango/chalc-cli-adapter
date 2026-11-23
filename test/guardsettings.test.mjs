@@ -16,7 +16,8 @@ test('R1, R2: from an empty file the guard adds its hook and asks before commit 
   assert.deepEqual(withGuard({}), {
     changed: true,
     settings: {
-      permissions: { ask: ['Bash(git commit *)', 'Bash(git push *)'] },
+      // `deny`: aprobar la spec es del usuario, desde su terminal (spec 024, R15).
+      permissions: { ask: ['Bash(git commit *)', 'Bash(git push *)'], deny: ['Bash(node .chalc/gate.mjs --approve-spec*)', 'Bash(node .chalc/gate.mjs --approve-feature*)', 'Bash(git merge chalc/int-*)'] },
       hooks: { PreToolUse: [GUARD_GROUP] }
     }
   });
@@ -41,7 +42,10 @@ test('R1: the hook group is the very one the hook document tells to paste, in bo
 test('R16: commit and push go to ask, never to deny', () => {
   assert.deepEqual([...GUARD_ASK], ['Bash(git commit *)', 'Bash(git push *)']);
   const { settings } = withGuard({ permissions: { deny: ['Bash(rm *)'] } });
-  assert.deepEqual(settings.permissions.deny, ['Bash(rm *)']);
+  // Lo que chalc deniega son las aprobaciones del usuario: la de la spec (spec 024, R15), la del cierre (spec 028)
+  // y la fusión de la rama de integración, que es la del cierre en equipo (spec 035, R11). Ni commit ni push.
+  assert.deepEqual(settings.permissions.deny, ['Bash(rm *)', 'Bash(node .chalc/gate.mjs --approve-spec*)', 'Bash(node .chalc/gate.mjs --approve-feature*)', 'Bash(git merge chalc/int-*)']);
+  assert.equal(settings.permissions.deny.some((rule) => /git (commit|push)/.test(rule)), false);
 });
 
 test('R3: what the user had is kept, in its order, and the guard goes after it', () => {
@@ -54,7 +58,7 @@ test('R3: what the user had is kept, in its order, and the guard goes after it',
   const { settings, changed } = withGuard(user);
   assert.equal(changed, true);
   assert.deepEqual(Object.keys(settings), ['model', 'permissions', 'hooks', 'env']);
-  assert.deepEqual(Object.keys(settings.permissions), ['allow', 'ask', 'defaultMode']);
+  assert.deepEqual(Object.keys(settings.permissions), ['allow', 'ask', 'defaultMode', 'deny']);
   assert.deepEqual(settings.permissions.ask, ['Bash(npm publish *)', 'Bash(git commit *)', 'Bash(git push *)']);
   assert.deepEqual(settings.permissions.allow, ['Bash(npm test)']);
   assert.deepEqual(settings.hooks.PreToolUse, [user.hooks.PreToolUse[0], GUARD_GROUP]);
@@ -71,7 +75,7 @@ test('R3: only what is missing is added', () => {
   const half = { permissions: { ask: ['Bash(git push *)'] }, hooks: { PreToolUse: [GUARD_GROUP] } };
   assert.deepEqual(withGuard(half), {
     changed: true,
-    settings: { permissions: { ask: ['Bash(git push *)', 'Bash(git commit *)'] }, hooks: { PreToolUse: [GUARD_GROUP] } }
+    settings: { permissions: { ask: ['Bash(git push *)', 'Bash(git commit *)'], deny: ['Bash(node .chalc/gate.mjs --approve-spec*)', 'Bash(node .chalc/gate.mjs --approve-feature*)', 'Bash(git merge chalc/int-*)'] }, hooks: { PreToolUse: [GUARD_GROUP] } }
   });
 });
 
@@ -121,13 +125,13 @@ test('R15: removing the guard from what chalc wrote leaves an empty file', () =>
   assert.deepEqual(withoutGuard(withGuard({}).settings), { settings: {}, changed: true });
 });
 
-// Límite: una lista que el usuario ya tenía VACÍA (`ask: []`) no se distingue, tras activar, de una que creó
+// Límite: una lista que el usuario ya tenía VACÍA (`ask: []`, `deny: []`) no se distingue, tras activar, de una que creó
 // chalc; al quitar la guarda se borra. Por eso aquí no hay ese caso.
 test('R15: removing after adding gives back what the user had', () => {
   const users = [
     { model: 'opus' },
     { permissions: { allow: ['Bash(ls)'], ask: ['Bash(npm publish *)'] } },
-    { permissions: { deny: [] }, hooks: { Stop: [] } },
+    { permissions: { deny: ['Bash(rm *)'] }, hooks: { Stop: [] } },
     { hooks: { PreToolUse: [{ matcher: 'Write', hooks: [{ type: 'command', command: 'lint' }] }], Stop: [] } }
   ];
   for (const user of users) {

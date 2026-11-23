@@ -12,6 +12,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ACTIONS, commandOf } from '../catalog/next/lib/actions.mjs';
 import { decide } from '../catalog/next/lib/decide.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
+import { closedFor } from './helpers/readyspecs.mjs';
 
 const GATE = 4000;
 const REVIEW = GATE + 500;
@@ -21,6 +23,9 @@ const ROLES = [{ id: 'revisor', order: 10, cadence: 'task', required: true }];
 const BRANCH = 'feature/008-advisor';
 
 const snapshot = (over = {}) => ({
+  specs: over.specs || READY_SPECS,
+  tdd: over.tdd || { red: true },
+  closing: over.closing || null,
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — implementar el lector', mtime: GATE - 1, ...over.tasks },
   gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: BRANCH, pending: [], ...over.gate },
   review: { entries: [{ role: 'revisor', date: GATE + 500, ok: true, findings: 0 }], ...over.review },
@@ -40,13 +45,22 @@ const snapshot = (over = {}) => ({
 // aquí, el test de cobertura de abajo lo delata.
 const REACHABLE = {
   blocked_config: { gate: { pending: ['test.command'] } },
+  // La coherencia de la spec (spec 024): problemas mecánicos, y aprobación pendiente del usuario.
+  fix_specs: { specs: { ...READY_SPECS, problems: [{ file: 'specs/001-demo/plan.md', line: 1, rule: 'plan-unknown-requirement', data: { id: 'R9' } }] } },
+  approve_spec: { specs: { ...READY_SPECS, approved: false } },
   run_gate: { changed: { newestMtime: GATE + 1 } },
   fix_gate: { gate: { verdict: 'fail' } },
   call_role: { review: { entries: [] } },
   fix_review: { review: { entries: [{ role: 'revisor', date: REVIEW, ok: false, findings: 3 }] } },
   tick_task: {},
+  // Primero los tests (spec 030): sin el rojo de la tarea registrado, `red_task`; con él, `work_task`.
+  red_task: { tasks: { mtime: GATE + 1 }, tdd: { red: false } },
   work_task: { tasks: { mtime: GATE + 1 } },
-  done: { tasks: { done: 3, total: 3, current: '', mtime: GATE + 1 } },
+  // El cierre lo aprueba el usuario (spec 028): sin su sello, `approve_feature`; con él, `done`.
+  approve_feature: { tasks: { done: 3, total: 3, current: '', mtime: GATE + 1 } },
+  done: { tasks: { done: 3, total: 3, current: '', mtime: GATE + 1 }, closing: closedFor(GATE) },
+  // En el worktree de una spec (spec 034): con todo hecho y medido, el desarrollador entrega.
+  deliver_spec: { tasks: { done: 3, total: 3, current: '', mtime: GATE + 1 }, git: { branch: 'chalc/001-demo' }, gate: { branch: 'chalc/001-demo' } },
   ask_human: { problems: ['evidencia ilegible'] },
   // Coordinación entre lados (spec 010): solo alcanzables en un workspace con varios lados.
   sync_contract: { sides: { me: 'front', owner: 'back', enabled: true }, contract: { differs: true, lines: 4, minePath: 'a.md', ownerPath: '../back/a.md' } },
@@ -83,7 +97,14 @@ test('R6 — solo correr el portón, cerrar la tarea y cerrar la feature traen c
   assert.equal(commandOf('run_gate'), 'node .chalc/gate.mjs');
   assert.equal(commandOf('tick_task'), 'node .chalc/memory.mjs capture');
   assert.equal(commandOf('done'), 'node .chalc/memory.mjs capture');
-  for (const action of ACTIONS.filter((a) => !['run_gate', 'tick_task', 'done'].includes(a))) {
+  // Y el de la aprobación de la spec (spec 024), que es para el usuario en su terminal, no para el asistente.
+  assert.equal(commandOf('approve_spec'), 'node .chalc/gate.mjs --approve-spec');
+  assert.equal(commandOf('approve_feature'), 'node .chalc/gate.mjs --approve-feature');
+  // Y el que registra el rojo de la tarea (spec 030), que se corre tras escribir sus tests.
+  assert.equal(commandOf('red_task'), 'node .chalc/gate.mjs --red');
+  // Y la entrega de una spec desde su worktree (spec 034), que registra el orquestador del repo.
+  assert.equal(commandOf('deliver_spec', { facts: { dir: 'specs/001-demo' } }), 'node .chalc/team.mjs deliver --spec specs/001-demo');
+  for (const action of ACTIONS.filter((a) => !['run_gate', 'tick_task', 'done', 'approve_spec', 'approve_feature', 'red_task', 'deliver_spec'].includes(a))) {
     assert.equal(commandOf(action), '', `${action} no debería traer comando`);
   }
 });

@@ -60,7 +60,7 @@ export async function runVerify({ projectPath, stacks, command: approved, timeou
   const command = approved ?? verifyCommand(stacks, { projectPath });
   if (!command) return { skipped: true, ok: null };
   const r = await execBounded(command, { cwd: projectPath, timeoutMs, maxBuffer: MAX_CHILD_OUTPUT });
-  // Redactada ANTES de salir de aquí: la salida acaba en consola, en la orden al proveedor y en review.md.
+  // Redactada ANTES de salir de aquí: la salida acaba en consola, en la orden al proveedor y en cli-review.md.
   const raw = redactSensitiveText(`${r.stdout || ''}\n${r.stderr || ''}`.trim());
   const ok = r.code === 0 && !r.timedOut;
   return {

@@ -16,6 +16,9 @@ import { tmpdir } from 'node:os';
 import { advise, render } from '../catalog/next/next.mjs';
 import { recordTouched } from '../catalog/gate/lib/touched.mjs';
 import { scopeHash } from '../catalog/gate/lib/fingerprint.mjs';
+import { coherentSpec, coherentTexts } from './helpers/coherentspec.mjs';
+import { specFacts } from '../catalog/gate/lib/specfacts.mjs';
+import { writeSeal } from '../catalog/gate/lib/specseal.mjs';
 
 const anchored = async (root, state, files) => ({ scope: { files }, scopeHash: await scopeHash(root, files), ...state });
 
@@ -26,14 +29,28 @@ const TOUCHED = Date.parse('2026-08-09T12:00:00Z');
 const MEASURED = Date.parse('2026-08-09T13:00:00Z');
 const REVIEWED = Date.parse('2026-08-09T14:00:00Z');
 
-async function repo({ tasks = '- [x] T1\n- [ ] T2 — en esto voy\n', config, state, review } = {}) {
+// Las tareas de estos tests no citan requisito; la spec 024 lo exige, así que se les añade `(R1)` y se arma a
+// su alrededor una carpeta coherente y aprobada: lo que aquí se prueba es el ciclo de tarea, que va después.
+const withRequirement = (tasks) => tasks.replace(/^(- \[[ x]\] T\d+)/gm, '$1 (R1)');
+
+async function writeSpec(root, tasks) {
+  const texts = { ...coherentTexts(), ...(tasks === null ? {} : { 'tasks.md': withRequirement(tasks) }) };
+  const files = coherentSpec(SPEC, { texts });
+  if (tasks === null) delete files[`${SPEC}/tasks.md`];
+  for (const [rel, content] of Object.entries(files)) {
+    await mkdir(join(root, ...rel.split('/'), '..'), { recursive: true });
+    await writeFile(join(root, ...rel.split('/')), content);
+  }
+}
+
+async function repo({ tasks = '- [x] T1\n- [ ] T2 — en esto voy\n', config, state, review, touched = true } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'chalc-entry-'));
   await mkdir(join(root, '.chalc'), { recursive: true });
   await mkdir(join(root, SPEC), { recursive: true });
   await mkdir(join(root, 'src'), { recursive: true });
 
   await writeFile(join(root, '.chalc', 'gate.json'), JSON.stringify(config ?? { spec: { dir: 'specs' }, pending: [], language: 'es' }));
-  if (tasks !== null) await writeFile(join(root, SPEC, 'tasks.md'), tasks);
+  await writeSpec(root, tasks);
   if (review) await writeFile(join(root, '.chalc', 'review.md'), review);
   // El fuente se envejece a un instante fijo para que la evidencia pueda ser posterior a él sin
   // depender de cuándo corra el test. Sin esto, cualquier repo "terminado" tendría trabajo sin medir.
@@ -41,7 +58,7 @@ async function repo({ tasks = '- [x] T1\n- [ ] T2 — en esto voy\n', config, st
   await utimes(join(root, 'src', 'pago.ts'), TOUCHED / 1000, TOUCHED / 1000);
   // Qué escribió esta tarea (spec 013, R10). Antes salía del árbol de fuentes entero, porque el
   // temporal no es un repo de git; R4b quitó ese respaldo y el fixture lo dice explícitamente.
-  await recordTouched(root, ['src/pago.ts']);
+  if (touched) await recordTouched(root, ['src/pago.ts']);
   // La evidencia lleva la huella del contenido revisado, como la escribe el portón (F-07).
   if (state) await writeFile(join(root, '.chalc', 'gate.state.json'), JSON.stringify(await anchored(root, state, ['src/pago.ts'])));
   return root;
@@ -81,8 +98,15 @@ test('R6 — un motivo de varias frases no rompe el formato de tres líneas', ()
 // ── R12: el código de salida ──────────────────────────────────────────────────────────────────
 
 test('R12 — decidir una acción sale con 0, aunque la acción sea done', async () => {
-  const result = await advise({ root: await finished() });
+  const root = await finished();
+  // Con todo hecho falta la aprobación del cierre, que es del usuario (spec 028): también sale con 0.
+  const pending = await advise({ root });
+  assert.equal(pending.action, 'approve_feature');
+  assert.equal(pending.code, 0);
 
+  const { fingerprint } = await specFacts(root, 'specs');
+  await writeSeal(root, { dir: SPEC, fingerprint, evidence: new Date(MEASURED).toISOString(), head: '', date: new Date(REVIEWED).toISOString() }, 'feature');
+  const result = await advise({ root });
   assert.equal(result.action, 'done');
   assert.equal(result.code, 0);
 });
@@ -102,11 +126,20 @@ test('R12 — blocked_config también sale con 0: el flujo sabe qué hacer', asy
 });
 
 test('R12 — solo ask_human sale con código distinto de cero', async () => {
-  const root = await repo({ tasks: null });
+  // Sin git y sin registro de rutas escritas no se sabe qué cambió la tarea: eso sí necesita a una persona.
+  const root = await repo({ touched: false });
   const result = await advise({ root });
 
   assert.equal(result.action, 'ask_human');
   assert.notEqual(result.code, 0);
+});
+
+test('spec 024, R9 — una spec sin tasks.md ya no es ask_human: es fix_specs, y sale con 0', async () => {
+  const result = await advise({ root: await repo({ tasks: null }) });
+
+  assert.equal(result.action, 'fix_specs');
+  assert.equal(result.code, 0);
+  assert.match(result.reason, /tasks\.md/);
 });
 
 // ── el advisor junta los tres módulos ─────────────────────────────────────────────────────────

@@ -14,8 +14,9 @@ import { markRead, send } from '../catalog/mail/lib/mailbox.mjs';
 const lines = async (dir) => (await readFile(join(dir, '.gitignore'), 'utf8')).split(/\r?\n/);
 
 // T7 (spec 022, R14, S7a)
-test('S7a: the local artifacts of .chalc are the five the audit names', () => {
-  assert.deepEqual([...LOCAL_IGNORES].sort(), ['.chalc/activity.jsonl', '.chalc/live.json', '.chalc/memory/state.json', '.chalc/usage.json', '.chalc/usage.lock/']);
+// Más el registro y el estado del equipo (spec 032, R12): también son de la máquina.
+test('S7a: the local artifacts of .chalc are the five the audit names, plus the team ledger and state', () => {
+  assert.deepEqual([...LOCAL_IGNORES].sort(), ['.chalc/activity.jsonl', '.chalc/design-out/', '.chalc/evals-out/', '.chalc/live.json', '.chalc/memory/state.json', '.chalc/probe-out/', '.chalc/team/ledger.jsonl', '.chalc/team/orders/', '.chalc/team/status.json', '.chalc/usage.json', '.chalc/usage.lock/']);
 });
 
 // T7 (spec 022, R14, S7a)

@@ -1,19 +1,22 @@
-// cli/engine/reviewfile.mjs — bitácora PERSISTIDA del ciclo de calidad: .chalc/review.md registra,
+// cli/engine/reviewfile.mjs — bitácora PERSISTIDA del ciclo de calidad: .chalc/cli-review.md registra,
 // en orden real, lo que el revisor encontró, la orden de corrección LITERAL que recibió el junior,
 // lo que el junior respondió y cómo cerró el portón de verificación (build). Es el hermano del
 // plan.md: aquel muestra las órdenes del líder; este muestra el pulso revisor→junior→compilador.
 // Lo escribe SOLO el orquestador con datos observados (veredictos, comandos, resultados) — nunca
 // a pedido del modelo. Un run nuevo con revisión reemplaza la bitácora anterior.
+//
+// NO es `.chalc/review.md` (spec 026, R1-R2): ese archivo es la bitácora append-only de los ROLES, que
+// leen el advisor y la memoria. Compartir la ruta hacía que abrir una revisión aquí la borrara.
 
 import { existsSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { stamp } from './planfile.mjs';
 import { redactSensitiveText } from '../../lib/redact.mjs';
 
-export const REVIEW_REL = '.chalc/review.md';
-export const reviewPath = (projectPath) => join(projectPath, '.chalc', 'review.md');
+export const REVIEW_REL = '.chalc/cli-review.md';
+export const reviewPath = (projectPath) => join(projectPath, ...REVIEW_REL.split('/'));
 
-// Todo lo que se sangra en la bitácora (salidas, órdenes) se redacta: review.md queda en el repo.
+// Todo lo que se sangra en la bitácora (salidas, órdenes) se redacta: la bitácora queda en el repo.
 const indent = (text) => redactSensitiveText(String(text || '').trim()).split('\n').map((l) => '    ' + l).join('\n');
 
 // Abre la bitácora de UNA revisión (reemplaza la anterior). opts.reviewer: etiqueta del modelo revisor.

@@ -1,0 +1,25 @@
+{
+  "api": [
+    {
+      "name": "<qué comprueba la petición>",
+      "method": "GET",
+      "url": "http://localhost:3000/<ruta>",
+      "expect": {
+        "status": 200,
+        "json": {
+          "<campo>": "*"
+        }
+      }
+    }
+  ],
+  "cli": [
+    {
+      "name": "<qué comprueba el comando>",
+      "command": "<comando> --help",
+      "expect": {
+        "exit": 0,
+        "stdout": "<texto que debe aparecer>"
+      }
+    }
+  ]
+}

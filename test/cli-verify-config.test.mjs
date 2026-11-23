@@ -21,7 +21,7 @@ test('a project can declare its own verification command in gate.json', async (t
 test('a skipped verification is logged as skipped, never as OK', async (tc) => {
   const root = await tempDir(tc, 'chalc-f03-log-');
   await mkdir(join(root, '.chalc'), { recursive: true });
-  await writeFile(join(root, '.chalc', 'review.md'), '# Revisión\n\n');   // la abre la revisión, siempre antes
+  await writeFile(reviewPath(root), '# Revisión\n\n');   // la abre la revisión, siempre antes
   logVerify(root, 0, { skipped: true, reason: 'sin comando de verificación' });
   const text = readFileSync(reviewPath(root), 'utf8');
   assert.match(text, /OMITIDA \(sin comando de verificación\)/);

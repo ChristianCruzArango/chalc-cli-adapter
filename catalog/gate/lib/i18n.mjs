@@ -9,6 +9,10 @@
 // hallazgo se lee en los dos idiomas sin que ninguna etapa sepa de idiomas.
 
 import { RULES } from './rules.mjs';
+import { COHERENCE } from './i18n-coherence.mjs';
+import { APPROVE } from './i18n-approve.mjs';
+import { TDD, TDD_MESSAGES } from './i18n-tdd.mjs';
+import { TOOLING } from './i18n-coherence.mjs';
 
 // Marco del informe. Paridad exacta de claves entre es y en: el test la exige.
 export const FRAME = {
@@ -21,7 +25,7 @@ export const FRAME = {
     stages: {
       title: 'Etapas',
       name: 'Etapa', result: 'Resultado', command: 'Comando', code: 'Salida', duration: 'Duración',
-      scope: 'alcance', config: 'configuración',
+      scope: 'alcance', config: 'configuración', coherence: 'coherencia de la spec', tooling: 'herramientas de chalc', tdd: 'test-first',
       tests: 'tests', build: 'compilación', mutation: 'mutación', smells: 'código', duplication: 'duplicación', security: 'seguridad', boundaries: 'fronteras',
       traceability: 'trazabilidad', contract: 'contrato'
     },
@@ -62,8 +66,13 @@ export const FRAME = {
     fast: 'Corrida rápida (`--fast`): la mutación no se ejecutó, así que **no cierra la tarea**.',
     configChanged: '`.chalc/gate.json` cambió desde el cierre de la tarea anterior en claves que deciden el veredicto',
     configMissing: (rel) => `falta ${rel}: vuelve a equipar el repo con chalc`,
+    // Lo que dice un hook de git cuando no deja seguir (spec 029, R5).
+    hook: { unmeasured: 'Hay código cambiado que el portón no ha medido (o la última corrida no aprobó, o fue `--fast`). Corre `node .chalc/gate.mjs` antes de subir. Saltar este hook (`--no-verify`) es decisión de una persona.' },
     sealed: 'Comandos del portón re-sellados: la próxima corrida los ejecuta.',
     nothingToSeal: 'No hay tarea sellada todavía (.chalc/task.json): no hay nada que re-sellar.',
+    // Las dos aprobaciones del usuario (specs 024 y 028): textos en `i18n-approve.mjs`.
+    ...APPROVE.es,
+    ...TDD.es,
     configInvalid: (rel, why) => `${rel} no es JSON válido: ${why}`,
     configThresholdInvalid: (rel, value) => `${rel}: mutation.threshold debe ser un número entre 0 y 100 (ahora vale ${value})`,
     invalidKept: (file, why, copy) => `${file} no es JSON válido (${why}); se guardó una copia en ${copy} y se sigue sin él.`,
@@ -85,7 +94,7 @@ export const FRAME = {
     stages: {
       title: 'Stages',
       name: 'Stage', result: 'Result', command: 'Command', code: 'Exit', duration: 'Duration',
-      scope: 'scope', config: 'config',
+      scope: 'scope', config: 'config', coherence: 'spec coherence', tooling: 'chalc tooling', tdd: 'test-first',
       tests: 'tests', build: 'build', mutation: 'mutation', smells: 'code', duplication: 'duplication', security: 'security', boundaries: 'boundaries',
       traceability: 'traceability', contract: 'contract'
     },
@@ -123,8 +132,11 @@ export const FRAME = {
     fast: 'Fast run (`--fast`): mutation did not run, so this **does not close the task**.',
     configChanged: '`.chalc/gate.json` changed since the previous task was closed, in keys that decide the verdict',
     configMissing: (rel) => `${rel} is missing: equip the repo with chalc again`,
+    hook: { unmeasured: 'There is changed code the gate has not measured (or the last run did not pass, or was `--fast`). Run `node .chalc/gate.mjs` before pushing. Skipping this hook (`--no-verify`) is a person\'s decision.' },
     sealed: 'Gate commands re-sealed: the next run will execute them.',
     nothingToSeal: 'There is no sealed task yet (.chalc/task.json): nothing to re-seal.',
+    ...APPROVE.en,
+    ...TDD.en,
     configInvalid: (rel, why) => `${rel} is not valid JSON: ${why}`,
     configThresholdInvalid: (rel, value) => `${rel}: mutation.threshold must be a number between 0 and 100 (it is ${value})`,
     invalidKept: (file, why, copy) => `${file} is not valid JSON (${why}); a copy was kept at ${copy} and it is ignored.`,
@@ -168,6 +180,7 @@ export const MESSAGES = {
     [RULES.typeInService]: (d) => `"${d.name}" se declara dentro de un servicio o componente: va en su propio archivo`,
     [RULES.fileTooLong]: (d) => `${d.lines} líneas (límite ${d.limit}): el archivo hace más de una cosa`,
     [RULES.functionTooLong]: (d) => `"${d.name}" tiene ${d.lines} líneas (límite ${d.limit})`,
+    [RULES.functionTooComplex]: (d) => `"${d.name}" tiene ${d.complexity} caminos (límite ${d.limit}): pártela o simplifica sus condiciones`,
     [RULES.oversizedGrew]: (d) => `${d.kind === 'file' ? 'el archivo' : `"${d.name}"`} ya superaba el límite (${d.limit}) y la tarea lo hizo crecer de ${d.before} a ${d.after} líneas: pártelo en vez de ampliarlo`,
     [RULES.tooManyParams]: (d) => `"${d.name}" recibe ${d.params} parámetros (límite ${d.limit}): agrúpalos en un objeto`,
     [RULES.deepNesting]: (d) => `anidamiento de ${d.depth} en "${d.name}" (límite ${d.limit}): extrae o invierte la condición`,
@@ -188,15 +201,19 @@ export const MESSAGES = {
 
     [RULES.layerBoundary]: (d) => `"${d.from}" importa "${d.to}" (${d.import}): rompe la dirección de las capas`,
     [RULES.featureBoundary]: (d) => `"${d.from}" importa "${d.to}" (${d.import}): los features no se importan entre sí`,
+    [RULES.fileOutsideStructure]: (d) => `archivo nuevo fuera de la arquitectura acordada: créalo bajo ${d.folders.join(', ')} (o añade su carpeta a structure.allow en .chalc/gate.json)`,
 
     [RULES.scopeUndetermined]: () => 'no se puede saber qué archivos cambió esta tarea: no hay repo de git ni registro de rutas escritas en .chalc/task.files — el portón revisa una tarea, no el proyecto entero, así que no revisa nada hasta poder acotarlo',
     [RULES.commandsUnsealed]: (d) => `cambió un comando del portón desde la última tarea cerrada (${d.keys.join(', ')}): no se ejecuta un comando que nadie revisó. Revisa .chalc/gate.json y, si el cambio es tuyo, re-sella con \`node .chalc/gate.mjs --seal\``,
+    [RULES.toolingAltered]: (d) => TOOLING.es[d.reason] || TOOLING.es.altered,
     [RULES.scopeEmpty]: (d) => `no hay nada que revisar: ningún fuente cambió desde ${d.from ? `"${d.from}"` : 'la última tarea cerrada'} — sin código medido no hay tarea que cerrar`,
 
     [RULES.noRequirement]: (d) => `el test no cita ningún requisito de ${d.spec}: sin cita nadie puede saber qué cubre`,
     [RULES.unknownRequirement]: (d) => `"${d.id}" no existe en ${d.spec}: cita un requisito real o actualiza la spec primero`,
     [RULES.contractRouteMissing]: (d, lang) =>
       `${d.method} ${d.path} está en el contrato pero este repo no la ${verb(lang, d.role)}: falta "${d.missing.join('", "')}" en el código`,
+    ...COHERENCE.es,
+    ...TDD_MESSAGES.es,
     [RULES.guardGitCommit]: (d) => `Commit pendiente de tu confirmación: \`${d.command}\`. Las reglas del proyecto exigen tu orden explícita para commitear.`,
     [RULES.guardGitPush]: (d) => `Push pendiente de tu confirmación: \`${d.command}\`. Las reglas del proyecto exigen tu orden explícita para subir cambios.`,
     [RULES.guardGitPushForce]: (d) => `Bloqueado: \`${d.command}\` es un push forzado y reescribe historia que otros ya tienen. Si de verdad hace falta, hazlo tú fuera del asistente.`,
@@ -221,6 +238,7 @@ export const MESSAGES = {
     [RULES.typeInService]: (d) => `"${d.name}" is declared inside a service or component: it belongs in its own file`,
     [RULES.fileTooLong]: (d) => `${d.lines} lines (limit ${d.limit}): the file does more than one thing`,
     [RULES.functionTooLong]: (d) => `"${d.name}" is ${d.lines} lines long (limit ${d.limit})`,
+    [RULES.functionTooComplex]: (d) => `"${d.name}" has ${d.complexity} paths (limit ${d.limit}): split it or simplify its conditions`,
     [RULES.oversizedGrew]: (d) => `${d.kind === 'file' ? 'the file' : `"${d.name}"`} was already over the limit (${d.limit}) and the task grew it from ${d.before} to ${d.after} lines: split it instead of extending it`,
     [RULES.tooManyParams]: (d) => `"${d.name}" takes ${d.params} parameters (limit ${d.limit}): group them into an object`,
     [RULES.deepNesting]: (d) => `nesting of ${d.depth} in "${d.name}" (limit ${d.limit}): extract it or invert the condition`,
@@ -241,15 +259,19 @@ export const MESSAGES = {
 
     [RULES.layerBoundary]: (d) => `"${d.from}" imports "${d.to}" (${d.import}): it breaks the direction of the layers`,
     [RULES.featureBoundary]: (d) => `"${d.from}" imports "${d.to}" (${d.import}): features do not import each other`,
+    [RULES.fileOutsideStructure]: (d) => `new file outside the agreed architecture: create it under ${d.folders.join(', ')} (or add its folder to structure.allow in .chalc/gate.json)`,
 
     [RULES.scopeUndetermined]: () => 'there is no way to tell which files this task changed: no git repo and no record of written paths in .chalc/task.files — the gate reviews a task, not the whole project, so it reviews nothing until the scope can be narrowed down',
     [RULES.commandsUnsealed]: (d) => `a gate command changed since the last closed task (${d.keys.join(', ')}): a command nobody reviewed is not run. Check .chalc/gate.json and, if the change is yours, re-seal with \`node .chalc/gate.mjs --seal\``,
+    [RULES.toolingAltered]: (d) => TOOLING.en[d.reason] || TOOLING.en.altered,
     [RULES.scopeEmpty]: (d) => `there is nothing to review: no source changed since ${d.from ? `"${d.from}"` : 'the last closed task'} — with no measured code there is no task to close`,
 
     [RULES.noRequirement]: (d) => `the test cites no requirement from ${d.spec}: without a citation nobody can tell what it covers`,
     [RULES.unknownRequirement]: (d) => `"${d.id}" does not exist in ${d.spec}: cite a real requirement or update the spec first`,
     [RULES.contractRouteMissing]: (d, lang) =>
       `${d.method} ${d.path} is in the contract but this repo does not ${verb(lang, d.role)} it: "${d.missing.join('", "')}" is missing from the code`,
+    ...COHERENCE.en,
+    ...TDD_MESSAGES.en,
     [RULES.guardGitCommit]: (d) => `Commit awaiting your confirmation: \`${d.command}\`. The project rules require your explicit go-ahead to commit.`,
     [RULES.guardGitPush]: (d) => `Push awaiting your confirmation: \`${d.command}\`. The project rules require your explicit go-ahead to push.`,
     [RULES.guardGitPushForce]: (d) => `Blocked: \`${d.command}\` is a forced push and rewrites history others already have. If it is truly needed, do it yourself outside the assistant.`,

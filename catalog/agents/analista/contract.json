@@ -1,0 +1,12 @@
+{
+  "id": "analista",
+  "order": 1,
+  "cadence": "spec",
+  "summary": {
+    "es": "Analista de la spec: antes de cualquier test o código, compara la HU literal (hu.md) con la spec, el plan y las tareas de la carpeta activa. Devuelve OK o una lista numerada y lo anota en .chalc/review.md con la huella de lo que revisó. No modifica ningún otro archivo.",
+    "en": "Spec analyst: before any test or code, compares the verbatim user story (hu.md) with the spec, the plan and the tasks of the active folder. Returns OK or a numbered list and logs it to .chalc/review.md with the fingerprint of what it reviewed. Modifies no other file."
+  },
+  "writes": [".chalc/review.md"],
+  "forbiddenWrites": ["**"],
+  "tools": ["Read", "Grep", "Glob", "Bash", "Write"]
+}

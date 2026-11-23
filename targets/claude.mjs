@@ -21,7 +21,7 @@ function planOf({ skills, mcps, methods, roles }) {
   for (const m of mcps) plan.push(`mcp       .mcp.json  ::  ${m.id}`);
   for (const me of methods) plan.push(kit.methodPlanLine(me, kit.planNote('planScaffoldRules')));
   plan.push(`rules     CLAUDE.md  ${kit.planNote('planChalcBlock')}`);
-  plan.push(`command   ${kit.liveCommandFile('claude')}`);
+  plan.push(...kit.commandPlanLines('claude'));
   plan.push('manifest  .chalc.json');
   return plan;
 }
@@ -76,8 +76,9 @@ export async function apply({ projectPath, CATALOG, skills, mcps, methods, stack
   // 4) CLAUDE.md (bloque gestionado)
   await kit.writeManagedBlock(join(projectPath, 'CLAUDE.md'), managedBlock({ projectPath, skills, mcps, methods, architecture, specLang }));
 
-  // 4b) El comando explícito que levanta el tablero (spec 021, R9): `/chalc-live`.
-  await kit.writeLiveCommand(projectPath, 'claude', specLang);
+  // 4b) Los comandos explícitos: `/chalc-live` levanta el tablero (spec 021, R9) y `/chalc-spec` lleva una HU
+  //     hasta la spec lista para aprobar (spec 024, R20).
+  await kit.writeCommands(projectPath, 'claude', specLang);
 
   // 5) Manifiesto
   await kit.writeManifest(projectPath, 'claude', { stacks, skills, mcps, methods, specLang, architecture });

@@ -11,6 +11,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decide } from '../catalog/next/lib/decide.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
 
 const TOUCHED = 3000;
 const GATE = 4000;
@@ -25,6 +26,8 @@ const BRANCH = 'feature/008-advisor';
 // Base con el verde SIN reclamar: si nada lo invalida, la acción es `tick_task`. Así cada test de
 // abajo demuestra exactamente qué invalidó la evidencia, sin que otro estado tape el resultado.
 const snapshot = (over = {}) => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — implementar el lector', mtime: GATE - 1, ...over.tasks },
   gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: BRANCH, pending: [], ...over.gate },
   review: { entries: [{ role: 'revisor', date: REVIEW, ok: true, findings: 0 }], ...over.review },

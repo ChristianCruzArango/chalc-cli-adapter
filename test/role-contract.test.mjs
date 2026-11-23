@@ -31,7 +31,8 @@ test('R1 — todo rol declara id, orden, cadencia, resumen bilingüe y alcance',
   for (const role of roles) {
     assert.match(role.id, /^[a-z][a-z0-9-]*$/, `${role.id}: el id aparece en la bitácora, debe ser estable`);
     assert.equal(typeof role.order, 'number', `${role.id}: falta order`);
-    assert.ok(['task', 'feature'].includes(role.cadence), `${role.id}: cadencia inválida "${role.cadence}"`);
+    // `team` (spec 034): los roles que no revisan —líder y desarrollador—.
+    assert.ok(['spec', 'task', 'feature', 'team'].includes(role.cadence), `${role.id}: cadencia inválida "${role.cadence}"`);
     assert.ok(role.summary?.es && role.summary?.en, `${role.id}: el resumen va en los dos idiomas`);
     assert.ok(Array.isArray(role.writes), `${role.id}: writes debe ser una lista, aunque esté vacía`);
     assert.ok(Array.isArray(role.tools), `${role.id}: tools debe ser una lista`);
@@ -160,7 +161,8 @@ test('R15 — la config detectada declara los roles con su cadencia y su orden',
   const config = await detectGateConfig(dir, { role: 'back', language: 'es' });
 
   assert.ok(Array.isArray(config.flow.roles), 'flow.roles debe ser una lista ordenada');
-  for (const role of await loadRoles()) {
+  // Los roles de equipo (spec 034) no revisan: el portón no los declara.
+  for (const role of (await loadRoles()).filter((r) => r.cadence !== 'team')) {
     const entry = config.flow.roles.find((r) => r.id === role.id);
     assert.ok(entry, `falta el rol ${role.id} en la config`);
     assert.equal(entry.cadence, role.cadence, `${role.id}: la cadencia por defecto sale del contrato`);

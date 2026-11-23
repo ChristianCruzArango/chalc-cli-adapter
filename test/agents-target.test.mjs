@@ -31,7 +31,7 @@ test('C1: el plan por defecto sale de la fila del layout, y en seco no escribe n
   const out = await applyAgentsTarget('copilot', { ...opts, dryRun: true });
   assert.deepEqual(out, { written: false, plan: [
     'skill     .chalc/skills/demo', 'mcp       .vscode/mcp.json  ::  fs', 'rules     AGENTS.md',
-    `command   ${liveCommandFile('copilot')}`, 'manifest  .chalc.json'
+    `command   ${liveCommandFile('copilot')}`, 'command   .github/prompts/chalc-spec.prompt.md', 'command   .github/prompts/chalc-teams.prompt.md', 'manifest  .chalc.json'
   ] });
   assert.ok(!existsSync(join(opts.projectPath, 'AGENTS.md')));
 });

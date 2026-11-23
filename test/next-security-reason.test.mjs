@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { parseGateState } from '../catalog/next/lib/state.mjs';
 import { decide } from '../catalog/next/lib/decide.mjs';
 import { reasonOf } from '../catalog/next/lib/i18n.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
 
 const state = (stages) => JSON.stringify({ date: '2026-10-07T15:00:00Z', verdict: 'fail', fast: false, stages });
 
@@ -27,6 +28,8 @@ test('R22: a state from an older chalc, with no stages, reads as no failed stage
 
 test('R22: fix_gate carries the failed stages as facts', () => {
   const result = decide({
+    specs: READY_SPECS,
+    tdd: { red: true },
     tasks: { hasTasksFile: true, done: 0, total: 2, current: 'T1', mtime: 1 },
     gate: { exists: true, date: 4000, verdict: 'fail', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: 'b', pending: [], failedStages: ['security'] },
     review: { entries: [] },

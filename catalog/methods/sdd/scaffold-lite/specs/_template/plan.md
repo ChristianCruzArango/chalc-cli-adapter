@@ -23,6 +23,17 @@
 ## Riesgos / Dudas
 - ...
 
+## Alcance (lo que esta spec puede tocar)
+Rutas o globs que la implementación puede modificar: lo que quede fuera impide la entrega, y dos specs cuyo
+alcance se solapa no se trabajan a la vez. `Depende de:` nombra las specs que deben integrarse antes.
+
+Superficie: <ui | api | cli | ninguna>
+
+Toca:
+- <ruta/o/glob/**>
+
+Depende de: <ninguna>
+
 ## Trazabilidad
 Cada requisito de la spec queda cubierto por al menos un componente:
 - R1 → ...

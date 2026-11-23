@@ -13,8 +13,18 @@ import { currentBranch, headCommit, taskScope } from './lib/changed.mjs';
 import { readBaseline, resealConfig as resealBaseline, sealBaseline } from './lib/baseline.mjs';
 import { commandChanges, configChanges, guardedConfig, scopeHash } from './lib/fingerprint.mjs';
 import { clearTouched } from './lib/touched.mjs';
+import { approvalIn, approveCommand } from './lib/approvecli.mjs';
 import { checkContract } from './lib/contractcheck.mjs';
-import { checkTraceability } from './lib/traceability.mjs';
+import { coherenceStage } from './lib/coherencestage.mjs';
+import { configStage, noConfigStage, scopeStage, toolingStage } from './lib/blockstages.mjs';
+import { hookIo, runHook } from './lib/hook.mjs';
+import { ciCheck } from './lib/cicheck.mjs';
+import { redCommand } from './lib/redcli.mjs';
+import { tddStage } from './lib/tddstage.mjs';
+import { lintTests } from './lib/testsmells.mjs';
+import { structureFindings } from './lib/structure.mjs';
+import { integrityProblems } from './lib/integrity.mjs';
+import { checkTraceability, untestedRequirements } from './lib/traceability.mjs';
 import { contractRoutesWithLines } from './lib/contract-routes.mjs';
 import { frameOf, messageOf } from './lib/i18n.mjs';
 import { lintBoundariesIn } from './lib/boundaries.mjs';
@@ -22,8 +32,9 @@ import { lintChanged } from './lib/smells.mjs';
 import { scanDuplication } from './lib/duplication.mjs';
 import { lintSecurity } from './lib/security.mjs';
 import { loadConfig } from './lib/config.mjs';
-import { newestSpec } from './lib/spec.mjs';
+import { activeSpecDir } from './lib/spec.mjs';
 import { renderEvidence, renderState, verdictOf, writeEvidence, writeState } from './lib/evidence.mjs';
+import { noteFailure } from './lib/lessons.mjs';
 import { RULES } from './lib/rules.mjs';
 import { runCommand } from './lib/run.mjs';
 import { runMutation } from './lib/mutation.mjs';
@@ -59,21 +70,42 @@ export async function runGate({ root = process.cwd(), fast = false, run = runCom
   // El alcance: qué archivos revisa esta corrida (spec 013). Una lista inyectada ES un alcance
   // determinado —los tests del portón la usan para no depender de git— y se respeta tal cual.
   const scope = changed ? { files: changed, source: 'given', undetermined: false, from: '' } : await taskScope(root);
-  const spec = await newestSpec(root, config.spec.dir, 'spec.md');
+  const spec = await activeSpecDir(root, config.spec.dir);
   // El alcance viaja en la meta hasta la evidencia y el estado (R7): sin dejar escrito sobre qué se
   // miró, un informe sin hallazgos no se distingue de un informe que no miró nada.
   // Las claves de gate.json que cambiaron desde que se cerró la tarea anterior (F-07): no bloquean
   // —el usuario ajusta su portón—, pero la evidencia y el advisor lo dicen.
   const changedConfig = configChanges((await readBaseline(root)).config, config);
-  const meta = { branch: await currentBranch(root), role: config.role, spec: spec ? spec.dir : '', scope, config, configChanges: changedConfig };
+  const meta = { branch: await currentBranch(root), role: config.role, spec: spec.dir || '', scope, config, configChanges: changedConfig };
+  const { blocking, coherence } = await preflight(root, config, { changedConfig, scope });
+  if (blocking) return finish(out, [blocking], meta);
+
+  const task = { root, files: scope.files, scope };
+  const stages = [...(coherence ? [coherence] : []), ...await executedStages(config, { ...task, run, fast }), ...await staticStages(config, task)];
+  return finish(out, stages, meta);
+}
+
+// Lo que impide revisar nada todavía, como etapa (`blocking`), en el orden en que se comprueba; y la etapa
+// `coherence` cuando pasó, para que figure en el informe.
+async function preflight(root, config, { changedConfig, scope }) {
+  // Integridad (spec 029, R8): con una herramienta de `.chalc/` alterada no se mide nada. Va la primera porque
+  // todo lo demás lo decide ese mismo código.
+  const altered = await integrityProblems(root);
+  if (altered.length) return { blocking: toolingStage(altered) };
+
   // Un COMANDO cambiado sí bloquea (S7b): se ejecuta con shell en cada turno (hook `Stop`). Un PR que reescribe
   // `test.command` no corre solo: el usuario lo revisa y re-sella con `--seal`.
-  if (commandChanges(changedConfig).length) return finish(out, [configStage(commandChanges(changedConfig))], meta);
+  if (commandChanges(changedConfig).length) return { blocking: configStage(commandChanges(changedConfig)) };
+
+  // Coherencia (spec 024, R17): la primera etapa. Con la HU, la spec, el plan y las tareas sin cuadrar —o sin
+  // la aprobación del usuario— no se corre un solo test: medir código de una spec que nadie validó no sirve.
+  const coherence = await coherenceStage(root, config.spec.dir);
+  if (coherence && !coherence.ok) return { blocking: coherence };
 
   // Sin saber QUÉ revisar no se revisa (R4b). La salida histórica era el árbol de fuentes entero, y
   // eso no es revisar de más: es cambiar de pregunta sin avisar, y enterrar la tarea de hoy bajo la
   // deuda de tres años. Es un bloqueo —"no pude comprobarlo"—, no un fallo.
-  if (scope.undetermined) return finish(out, [scopeStage(RULES.scopeUndetermined, {}, true)], meta);
+  if (scope.undetermined) return { blocking: scopeStage(RULES.scopeUndetermined, {}, true) };
 
   // Sabiendo que no cambió nada, se dice y no se aprueba (R13). "No hay nada que revisar" y "está
   // todo bien" no son lo mismo: confundirlos cierra tareas sin una línea de código medida.
@@ -81,18 +113,9 @@ export async function runGate({ root = process.cwd(), fast = false, run = runCom
   // Aquí caen también las tareas cuyo único cambio no es fuente —solo documentación, solo config— y
   // las que solo borran archivos. No es un descuido: el portón mide código, y de esas no tiene nada
   // que medir. El informe dice exactamente eso, que es lo que permite decidir a quien lo lea.
-  if (!scope.files.length) return finish(out, [scopeStage(RULES.scopeEmpty, { from: scope.from }, false)], meta);
-
-  const task = { root, files: scope.files, scope };
-  const stages = [...await executedStages(config, { ...task, run, fast }), ...await staticStages(config, task)];
-  return finish(out, stages, meta);
+  if (!scope.files.length) return { blocking: scopeStage(RULES.scopeEmpty, { from: scope.from }, false) };
+  return { blocking: null, coherence };
 }
-
-// La config que falta o no se puede leer, como etapa bloqueada.
-const noConfigStage = (error) => ({
-  stage: 'tests', ok: false, blocked: true, reason: 'no-config', command: '', code: null, ms: 0,
-  findings: [{ file: '', line: 0, rule: RULES.noTestCommand, data: { detail: error } }]
-});
 
 // Las etapas que ejecutan herramientas del repo: tests, compilación y mutación.
 async function executedStages(config, { root, files, scope, run, fast }) {
@@ -116,10 +139,12 @@ async function executedStages(config, { root, files, scope, run, fast }) {
 //    lo demás esté bloqueado. El orden va de más local a más global: primero el archivo, luego el
 //    repo, luego las fronteras.
 async function staticStages(config, { root, files, scope }) {
-  const stages = [];
+  // Test-First con evidencia (spec 030, R5): el rojo registrado y los tests sellados, antes que nada más.
+  const stages = [await tddStage(root, { files, specDir: config.spec.dir })];
 
   const smells = await timed(() => lintChanged(files, { root, limits: config.lint, lines: scope.lines, removed: scope.removed }));
-  stages.push(staticStage('smells', smells.value, smells.ms));
+  // Con los tests que no prueban nada (spec 030, R9): son olores del código de pruebas.
+  stages.push(staticStage('smells', [...smells.value, ...await lintTests(files, { root, lines: scope.lines })], smells.ms));
 
   // Duplicación (spec 012): mira el árbol entero, pero solo reporta lo que tiene una punta en algo
   // que la tarea tocó. Va junto a `smells` porque las dos leen el mismo texto. Si el recorrido se
@@ -132,10 +157,13 @@ async function staticStages(config, { root, files, scope }) {
   stages.push(await securityStage(config, { root, files, lines: scope.lines }));
 
   const boundaries = await timed(() => lintBoundariesIn(root, files));
-  stages.push(staticStage('boundaries', boundaries.value.map(asFinding), boundaries.ms));
+  // Con dónde NACE el código (spec 031, R3): un archivo nuevo fuera de la arquitectura acordada.
+  stages.push(staticStage('boundaries', [...boundaries.value.map(asFinding), ...structureFindings(scope, config)], boundaries.ms));
 
   const traceability = await timed(() => checkTraceability(files, { root, specDir: config.spec.dir }));
-  stages.push(staticStage('traceability', traceability.value, traceability.ms));
+  // En los dos sentidos (spec 030, R10): cada test cita un requisito real, y cada requisito de la tarea tiene test.
+  const untested = await untestedRequirements(files, { root, specDir: config.spec.dir });
+  stages.push(staticStage('traceability', [...traceability.value, ...untested], traceability.ms));
 
   const contract = await timed(() => checkContract({
     root, specDir: config.spec.dir, role: config.role, routesOf: contractRoutesWithLines
@@ -152,20 +180,6 @@ async function securityStage(config, { root, files, lines }) {
   const security = await timed(() => lintSecurity(files, { root, lines }));
   return { ...staticStage('security', security.value.findings, security.ms), allowed: security.value.allowed };
 }
-
-// La etapa que reporta un alcance con el que no se puede trabajar. No cuelga de ningún archivo —el
-// problema no está EN un archivo, está en no saber cuáles son—, así que el informe la muestra por el
-// nombre de su etapa.
-const scopeStage = (rule, data, blocked) => ({
-  stage: 'scope', ok: false, blocked, reason: rule, command: '', code: null, ms: 0,
-  findings: [{ file: '', line: 0, rule, data }]
-});
-
-// La etapa que se niega a ejecutar comandos cambiados sin re-sellar.
-const configStage = (keys) => ({
-  stage: 'config', ok: false, blocked: true, reason: RULES.commandsUnsealed, command: '', code: null, ms: 0,
-  findings: [{ file: '', line: 0, rule: RULES.commandsUnsealed, data: { keys } }]
-});
 
 // Una violación de frontera, en el formato común de hallazgo.
 const asFinding = (v) => ({
@@ -198,6 +212,7 @@ async function finish({ root, lang, fast }, stages, meta) {
   // El mismo resultado, para el advisor (spec 008, R13). Se escribe aquí y no en otro sitio para
   // que informe y estado no puedan discrepar: misma corrida, misma fecha, mismo `verdictOf`.
   await writeState(root, renderState({ stages, meta: stamped, fast }));
+  if (verdict !== 'pass') await noteFailure(root, stages);   // spec 036, R4: lo que se repite queda como candidata
 
   if (closesTask) await sealTask(root, meta.config);
 
@@ -246,8 +261,25 @@ export function report(result, lang, write = say) {
 /** ¿`argv` es una invocación directa de este archivo (y no un import desde los tests)? */
 export const isEntry = (argv) => Boolean(argv[1]) && /gate\.mjs$/.test(argv[1]);
 
-/** Entrada de línea de comandos: `--seal` re-sella; si no, corre el portón. Devuelve el código de salida. */
-export async function main({ argv = process.argv, root = process.cwd(), write = say } = {}) {
+// El portón al servicio de un hook de git: mismo código, y el resumen de la corrida rápida si la hay.
+async function hookMode(name, root, write) {
+  const lang = (await loadConfig(root)).config.language || 'en';
+  const fastGate = async () => { const result = await runGate({ root, fast: true }); report(result, lang, write); return result.code; };
+  return runHook(name, hookIo(root, { lang, fastGate, write }));
+}
+
+/**
+ * Entrada de línea de comandos: `--approve-spec` y `--approve-feature` sellan la spec y el cierre (solo el usuario,
+ * desde su terminal), `--seal` re-sella los comandos; si no, corre el portón. `io` inyecta la terminal en los tests. Devuelve el código de salida.
+ */
+export async function main({ argv = process.argv, root = process.cwd(), write = say, io } = {}) {
+  if (approvalIn(argv)) return approveCommand({ root, write, io, kind: approvalIn(argv) });
+  // Llamado por un hook de git (spec 029, R4, R5): `--hook pre-commit` mide en rápido; `--hook pre-push` solo comprueba.
+  if (argv.includes('--hook')) return hookMode(argv[argv.indexOf('--hook') + 1], root, write);
+  // En CI (spec 029, R11): integridad del tooling y coherencia y aprobación de la spec; sin medir código.
+  if (argv.includes('--ci')) return ciCheck(root, write);
+  // El rojo de la tarea (spec 030): los tests fallan ANTES de que exista su código, y queda escrito.
+  if (argv.includes('--red')) return redCommand({ root, argv, write });
   if (argv.includes('--seal')) {
     const sealed = await resealConfig(root);
     const frame = frameOf((await loadConfig(root)).config.language || 'en');

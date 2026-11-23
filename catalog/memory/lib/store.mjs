@@ -11,6 +11,7 @@
 import { createHash } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { sharedRoot } from './sharedroot.mjs';
 
 export const MEMORY_REL = '.chalc/memory/memory.jsonl';
 
@@ -19,7 +20,8 @@ const idOf = (key) => createHash('sha256').update(key).digest('hex').slice(0, 8)
 
 const union = (a = [], b = []) => [...new Set([...a, ...b])];
 
-const pathOf = (root) => join(root, MEMORY_REL);
+// El almacén es UNO por proyecto (spec 036, R1): desde el worktree de una spec, el del repo principal.
+const pathOf = (root) => join(sharedRoot(root), MEMORY_REL);
 
 // Una línea como entrada, o null. Una línea rota —un proceso que murió a mitad de escribir— no es
 // una entrada: no puede tumbar la memoria entera.
@@ -81,6 +83,15 @@ export async function remember(root, entry, { now = new Date() } = {}) {
   const { seen, ...line } = saved;
   await appendFile(pathOf(root), JSON.stringify({ ...line, inc: 1 }) + '\n', 'utf8');
   return saved;
+}
+
+/**
+ * Cambia campos de la entrada `key` SIN contarlo como otra repetición (spec 036: promover o retirar una lección).
+ * Como todo aquí, añade una línea: la versión vigente es la suma de las que hay.
+ */
+export async function mark(root, key, fields) {
+  await mkdir(dirname(pathOf(root)), { recursive: true });
+  await appendFile(pathOf(root), JSON.stringify({ key, ...fields, inc: 0 }) + '\n', 'utf8');
 }
 
 // Reescribe el archivo con solo las versiones vigentes cuando las líneas superan el doble de las

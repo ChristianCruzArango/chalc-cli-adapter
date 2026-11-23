@@ -7,7 +7,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { methodEntries, readChoices } from '../lib/manifest.mjs';
 
-const NONE = { lang: '', methods: [], architecture: null };
+// `skills` llegó con la spec 026 (R5): lo que re-equipar conserva además de idioma, método y arquitectura.
+const NONE = { lang: '', methods: [], architecture: null, skills: [] };
 const withManifest = async (content) => {
   const dir = await mkdtemp(join(tmpdir(), 'chalc-choices-'));
   if (content !== undefined) await writeFile(join(dir, '.chalc.json'), typeof content === 'string' ? content : JSON.stringify(content));
@@ -19,7 +20,8 @@ test('R7: the stored language, methods with their mode, and architecture are rea
   assert.deepEqual(await readChoices(dir), {
     lang: 'es',
     methods: [{ id: 'sdd', mode: 'lite' }, { id: 'otro', mode: '' }],
-    architecture: { id: 'modular-feature', name: 'NestJS Modular' }
+    architecture: { id: 'modular-feature', name: 'NestJS Modular' },
+    skills: []
   });
 });
 
@@ -30,13 +32,13 @@ test('R8: no manifest, broken JSON, or a non-object give no choices', async () =
 });
 
 test('R8: an old manifest without the new fields gives no language and no architecture', async () => {
-  assert.deepEqual(await readChoices(await withManifest({ target: 'claude', methods: ['sdd'] })), { lang: '', methods: [{ id: 'sdd', mode: '' }], architecture: null });
+  assert.deepEqual(await readChoices(await withManifest({ target: 'claude', methods: ['sdd'] })), { lang: '', methods: [{ id: 'sdd', mode: '' }], architecture: null, skills: [] });
 });
 
 test('R8: values that are not what was written are ignored', async () => {
   const dir = await withManifest({ lang: 'fr', methods: 'sdd', architecture: { id: 'x', name: '' } });
   assert.deepEqual(await readChoices(dir), NONE);
-  assert.deepEqual(await readChoices(await withManifest({ lang: 'en', methods: [':lite'], architecture: { name: 42 } })), { lang: 'en', methods: [], architecture: null });
+  assert.deepEqual(await readChoices(await withManifest({ lang: 'en', methods: [':lite'], architecture: { name: 42 } })), { lang: 'en', methods: [], architecture: null, skills: [] });
 });
 
 test('R7: --method entries win; without them the remembered ones are used', () => {

@@ -18,6 +18,8 @@ import { parseGateState } from '../catalog/next/lib/state.mjs';
 import { snapshot } from '../catalog/next/lib/snapshot.mjs';
 import { decide } from '../catalog/next/lib/decide.mjs';
 import { loadConfig } from '../catalog/gate/lib/config.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
+import { coherentSpec } from './helpers/coherentspec.mjs';
 
 const CONFIG = {
   stack: 'js',
@@ -35,8 +37,7 @@ async function project() {
   const dir = await mkdtemp(join(tmpdir(), 'chalc-f07-'));
   const files = {
     '.chalc/gate.json': JSON.stringify(CONFIG),
-    'specs/001-x/spec.md': '- **R1** — WHEN x THE SYSTEM SHALL y.',
-    'specs/001-x/tasks.md': '- [ ] T1 — pagar\n',
+    ...coherentSpec('specs/001-x'),
     'src/base.ts': 'export const base = () => 1;\n'
   };
   for (const [rel, content] of Object.entries(files)) {
@@ -82,6 +83,8 @@ test('a gate state dated in the future is not evidence', () => {
 
 const ROLES = [{ id: 'revisor', order: 10, cadence: 'task', required: true }];
 const facts = (entry, { now = 10_000_000 } = {}) => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 0, total: 2, current: 'T1', mtime: 0 },
   gate: { exists: true, date: 5_000_000, verdict: 'pass', fast: false, branch: 'main', pending: [], scopeHash: 'h', currentScopeHash: 'h', head: 'abcdef1234567890' },
   review: { entries: [entry] },

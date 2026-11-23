@@ -12,6 +12,8 @@ import { allReviews } from '../catalog/next/lib/review.mjs';
 import { checklistProblems } from '../catalog/next/lib/checklist.mjs';
 import { decide } from '../catalog/next/lib/decide.mjs';
 import { requirementsOf } from '../catalog/next/lib/tasks.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
+import { closedFor } from './helpers/readyspecs.mjs';
 
 const SCOPE = ['src/app.module.ts', 'src/app.saludo.spec.ts'];
 const entry = (body, verdict = 'OK') => allReviews(`## 2026-10-13T15:10:00Z · a1b2c3d4e5 · revisor · ${verdict}\n${body}`)[0];
@@ -74,6 +76,8 @@ test('R6: without requirements nothing is demanded', () => {
 const GATE = Date.parse('2026-10-13T15:00:00Z');
 const ROLES = [{ id: 'revisor', order: 10, cadence: 'task', required: true, checklist: 'requirements' }];
 const snap = (log, current = '**T2** (R1, R2) — Exponer por HTTP') => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 1, total: 2, current, mtime: GATE - 1 },
   gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', scopeFiles: SCOPE, branch: 'b', pending: [] },
   review: { entries: allReviews(log) },
@@ -94,7 +98,8 @@ test('R4: the advisor lets the task close only when every requirement is answere
 test('R6: with everything ticked, or a task without requirements, no requirement line is demanded', () => {
   assert.equal(decide(snap(LOG(''), '**T3** — Mutation testing')).action, 'tick_task');
   const done = { ...snap(LOG('')), tasks: { hasTasksFile: true, done: 2, total: 2, current: '', mtime: GATE - 1 } };
-  assert.equal(decide(done).action, 'done');
+  assert.equal(decide(done).action, 'approve_feature');
+  assert.equal(decide({ ...done, closing: closedFor(done.gate.date) }).action, 'done');
 });
 
 test('R4: the reviewer contract declares the requirements checklist', async () => {

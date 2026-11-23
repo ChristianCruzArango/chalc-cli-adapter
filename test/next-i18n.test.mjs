@@ -18,11 +18,15 @@ const LANGS = ['es', 'en'];
 // Hechos representativos de cada acción, como los devuelve `decide`.
 const FACTS = {
   blocked_config: { pending: ['test.command', 'mutation.command'] },
+  fix_specs: { dir: 'specs/001-demo', noSpec: false, author: 'especificador', problems: [{ file: 'specs/001-demo/plan.md', line: 3, rule: 'plan-unknown-requirement', data: { id: 'R9' } }] },
+  approve_spec: { dir: 'specs/001-demo', fingerprint: '0123456789abcdef' },
+  approve_feature: { dir: 'specs/001-demo', fingerprint: '0123456789abcdef', total: 3 },
   run_gate: { files: 3, newestMtime: Date.parse('2026-08-09T15:00:00Z'), evidenceDate: Date.parse('2026-08-09T14:00:00Z'), fast: false, otherBranch: '' },
   fix_gate: { verdict: 'fail', evidenceDate: Date.parse('2026-08-09T14:00:00Z') },
   call_reviewer: { evidenceDate: Date.parse('2026-08-09T14:00:00Z'), reviewDate: null },
   fix_review: { findings: 3, reviewDate: Date.parse('2026-08-09T14:30:00Z') },
   tick_task: { task: 'T2 — implementar el lector', done: 1, total: 3, waitForApproval: true },
+  red_task: { task: 'T2 — implementar el lector', done: 1, total: 3, requirements: ['R1'] },
   work_task: { task: 'T2 — implementar el lector', done: 1, total: 3 },
   done: { total: 3 },
   ask_human: { problems: ['tasks-missing'] }
@@ -108,11 +112,12 @@ test('R10 — el motivo de ask_human dice qué no se pudo leer', () => {
   }
 });
 
-test('R18 — la puerta de aprobación cambia el motivo de tick_task', () => {
+// La aprobación por tarea desapareció con la spec 028 (R8): las puertas humanas son la spec y el cierre.
+test('spec 028, R8 — tick_task ya no cambia con una puerta de aprobación por tarea', () => {
   for (const lang of LANGS) {
     const withGate = reasonOf('tick_task', { ...FACTS.tick_task, waitForApproval: true }, lang);
     const withoutGate = reasonOf('tick_task', { ...FACTS.tick_task, waitForApproval: false }, lang);
-    assert.notEqual(withGate, withoutGate, `${lang}: la puerta tiene que verse en el texto`);
+    assert.equal(withGate, withoutGate, `${lang}: no hay puerta por tarea`);
   }
 });
 

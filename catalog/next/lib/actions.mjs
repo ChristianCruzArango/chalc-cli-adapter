@@ -17,6 +17,8 @@ const GATE_DEFAULT = '.chalc/gate.mjs';
 // hace evidente qué gana a qué.
 export const ACTIONS = [
   'blocked_config',
+  'fix_specs',
+  'approve_spec',
   'sync_contract',
   'read_mail',
   'run_gate',
@@ -24,7 +26,10 @@ export const ACTIONS = [
   'call_role',
   'fix_review',
   'tick_task',
+  'red_task',
   'work_task',
+  'deliver_spec',
+  'approve_feature',
   'done',
   'ask_human'
 ];
@@ -38,6 +43,15 @@ const arg = (path) => (/^[\w@%+=:,./\\-]+$/.test(String(path)) ? String(path) : 
 
 export function commandOf(action, { gatePath = GATE_DEFAULT, facts = {} } = {}) {
   if (action === 'run_gate') return `node ${arg(gatePath)}`;
+
+  // El comando de la aprobación es para el USUARIO, en su terminal (spec 024, R11): el motivo lo dice, la
+  // guarda se lo deniega al asistente y el propio comando se niega sin una terminal interactiva.
+  if (action === 'approve_spec') return `node ${arg(gatePath)} --approve-spec`;
+  if (action === 'approve_feature') return `node ${arg(gatePath)} --approve-feature`;
+  // Registrar el rojo de la tarea (spec 030): se corre DESPUÉS de escribir sus tests y antes de su código.
+  if (action === 'red_task') return `node ${arg(gatePath)} --red`;
+  // Entregar la spec desde su worktree (spec 034): lo registra el orquestador, que vive junto al portón.
+  if (action === 'deliver_spec') return `node ${arg(gatePath.replace(/gate\.mjs$/, 'team.mjs'))} deliver --spec ${arg(facts.dir)}`;
 
   // Al cerrar la tarea y al cerrar la feature, la memoria guarda lo que el ciclo enseñó (spec 015,
   // R11): lo que deja el endurecedor solo existe al final. Vive junto al portón que la cierra, así que

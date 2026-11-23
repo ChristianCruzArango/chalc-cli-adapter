@@ -16,6 +16,7 @@ import { envLanguage, loadConfig } from '../catalog/gate/lib/config.mjs';
 import { frameOf, messageOf } from '../catalog/gate/lib/i18n.mjs';
 import { RULES } from '../catalog/gate/lib/rules.mjs';
 import { readTouched } from '../catalog/gate/lib/touched.mjs';
+import { coherentSpec } from './helpers/coherentspec.mjs';
 
 const NODE_OK = `${JSON.stringify(process.execPath)} -e "process.exit(0)"`;
 const CONFIG = {
@@ -40,7 +41,7 @@ async function files(dir, map) {
 // Un repo equipado, con commit base y un archivo nuevo de la tarea en curso.
 async function repo(t, { config = CONFIG, seal = false } = {}) {
   const dir = await tempDir(t, 'chalc-mut-gate-');
-  await files(dir, { '.chalc/gate.json': JSON.stringify(config), 'specs/001-x/spec.md': '- **R1** — WHEN x THE SYSTEM SHALL y.', 'src/base.ts': 'export const base = () => 1;\n' });
+  await files(dir, { '.chalc/gate.json': JSON.stringify(config), ...coherentSpec('specs/001-x', { ticked: true }), 'src/base.ts': 'export const base = () => 1;\n' });
   git(dir, 'init', '-q', '-b', 'main', '.');
   git(dir, 'add', '-A');
   git(dir, 'commit', '-qm', 'base');

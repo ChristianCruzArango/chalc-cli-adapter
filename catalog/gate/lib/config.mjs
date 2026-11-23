@@ -19,6 +19,8 @@ const DEFAULTS = {
   mutation: { tool: '', command: '', report: '', format: '', install: '', probe: '', scopeFlag: '', scopeJoin: '', projectFlag: '', threshold: 80, required: true },
   lint: {
     maxFileLines: 300, maxFunctionLines: 40, maxParams: 4, maxDepth: 3,
+    // Caminos por función (spec 031, R6). 10 es el umbral clásico de complejidad ciclomática.
+    maxComplexity: 10,
     // Duplicación (spec 012). Mínimo conservador a propósito: esta etapa vive o muere por los falsos
     // positivos, y un linter que se equivoca se acaba apagando entero.
     duplication: { enabled: true, minLines: 6, maxFiles: 4000 }
@@ -28,11 +30,9 @@ const DEFAULTS = {
   security: { enabled: true },
   spec: { dir: 'specs' },
   // Cómo se TRABAJA, frente al resto de la config, que dice cómo se MIDE (spec 008, R17). Comparte
-  // archivo porque es el mismo ciclo y porque la fusión de R16 ya está resuelta aquí. Los defaults
-  // son el comportamiento de siempre: sin ellos, actualizar chalc encadenaría tareas sin que nadie
-  // las apruebe.
+  // archivo porque es el mismo ciclo y porque la fusión de R16 ya está resuelta aquí. Las aprobaciones del
+  // usuario (la spec y el cierre) NO están aquí: no son una puerta que se pueda apagar (spec 028, R7, R9).
   flow: {
-    approvals: { task: true, feature: true },
     review: { required: true },
     // Coordinación entre lados (spec 010). Apagada por defecto: el caso común es el mono-repo, que no
     // tiene con quién coordinarse. La rellena `chalc feature` en modo worktree, que es el único que

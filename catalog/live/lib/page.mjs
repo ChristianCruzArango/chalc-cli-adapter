@@ -17,8 +17,8 @@ export const REFRESH_MS = 2000;
 // El orden de la página (R21): a la izquierda, la barra lateral —estado del agente, specs y navegación—; a la
 // derecha, a pantalla completa, el resumen y la vía SDD, el portón, gráficos y lo que falta, tareas, notas y la
 // actividad. Lo que va a lo ancho lleva `wide`; gráficos y «qué falta» comparten fila.
-const SECTIONS = ['headline', 'flow', 'gate', 'charts', 'missing', 'tasks', 'notes', 'activity'];
-const WIDE = new Set(['headline', 'flow', 'gate', 'tasks', 'notes', 'activity']);
+const SECTIONS = ['headline', 'team', 'flow', 'gate', 'charts', 'missing', 'tasks', 'notes', 'activity'];
+const WIDE = new Set(['headline', 'team', 'flow', 'gate', 'tasks', 'notes', 'activity']);
 const NAV = ['headline', 'flow', 'gate', 'tasks', 'notes', 'activity'];
 
 /** El HTML del tablero, en el idioma del proyecto (sin coincidencia, inglés). */

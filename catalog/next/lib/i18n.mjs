@@ -13,6 +13,8 @@
 // 15:00" dice qué pasó y deja verificarlo.
 
 // Hora local corta, para situar al lector sin llenar la línea de precisión inútil.
+import { messageOf } from '../../gate/lib/i18n.mjs';
+
 const at = (ms) => {
   if (!ms) return '—';
   const d = new Date(ms);
@@ -103,6 +105,31 @@ const REQUIREMENTS_NOTE = {
 };
 const requirementsNote = (f, lang) => (f.requirements?.length ? REQUIREMENTS_NOTE[lang](f.requirements.join(', ')) : '');
 
+// Los problemas de coherencia (spec 024, R9), cada uno con su archivo y línea y la frase del portón, que es
+// quien los define. Acotados: una lista interminable no se lee; el resto sale al corregir los primeros.
+const MAX_PROBLEMS = 12;
+const MORE = { es: (n) => ` (+${n} más)`, en: (n) => ` (+${n} more)` };
+const problemList = (problems, lang) => problems.slice(0, MAX_PROBLEMS)
+  .map((p) => `${p.file}:${p.line} — ${messageOf(p.rule, p.data, lang)}`).join('; ')
+  + (problems.length > MAX_PROBLEMS ? MORE[lang](problems.length - MAX_PROBLEMS) : '');
+
+const SPEC_NOTE = {
+  es: {
+    none: 'No hay ninguna carpeta de spec. Crea `specs/NNN-nombre/` con su `hu.md` (la HU tal cual la entregó el usuario, con su línea «Fuente:») antes de nada: sin HU no hay contra qué comprobar la spec. No escribas tests ni código.',
+    fix: (f) => `La spec${f.dir ? ` de \`${f.dir}\`` : ''} no es coherente todavía (${f.problems.length} problema(s)). No escribas tests ni código: corrige esto primero`
+      + `${f.author ? `, encargándolo al agente \`${f.author}\`` : ''}. ${problemList(f.problems, 'es')}`,
+    role: (f) => `La spec de \`${f.dir}\` ya no tiene problemas mecánicos y falta que la revise el agente \`${f.role}\` contra la HU. `
+      + `Su entrada en .chalc/review.md debe llevar la línea «- Huella: ${f.fingerprint}». No escribas tests ni código todavía.`
+  },
+  en: {
+    none: 'There is no spec folder. Create `specs/NNN-name/` with its `hu.md` (the user story exactly as the user delivered it, with its "Source:" line) before anything else: without the story there is nothing to check the spec against. Write no tests or code.',
+    fix: (f) => `The spec${f.dir ? ` in \`${f.dir}\`` : ''} is not coherent yet (${f.problems.length} problem(s)). Write no tests or code: fix this first`
+      + `${f.author ? `, handing it to the \`${f.author}\` agent` : ''}. ${problemList(f.problems, 'en')}`,
+    role: (f) => `The spec in \`${f.dir}\` has no mechanical problems left and the \`${f.role}\` agent still has to review it against the user story. `
+      + `Its entry in .chalc/review.md must carry the line "- Fingerprint: ${f.fingerprint}". Write no tests or code yet.`
+  }
+};
+
 // Marco del advisor. Paridad exacta de claves entre es y en: el test la exige.
 export const FRAME = {
   es: {
@@ -120,13 +147,21 @@ export const FRAME = {
       }),
       fix_gate: (f) => `La evidencia de las ${at(f.evidenceDate)} salió con veredicto \`${f.verdict}\`. Arregla lo que reporta .chalc/gate.md.`
         + (isSecurity(f) ? SECURITY_FIX.es : ''),
-      call_role: (f) => `El portón aprobó a las ${at(f.evidenceDate)} y falta que pase el agente \`${f.role}\``
-        + (f.cadence === 'feature' ? ' antes de dar la feature por terminada.' : ' por esta tarea.') + roleMemory(f, 'es') + requirementsNote(f, 'es') + priorNote(f, 'es'),
+      fix_specs: (f) => (f.noSpec ? SPEC_NOTE.es.none : SPEC_NOTE.es.fix(f)),
+      approve_spec: (f) => `La spec de \`${f.dir}\` es coherente y está validada (huella ${f.fingerprint}). PARA aquí: solo el usuario la aprueba, `
+        + `en SU terminal, con el COMMAND. Espera su OK explícito; no escribas tests ni código antes y no ejecutes tú el comando.`,
+      call_role: (f) => (f.cadence === 'spec' ? SPEC_NOTE.es.role(f) : `El portón aprobó a las ${at(f.evidenceDate)} y falta que pase el agente \`${f.role}\``
+        + (f.cadence === 'feature' ? ' antes de dar la feature por terminada.' : ' por esta tarea.') + roleMemory(f, 'es') + requirementsNote(f, 'es')) + priorNote(f, 'es'),
       fix_review: (f) => `El agente \`${f.role}\` dejó ${f.findings} hallazgo(s) a las ${at(f.reviewDate)} en .chalc/review.md.`
         + (isSecurity(f) ? SECURITY_FIX.es : '') + requirementsNote(f, 'es') + priorNote(f, 'es'),
-      tick_task: (f) => `Portón verde y revisión limpia: primero corre el COMMAND (guarda en la memoria lo que enseñó la tarea) y después marca «${f.task}» en tasks.md (${f.done + 1}/${f.total}).`
-        + (f.waitForApproval ? ' Después PARA y espera mi OK antes de seguir.' : ''),
+      tick_task: (f) => `Portón verde y revisión limpia: primero corre el COMMAND (guarda en la memoria lo que enseñó la tarea) y después marca «${f.task}» en tasks.md (${f.done + 1}/${f.total}).`,
+      red_task: (f) => `Toca «${f.task}» (${f.done}/${f.total} hechas). Primero SOLO los tests de sus criterios${f.requirements?.length ? ` (${f.requirements.join(', ')}; cítalos en los tests)` : ''}: `
+        + `escríbelos, compruébalos en rojo y regístralos con el COMMAND. Nada de código de producción todavía: el portón lo rechaza sin el rojo. `
+        + `Si la tarea de verdad no lleva tests, añade --skip "<motivo>".` + workMemory(f, 'es'),
       work_task: (f) => `Toca «${f.task}» (${f.done}/${f.total} hechas). TDD estricto: test que falla, código mínimo, refactor.` + workMemory(f, 'es'),
+      deliver_spec: (f) => `Las ${f.total} tareas de \`${f.dir}\` están hechas y el portón aprobó. Commitea todo y entrega con el COMMAND: no llames tú a quien revisa ni pidas el cierre; eso lo hace quien te despachó.`,
+      approve_feature: (f) => `Las ${f.total} tareas de \`${f.dir}\` están hechas, medidas y revisadas. PARA aquí: el cierre lo aprueba solo el usuario, `
+        + `en SU terminal, con el COMMAND. Entrégale el resumen de lo hecho y espera su OK explícito; no ejecutes tú el comando.`,
       done: (f) => `Las ${f.total} tareas están marcadas. La feature terminó: corre el COMMAND para guardar en la memoria lo que enseñó el cierre.`,
       ask_human: (f) => `No puedo saber en qué punto va esto: ${list(f.problems)}. Dímelo tú en vez de que yo lo adivine.`
     }
@@ -146,13 +181,21 @@ export const FRAME = {
       }),
       fix_gate: (f) => `The evidence from ${at(f.evidenceDate)} came out \`${f.verdict}\`. Fix what .chalc/gate.md reports.`
         + (isSecurity(f) ? SECURITY_FIX.en : ''),
-      call_role: (f) => `The gate passed at ${at(f.evidenceDate)} and the \`${f.role}\` agent still has to run`
-        + (f.cadence === 'feature' ? ' before the feature can be called done.' : ' for this task.') + roleMemory(f, 'en') + requirementsNote(f, 'en') + priorNote(f, 'en'),
+      fix_specs: (f) => (f.noSpec ? SPEC_NOTE.en.none : SPEC_NOTE.en.fix(f)),
+      approve_spec: (f) => `The spec in \`${f.dir}\` is coherent and validated (fingerprint ${f.fingerprint}). STOP here: only the user approves it, `
+        + `in THEIR terminal, with the COMMAND. Wait for their explicit OK; write no tests or code before that and do not run the command yourself.`,
+      call_role: (f) => (f.cadence === 'spec' ? SPEC_NOTE.en.role(f) : `The gate passed at ${at(f.evidenceDate)} and the \`${f.role}\` agent still has to run`
+        + (f.cadence === 'feature' ? ' before the feature can be called done.' : ' for this task.') + roleMemory(f, 'en') + requirementsNote(f, 'en')) + priorNote(f, 'en'),
       fix_review: (f) => `The \`${f.role}\` agent left ${f.findings} finding(s) at ${at(f.reviewDate)} in .chalc/review.md.`
         + (isSecurity(f) ? SECURITY_FIX.en : '') + requirementsNote(f, 'en') + priorNote(f, 'en'),
-      tick_task: (f) => `Gate green and review clean: first run the COMMAND (it stores what the task taught in the memory), then tick "${f.task}" in tasks.md (${f.done + 1}/${f.total}).`
-        + (f.waitForApproval ? ' Then STOP and wait for my OK before moving on.' : ''),
+      tick_task: (f) => `Gate green and review clean: first run the COMMAND (it stores what the task taught in the memory), then tick "${f.task}" in tasks.md (${f.done + 1}/${f.total}).`,
+      red_task: (f) => `Next up: "${f.task}" (${f.done}/${f.total} done). First ONLY the tests for its criteria${f.requirements?.length ? ` (${f.requirements.join(', ')}; cite them in the tests)` : ''}: `
+        + `write them, see them fail and register them with the COMMAND. No production code yet: the gate rejects it without the red. `
+        + `If the task truly carries no tests, add --skip "<reason>".` + workMemory(f, 'en'),
       work_task: (f) => `Next up: "${f.task}" (${f.done}/${f.total} done). Strict TDD: failing test, minimum code, refactor.` + workMemory(f, 'en'),
+      deliver_spec: (f) => `The ${f.total} tasks of \`${f.dir}\` are done and the gate passed. Commit everything and deliver with the COMMAND: do not call the reviewers yourself or ask for the close; whoever dispatched you does that.`,
+      approve_feature: (f) => `The ${f.total} tasks of \`${f.dir}\` are done, measured and reviewed. STOP here: the close is approved only by the user, `
+        + `in THEIR terminal, with the COMMAND. Hand them the summary of what was done and wait for their explicit OK; do not run the command yourself.`,
       done: (f) => `All ${f.total} tasks are ticked. The feature is complete: run the COMMAND to store in the memory what the closing taught.`,
       ask_human: (f) => `I cannot tell where this stands: ${list(f.problems)}. Tell me instead of me guessing.`
     }

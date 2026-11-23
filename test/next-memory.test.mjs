@@ -17,6 +17,7 @@ import { reasonOf } from '../catalog/next/lib/i18n.mjs';
 import { readMemoryFacts } from '../catalog/next/lib/memory.mjs';
 import { render } from '../catalog/next/next.mjs';
 import { remember } from '../catalog/memory/lib/store.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
 
 const GATE = Date.parse('2026-10-07T15:00:00Z');
 const RULE = { id: 'a1b2c3d4', kind: 'bug', title: 'Todo valor monetario usa 2 decimales', files: ['src/cobro.mjs'], stale: false };
@@ -24,6 +25,8 @@ const DECISION = { id: 'e5f6a7b8', kind: 'decision', title: 'weak-hash aceptado 
 const ROLES = [{ id: 'revisor', order: 10, cadence: 'task', required: true }];
 
 const snap = ({ entries = [], log = '', gate = { exists: true, date: GATE, verdict: 'pass' }, changed = ['src/tarifa.mjs'] } = {}) => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 1, total: 3, current: '**T2** (R2) — Calcular tarifas', mtime: GATE - 1 },
   gate: { fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: 'b', pending: [], ...gate },
   review: { entries: allReviews(log) },

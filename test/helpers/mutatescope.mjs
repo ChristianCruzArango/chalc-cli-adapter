@@ -12,11 +12,20 @@ import { parseHunks, rangesOf } from '../../catalog/gate/lib/hunks.mjs';
 const ROOTS = ['bin', 'cli', 'lib', 'targets', 'catalog'];
 // Fuera: los diccionarios (tablas de texto) y los entrypoints, que solo se prueban por subproceso.
 const ENTRYPOINTS = new Set(['bin/chalc.mjs', 'cli/index.mjs']);
+// Las tablas de texto es/en de las herramientas del equipo, el diseño, las sondas y los evals (specs 032–042):
+// son diccionarios, como `lib/i18n/`. Su paridad de claves y cada mensaje que se muestra los cubren sus tests;
+// mutar cada frase solo se mata copiándola en un test. La lógica de esos árboles SÍ se muta.
+const TEXT_TABLES = /^catalog\/(team|design|probe|evals)\/lib\/i18n(-[a-z]+)?\.mjs$/;
+
+// La sonda de diseño (spec 039) son funciones que se envían como TEXTO al navegador: instrumentadas llaman a
+// ayudantes de Stryker que en la página no existen, y ni la corrida inicial pasa. La cubren sus tests con un DOM
+// simulado y la prueba opcional con navegador real.
+const RUNS_IN_PAGE = new Set(['catalog/design/lib/probe.mjs']);
 
 /** ¿Es código que Stryker debe mutar? */
 export function isMutable(path) {
   const p = String(path).replace(/\\/g, '/');
-  if (!/\.m?js$/.test(p) || ENTRYPOINTS.has(p) || p.startsWith('lib/i18n/')) return false;
+  if (!/\.m?js$/.test(p) || ENTRYPOINTS.has(p) || p.startsWith('lib/i18n/') || TEXT_TABLES.test(p) || RUNS_IN_PAGE.has(p)) return false;
   return ROOTS.some((root) => p.startsWith(`${root}/`));
 }
 

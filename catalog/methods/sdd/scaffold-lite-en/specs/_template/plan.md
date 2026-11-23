@@ -23,6 +23,17 @@
 ## Risks / Questions
 - ...
 
+## Scope (what this spec may touch)
+Paths or globs the implementation may modify: anything outside blocks the delivery, and two specs whose
+scope overlaps are not worked on at the same time. `Depends on:` names the specs that must be integrated first.
+
+Surface: <ui | api | cli | none>
+
+Touches:
+- <path/or/glob/**>
+
+Depends on: <none>
+
 ## Traceability
 Every requirement in the spec is covered by at least one component:
 - R1 → ...

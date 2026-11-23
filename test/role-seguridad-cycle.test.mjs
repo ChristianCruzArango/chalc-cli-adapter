@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { decide } from '../catalog/next/lib/decide.mjs';
 import { detectGateConfig } from '../lib/gatedetect.mjs';
 import { tempDir } from './helpers/tmpdir.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
 
 const GATE = 4000;
 const BRANCH = 'feature/014-seguridad';
@@ -22,6 +23,8 @@ const roles = (...ids) => ids.map((id) => ({
 }[id]));
 
 const snapshot = ({ declared = roles('seguridad', 'revisor', 'endurecedor'), entries = [] } = {}) => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — pagar', mtime: GATE - 1 },
   gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: BRANCH, pending: [] },
   review: { entries },

@@ -12,6 +12,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runGate } from '../catalog/gate/gate.mjs';
+import { coherentSpec } from './helpers/coherentspec.mjs';
 
 async function project(files = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'chalc-gate-run-'));
@@ -39,7 +40,7 @@ const CONFIG = {
 // Un repo equipado: config del portón, una spec y un fuente limpio.
 const equipped = (over = {}) => project({
   '.chalc/gate.json': { ...CONFIG, ...over },
-  'specs/007-carrito/spec.md': '- **R1** — WHEN algo THE SYSTEM SHALL otra cosa.',
+  ...coherentSpec('specs/007-carrito', { ticked: true }),
   'src/precio.ts': 'export const precio = () => 1;\n'
 });
 
@@ -170,7 +171,7 @@ test('runGate closes a task only when mutation actually ran', async () => {
 test('runGate reports the static findings of the changed files', async () => {
   const dir = await project({
     '.chalc/gate.json': CONFIG,
-    'specs/007-carrito/spec.md': '- **R1** — WHEN algo THE SYSTEM SHALL otra cosa.',
+    ...coherentSpec('specs/007-carrito', { ticked: true }),
     'src/precio.ts': 'export interface Precio {}\nexport interface Total {}\n'
   });
   const run = runner({ 'npx stryker': { writes: writeReport(dir, ['Killed']) } });

@@ -18,7 +18,7 @@ async function project() {
   const root = await mkdtemp(join(tmpdir(), 'chalc-022-g2-verify-'));
   await mkdir(join(root, '.chalc'));
   await writeFile(join(root, 'leak.mjs'), LEAK);
-  await writeFile(join(root, '.chalc', 'review.md'), '# Revisión\n\n');
+  await writeFile(reviewPath(root), '# Revisión\n\n');
   return root;
 }
 

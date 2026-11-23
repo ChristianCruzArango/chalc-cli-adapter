@@ -11,6 +11,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { analyze, blankOut, lineAt, linesOf } from './source.mjs';
+import { complexityOf } from './complexity.mjs';
 import { isTestFile } from './sources.mjs';
 import { RULES } from './rules.mjs';
 
@@ -139,9 +140,14 @@ function typeInService(file, text, lines, dialect) {
 // Lo que sobra en UNA función: largo y parámetros. El tramo va en el hallazgo porque una función larga
 // es de quien le metió las líneas que la alargaron, aunque su cabecera lleve años ahí. Sin él, el
 // hallazgo se atribuiría solo a quien tocara la primera línea.
-function functionSmells(file, fn, limits) {
+function functionSmells(file, fn, limits, lines) {
   const span = fn.line + Math.max(0, fn.length - 1);
   const found = [];
+  // Caminos (spec 031, R6): solo si la config trae el límite; una anterior a esa spec no lo mide.
+  const complexity = limits.maxComplexity ? complexityOf(lines.slice(fn.line - 1, span)) : 0;
+  if (complexity > limits.maxComplexity) {
+    found.push(finding(file, fn.line, RULES.functionTooComplex, { name: fn.name, complexity, limit: limits.maxComplexity }));
+  }
   if (fn.length > limits.maxFunctionLines) {
     found.push(finding(file, fn.line, RULES.functionTooLong, { name: fn.name, lines: fn.length, limit: limits.maxFunctionLines }));
   }
@@ -166,7 +172,7 @@ function measurable({ file, text, lines, dialect }, limits) {
       requireBody: !!dialect.requireBody
     });
 
-    for (const fn of functions) found.push(...functionSmells(file, fn, limits));
+    for (const fn of functions) found.push(...functionSmells(file, fn, limits, lines));
 
     for (const d of deepest) {
       found.push(finding(file, d.line, RULES.deepNesting, { name: d.name, depth: d.depth, limit: limits.maxDepth }));

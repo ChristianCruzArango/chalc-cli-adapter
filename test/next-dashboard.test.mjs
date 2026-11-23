@@ -17,6 +17,7 @@ import { sideAdvice } from '../lib/dashboard.mjs';
 import { emitGate } from '../lib/gateemit.mjs';
 import { emitNext } from '../lib/nextemit.mjs';
 import { scopeHash } from '../catalog/gate/lib/fingerprint.mjs';
+import { coherentSpec, coherentTexts } from './helpers/coherentspec.mjs';
 
 const SPEC = '008-advisor';
 
@@ -31,7 +32,12 @@ async function side({ tasks = '- [x] T1\n- [ ] T2 — en esto voy\n', state, rev
   await emitGate(dest, { role: 'back', language: 'es' });
   await emitNext(dest);
   await writeFile(join(dest, '.chalc', 'gate.json'), JSON.stringify(config ?? { spec: { dir: 'specs' }, pending: [], language: 'es' }));
-  await writeFile(join(dest, 'specs', SPEC, 'tasks.md'), tasks);
+  // Una carpeta coherente y aprobada alrededor de esas tareas (spec 024): aquí se prueba el ciclo de tarea.
+  const texts = { ...coherentTexts(), 'tasks.md': tasks.replace(/^(- \[[ x]\] T\d+)/gm, '$1 (R1)') };
+  for (const [rel, content] of Object.entries(coherentSpec(`specs/${SPEC}`, { texts }))) {
+    await mkdir(join(dest, ...rel.split('/'), '..'), { recursive: true });
+    await writeFile(join(dest, ...rel.split('/')), content);
+  }
   // El fuente de la tarea y el registro de que fue esta tarea quien lo escribió (spec 013, R10).
   // Antes el lado no tenía ni fuentes ni registro: el alcance salía "no sé" y el advisor —con razón—
   // paraba a preguntar, que no es lo que estos tests miden. Se envejece a un instante fijo para que

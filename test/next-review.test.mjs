@@ -11,6 +11,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decide } from '../catalog/next/lib/decide.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
 
 const GATE = 4000;
 const REVIEW = 4500;
@@ -22,6 +23,8 @@ const BRANCH = 'feature/008-advisor';
 
 // Base con el verde SIN reclamar y la revisión al día: la acción natural es `tick_task`.
 const snapshot = (over = {}) => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — implementar el lector', mtime: GATE - 1, ...over.tasks },
   gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: BRANCH, pending: [], ...over.gate },
   review: { entries: [{ role: 'revisor', date: REVIEW, ok: true, findings: 0 }], ...over.review },
@@ -105,13 +108,11 @@ test('R18 — con el rol no requerido, unos hallazgos suyos tampoco bloquean', (
 
 // ── R18: la aprobación es un hecho de tick_task, nunca un estado ──────────────────────────────
 
-test('R18 — con la puerta activada, tick_task pide esperar el OK', () => {
-  assert.equal(decide(snapshot({})).facts.waitForApproval, true);
-});
-
-test('R18 — con la puerta desactivada, tick_task NO pide esperar', () => {
-  const flow = { approvals: { task: false, feature: true }, review: { required: true } };
-  assert.equal(decide(snapshot({ flow })).facts.waitForApproval, false);
+// La aprobación por tarea desapareció con la spec 028 (R8): entre la spec y el cierre, el equipo trabaja solo.
+test('spec 028, R8 — tick_task no lleva ninguna puerta de aprobación, diga lo que diga flow.approvals', () => {
+  assert.equal('waitForApproval' in decide(snapshot({})).facts, false);
+  const flow = { approvals: { task: true, feature: true }, review: { required: true } };
+  assert.equal('waitForApproval' in decide(snapshot({ flow })).facts, false);
 });
 
 test('R18 — la puerta no cambia la acción, solo lo que se pide al marcar', () => {

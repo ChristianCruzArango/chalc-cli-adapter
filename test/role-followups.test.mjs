@@ -74,7 +74,9 @@ test('R12: the role forms its judgement before reading the author of the change'
 
 test('R12: the shared folder is not a role', async () => {
   const ids = (await loadRoles()).map((r) => r.id);
-  assert.deepEqual([...ids].sort(), [...ROLES].sort());
+  // Además de los tres roles de revisión del código, los dos de la spec (spec 024): quien la escribe y quien la revisa.
+  // Y los dos de equipo (spec 034): quien coordina y quien desarrolla.
+  assert.deepEqual([...ids].sort(), [...ROLES, 'analista', 'especificador', 'desarrollador', 'lider', 'disenador'].sort());
 });
 
 test('R12: a catalog without the shared text still renders the role, without the marker', async (tc) => {

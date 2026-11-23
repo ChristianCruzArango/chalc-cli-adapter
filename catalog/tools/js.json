@@ -7,6 +7,75 @@
       "package.json"
     ]
   },
+  "packageManagers": {
+    "field": {
+      "file": "package.json",
+      "path": "packageManager"
+    },
+    "managers": [
+      {
+        "id": "pnpm",
+        "files": [
+          "pnpm-lock.yaml"
+        ],
+        "rewrite": [
+          [
+            "npm test",
+            "pnpm test"
+          ],
+          [
+            "npm run ",
+            "pnpm run "
+          ],
+          [
+            "npm i -D ",
+            "pnpm add -D "
+          ]
+        ]
+      },
+      {
+        "id": "yarn",
+        "files": [
+          "yarn.lock"
+        ],
+        "rewrite": [
+          [
+            "npm test",
+            "yarn test"
+          ],
+          [
+            "npm run ",
+            "yarn run "
+          ],
+          [
+            "npm i -D ",
+            "yarn add -D "
+          ]
+        ]
+      },
+      {
+        "id": "bun",
+        "files": [
+          "bun.lockb",
+          "bun.lock"
+        ],
+        "rewrite": [
+          [
+            "npm test",
+            "bun run test"
+          ],
+          [
+            "npm run ",
+            "bun run "
+          ],
+          [
+            "npm i -D ",
+            "bun add -d "
+          ]
+        ]
+      }
+    ]
+  },
   "test": {
     "rule": "jsonField",
     "file": "package.json",
@@ -55,6 +124,11 @@
       "probe": "node_modules/.bin/stryker",
       "scopeFlag": "--mutate",
       "scopeSpan": "colon",
+      "ignore": [
+        ".stryker-tmp/",
+        "reports/mutation/"
+      ],
+      "configFile": "stryker.conf.json",
       "setup": "**StrykerJS does not write the JSON report by default.** Its default reporters are HTML and\nprogress. Add the `json` reporter to `stryker.conf.json` (and commit it):\n\n```json\n{\n  \"reporters\": [\"html\", \"json\", \"progress\"],\n  \"jsonReporter\": { \"fileName\": \"{report}\" }\n}\n```"
     },
     "variants": [
@@ -112,11 +186,13 @@
         "@stryker-mutator/core"
       ],
       "template": {
-        "install": "npm i -D @stryker-mutator/core"
+        "install": "npm i -D @stryker-mutator/core",
+        "config": "{\n  \"testRunner\": \"{id}\",\n  \"reporters\": [\n    \"html\",\n    \"json\",\n    \"progress\"\n  ],\n  \"jsonReporter\": {\n    \"fileName\": \"reports/mutation/mutation.json\"\n  }\n}"
       }
     },
     "template": {
-      "install": "npm i -D @stryker-mutator/core @stryker-mutator/{runner}"
+      "install": "npm i -D @stryker-mutator/core @stryker-mutator/{runner}",
+      "config": "{\n  \"testRunner\": \"{id}\",\n  \"reporters\": [\n    \"html\",\n    \"json\",\n    \"progress\"\n  ],\n  \"jsonReporter\": {\n    \"fileName\": \"reports/mutation/mutation.json\"\n  }\n}"
     }
   }
 }

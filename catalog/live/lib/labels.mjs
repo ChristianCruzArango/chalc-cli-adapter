@@ -12,13 +12,19 @@ export const LABELS = {
     title: 'Tablero del proyecto',
     sections: {
       headline: 'Resumen', flow: 'Flujo SDD', charts: 'Tokens y tiempo por tarea', gate: 'Último portón', tasks: 'Tareas',
-      notes: 'Notas de los roles', missing: 'Qué falta', specs: 'Specs', activity: 'Actividad en vivo', nav: 'Secciones'
+      notes: 'Notas de los roles', missing: 'Qué falta', specs: 'Specs', activity: 'Actividad en vivo', nav: 'Secciones', team: 'Equipo'
     },
+    // El equipo (spec 032): las mismas palabras que `node .chalc/team.mjs status`.
+    team: {
+      waiting: 'Espera al usuario', lead: 'líder', stalled: 'posible atasco: sin señal', closed: 'cerrada', attempt: 'intento'
+    },
+    teamStates: { draft: 'borrador', approved: 'aprobada', scheduled: 'programada', in_dev: 'en desarrollo', delivered: 'entregada', rejected: 'rechazada', reviewed_ok: 'revisada', integrated: 'integrada', blocked: 'bloqueada', escalated: 'escalada' },
     kpi: { progress: 'Avance', gate: 'Portón', tokens: 'Tokens', time: 'Tiempo', roles: 'Roles al día', next: 'Siguiente paso' },
     actions: {
       blocked_config: 'Completar .chalc/gate.json', sync_contract: 'Sincronizar el contrato', read_mail: 'Leer los avisos',
       run_gate: 'Correr el portón', fix_gate: 'Arreglar lo que reporta el portón', call_role: 'Llamar a un rol', fix_review: 'Corregir los hallazgos de un rol',
-      tick_task: 'Marcar la tarea como hecha', work_task: 'Trabajar en la tarea', done: 'Feature terminada', ask_human: 'Necesita a una persona'
+      tick_task: 'Marcar la tarea como hecha', work_task: 'Trabajar en la tarea', done: 'Feature terminada', ask_human: 'Necesita a una persona',
+      fix_specs: 'Corregir la spec', approve_spec: 'Espera tu aprobación de la spec', red_task: 'Escribir los tests y registrarlos en rojo', approve_feature: 'Espera tu aprobación del cierre', deliver_spec: 'Entregar la spec'
     },
     phases: {
       constitution: 'Constitución', spec: 'Spec', plan: 'Plan', tasks: 'Tareas', implement: 'Implementación (TDD + mutación)',
@@ -60,13 +66,18 @@ export const LABELS = {
     title: 'Project board',
     sections: {
       headline: 'Summary', flow: 'SDD flow', charts: 'Tokens and time per task', gate: 'Last gate', tasks: 'Tasks',
-      notes: 'Role notes', missing: 'What is missing', specs: 'Specs', activity: 'Live activity', nav: 'Sections'
+      notes: 'Role notes', missing: 'What is missing', specs: 'Specs', activity: 'Live activity', nav: 'Sections', team: 'Team'
     },
+    team: {
+      waiting: 'Waiting for the user', lead: 'lead', stalled: 'possibly stalled: no signal', closed: 'closed', attempt: 'attempt'
+    },
+    teamStates: { draft: 'draft', approved: 'approved', scheduled: 'scheduled', in_dev: 'in development', delivered: 'delivered', rejected: 'rejected', reviewed_ok: 'reviewed', integrated: 'integrated', blocked: 'blocked', escalated: 'escalated' },
     kpi: { progress: 'Progress', gate: 'Gate', tokens: 'Tokens', time: 'Time', roles: 'Roles up to date', next: 'Next step' },
     actions: {
       blocked_config: 'Fill in .chalc/gate.json', sync_contract: 'Sync the contract', read_mail: 'Read the notes',
       run_gate: 'Run the gate', fix_gate: 'Fix what the gate reports', call_role: 'Call a role', fix_review: 'Fix a role\'s findings',
-      tick_task: 'Tick the task', work_task: 'Work on the task', done: 'Feature complete', ask_human: 'Needs a person'
+      tick_task: 'Tick the task', work_task: 'Work on the task', done: 'Feature complete', ask_human: 'Needs a person',
+      fix_specs: 'Fix the spec', approve_spec: 'Waiting for your approval of the spec', red_task: 'Write the tests and register them as failing', approve_feature: 'Waiting for your approval of the close', deliver_spec: 'Deliver the spec'
     },
     phases: {
       constitution: 'Constitution', spec: 'Spec', plan: 'Plan', tasks: 'Tasks', implement: 'Implementation (TDD + mutation)',

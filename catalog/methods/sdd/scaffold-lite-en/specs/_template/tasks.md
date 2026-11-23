@@ -6,13 +6,13 @@
 
 ## Execution order
 
-- [ ] **T1** (R1) — Write the test for <criterion R1> and confirm it **FAILS** (Red).
-- [ ] **T2** (R1) — Implement the minimum code to pass T1 (Green) and refactor.
-- [ ] **T3** (R2) `[P]` — Test for <criterion R2> FAILING, then implementation.
-- [ ] **T4** — ...
-- [ ] **Tm** — Mutation testing: run the tool and strengthen tests until the mutants are killed (score ≥ 80%).
+- [ ] **T1** (R1) — Tests for <criterion R1> failing and registered (`node .chalc/gate.mjs --red`) → minimum code → refactor.
+- [ ] **T2** (R2) `[P]` — Tests for <criterion R2> failing and registered → minimum code → refactor.
+- [ ] **T3** (R3) — ...
 
 ## Rule
-- Don't mark a code task done if its test didn't exist **before** and doesn't pass **now**.
-- Run **mutation testing** when closing each block: if a mutant survives, strengthen the test until it's killed.
+- Every task carries its tests AND its code: there is no "tests" task and a separate "code" task (the gate closes a task with the tests green, and requires its red to have been registered before the code).
+- A test sealed at the red is not loosened: to change it, make it fail again and register it again.
+- Mutation is not a separate task: the gate (`node .chalc/gate.mjs`) demands it when closing EVERY task (score ≥ 80%). If a mutant survives, strengthen the test until it's killed.
+- Every task cites its requirement: a task without an `R#` blocks the spec.
 - When the feature is done: every requirement (R1, R2…) has a green test, **mutation score ≥ 80%**, and `spec.md` updated if anything changed.

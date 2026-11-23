@@ -11,6 +11,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decide } from '../catalog/next/lib/decide.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
+import { closedFor } from './helpers/readyspecs.mjs';
 
 // Línea de tiempo del repo sano: el fuente se tocó, el portón corrió después, el revisor después,
 // y la tarea se marcó al final. Todo lo demás son variaciones sobre este orden.
@@ -26,6 +28,8 @@ const BRANCH = 'feature/008-advisor';
 
 // Snapshot base: verde ya reclamado y una tarea pendiente por delante → toca trabajar.
 const snapshot = (over = {}) => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — implementar el lector', mtime: TICKED, ...over.tasks },
   gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: BRANCH, pending: [], ...over.gate },
   review: { entries: [{ role: 'revisor', date: REVIEW, ok: true, findings: 0 }], ...over.review },
@@ -68,8 +72,11 @@ test('R9.7 — verde ya reclamado y tarea pendiente: a trabajar', () => {
   assert.equal(decide(snapshot()).action, 'work_task');
 });
 
-test('R9.8 — sin tareas pendientes, la feature terminó', () => {
-  assert.equal(actionOf({ tasks: { done: 3, total: 3, current: '' } }), 'done');
+// Desde la spec 028 el cierre lo aprueba el usuario: sin su sello, lo que toca es pedírselo.
+test('R9.8 — sin tareas pendientes falta la aprobación del cierre; con ella, la feature terminó', () => {
+  const finished = { tasks: { done: 3, total: 3, current: '' } };
+  assert.equal(actionOf(finished), 'approve_feature');
+  assert.equal(decide({ ...snapshot(finished), closing: closedFor(GATE) }).action, 'done');
 });
 
 // ── precedencia: el primero que aplique, no el más llamativo ──────────────────────────────────
@@ -104,7 +111,7 @@ test('R9 — marcar la tarea gana a trabajar la siguiente', () => {
 });
 
 test('R9.6 — sin tarea que marcar, un verde sin reclamar no inventa un tick', () => {
-  assert.equal(actionOf({ tasks: { mtime: GATE - 1, done: 3, total: 3, current: '' } }), 'done');
+  assert.equal(actionOf({ tasks: { mtime: GATE - 1, done: 3, total: 3, current: '' } }), 'approve_feature');
 });
 
 test('R9.6 — en el empate exacto, el verde se da por RECLAMADO y no se vuelve a marcar', () => {

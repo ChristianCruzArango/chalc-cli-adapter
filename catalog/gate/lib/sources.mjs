@@ -27,9 +27,15 @@ export const SKIP_DIRS = CODE_SKIP_DIRS;
 // árbol; aplicarlo aquí a cada segmento de ruta excluiría fuentes legítimas —`bin/` y `obj/` están
 // dentro, y este mismo repo tiene `bin/chalc.mjs`—. Lo que llega por git ya viene filtrado por el
 // .gitignore del proyecto, así que la única exclusión que hace falta es la que git no puede saber.
+//
+// Y las demás carpetas de configuración de asistentes (spec 029, R14): las skills equipadas traen scripts
+// propios (`.claude/skills/<id>/scripts/*.mjs`) que no son de ninguna tarea. Solo en la RAÍZ: un `src/agents/`
+// del proyecto es código suyo.
+const ASSISTANT_DIRS = ['.chalc/', '.claude/', '.agents/', '.cursor/', '.codex/'];
+
 export const isUserSource = (file) => {
   const path = String(file ?? '').replace(/\\/g, '/');
-  return !path.startsWith('.chalc/') && SOURCE_FILE.test(path);
+  return !ASSISTANT_DIRS.some((dir) => path.startsWith(dir)) && SOURCE_FILE.test(path);
 };
 
 // Cómo nombra cada stack a sus pruebas. Vive aquí, junto al resto del conocimiento sobre qué es

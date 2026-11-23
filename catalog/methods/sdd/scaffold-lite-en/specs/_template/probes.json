@@ -1,0 +1,25 @@
+{
+  "api": [
+    {
+      "name": "<what the request checks>",
+      "method": "GET",
+      "url": "http://localhost:3000/<path>",
+      "expect": {
+        "status": 200,
+        "json": {
+          "<field>": "*"
+        }
+      }
+    }
+  ],
+  "cli": [
+    {
+      "name": "<what the command checks>",
+      "command": "<command> --help",
+      "expect": {
+        "exit": 0,
+        "stdout": "<text that must appear>"
+      }
+    }
+  ]
+}

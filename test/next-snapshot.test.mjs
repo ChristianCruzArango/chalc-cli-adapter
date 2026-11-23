@@ -167,7 +167,8 @@ test('R13 — a plain list of files from an injected reader is a determined scop
 
 test('R17 — las puertas salen de gate.json, con los defaults del portón si no están', async () => {
   const s = await take(await repo());
-  assert.equal(typeof s.flow.approvals.task, 'boolean');
+  // Las aprobaciones del usuario ya no son una puerta configurable (spec 028, R7, R8).
+  assert.equal('approvals' in s.flow, false);
   assert.equal(typeof s.flow.review.required, 'boolean');
 });
 

@@ -22,6 +22,8 @@ import { hasConstitution, readSpecFiles } from './lib/specfiles.mjs';
 import { loadConfig } from '../gate/lib/config.mjs';
 import { readProject } from './lib/project.mjs';
 import { viewOf } from './lib/view.mjs';
+import { teamOf } from './lib/team.mjs';
+import { readStatus } from '../team/lib/ledger.mjs';
 import { pageHtml } from './lib/page.mjs';
 import { announce, idleTimer, retire } from './lib/lifecycle.mjs';
 
@@ -46,13 +48,15 @@ export async function buildState(root) {
   const specDir = config.spec?.dir || 'specs';
   const project = await readProject(root);
   const lang = languageOf(config, project);
-  return viewOf({
+  const view = viewOf({
     snapshot: { ...s, lang }, decision, reason: reasonOf(decision.action, decision.facts, lang),
     state: await jsonOr(join(root, STATE_REL)), tasksText: s.tasks?.text || '', activityText: await textOr(join(root, ACTIVITY_REL), ''),
     usage: await jsonOr(join(root, USAGE_REL)),
     reviewText: await textOr(join(root, REVIEW_REL), ''),
     specFiles: await readSpecFiles(root, specDir), constitution: hasConstitution(root, specDir), harness: project.target
   });
+  // El equipo (spec 032, R13): calculado ahora desde su registro, para que un atasco se vea aunque nadie escriba.
+  return { ...view, team: teamOf(await readStatus(root)) };
 }
 
 const HEADERS = {

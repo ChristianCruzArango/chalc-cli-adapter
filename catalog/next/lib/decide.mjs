@@ -15,6 +15,9 @@
 import { checklistProblems, confirmationProblems, followupProblems } from './checklist.mjs';
 import { priorFindings } from './prior.mjs';
 import { requirementsOf } from './tasks.mjs';
+import { SPEC_ROWS, withoutSpecOnlyEvidence } from './specstage.mjs';
+import { featureApproved } from './closing.mjs';
+import { DELIVER_ROW, inTeam } from './teamstage.mjs';
 
 // Una corrida rápida omite la mutación a propósito, así que su verde no dice nada de la calidad de
 // las pruebas: para el advisor equivale a no tener evidencia (R14).
@@ -43,8 +46,11 @@ const sameSecond = (ms) => Math.floor(ms / 1000);
 // Los roles que aplican, en orden (spec 009, R7). Este módulo NO conoce ningún rol por su nombre: el
 // catálogo lo aporta `snapshot.mjs`, incluida la compatibilidad con un `gate.json` anterior a esta
 // spec. Aquí solo vive la política.
-const rolesOf = (s) => (s.flow.roles || [])
-  .filter((r) => r.required !== false)
+// Fuera quedan los de cadencia `spec` (spec 024): revisan la spec, no el código, y van atados a su huella
+// y no a la evidencia del portón; los decide `specstage.mjs`.
+// Ni ninguno en el worktree de una spec (spec 034, R12): ahí los despacha el líder sobre la entrega.
+const rolesOf = (s) => (inTeam(s) ? [] : s.flow.roles || [])
+  .filter((r) => r.required !== false && r.cadence !== 'spec')
   .sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity));
 
 // Lo que un rol dejó en la bitácora DESPUÉS de la evidencia vigente. Una entrada firmada por otro no
@@ -98,6 +104,11 @@ const sidesActive = (s) => !!s.flow.sides?.enabled;
 // terminada: confundirlo con `done` daría por cerrado un trabajo que no empezó.
 function unreadable(s) {
   const problems = [...(s.problems || []), ...checklistIssues(s)];
+  // Sin los hechos de la spec no se puede afirmar que sea coherente: «no sé» nunca vale como «está bien».
+  if (!s.specs) return [...problems, 'specs-unread'];
+  // Un `tasks.md` que falta o está vacío lo reporta `fix_specs` (spec 024, R9). Esto queda como red: una
+  // carpeta sin problemas no puede llegar aquí sin tareas.
+  if (!s.specs.dir || s.specs.problems.length) return problems;
   if (!s.tasks.hasTasksFile) problems.push('tasks-missing');
   else if (!s.tasks.total) problems.push('tasks-empty');
   return problems;
@@ -147,6 +158,8 @@ const TABLE = [
     when: (s) => s.gate.pending.length > 0,
     facts: (s) => ({ pending: s.gate.pending })
   },
+  // La coherencia de la spec (spec 024, R9–R11): antes que TODO lo que lleva a tests o código.
+  ...SPEC_ROWS,
   // La coordinación entre lados va ANTES de medir (spec 010, R4): correr el portón contra un contrato
   // que ya cambió gasta una corrida entera —minutos, con mutación— para producir una evidencia que
   // hay que tirar. Y el aviso sin leer puede decir justamente que no midas todavía.
@@ -203,13 +216,21 @@ const TABLE = [
   {
     action: 'tick_task',
     when: (s) => hasPendingTask(s) && s.tasks.mtime < s.gate.date,
-    facts: (s) => ({ task: s.tasks.current, done: s.tasks.done, total: s.tasks.total, waitForApproval: s.flow.approvals.task })
+    facts: (s) => ({ task: s.tasks.current, done: s.tasks.done, total: s.tasks.total })
+  },
+  // Primero los tests (spec 030, R11): sin el rojo de la tarea registrado no se escribe su código. Sin saber si
+  // lo hay, se pide: «no sé» no vale como «ya está».
+  {
+    action: 'red_task',
+    when: (s) => hasPendingTask(s) && !s.tdd?.red,
+    facts: (s) => ({ task: s.tasks.current, done: s.tasks.done, total: s.tasks.total, requirements: requirementsOf(s.tasks.current), memory: s.memory?.entries || [] })
   },
   {
     action: 'work_task',
     when: hasPendingTask,
     facts: (s) => ({ task: s.tasks.current, done: s.tasks.done, total: s.tasks.total, memory: s.memory?.entries || [] })
   },
+  DELIVER_ROW,
   // Sin tareas pendientes: primero los roles de tarea que tienen código nuevo que mirar (R10), luego los de
   // feature, y solo entonces, `done`.
   {
@@ -231,6 +252,13 @@ const TABLE = [
     action: 'fix_review',
     when: (s) => s.gate.exists && !!pendingRole(s, 'feature')?.entry,
     facts: (s) => roleFacts(s, pendingRole(s, 'feature'))
+  },
+  // El cierre lo aprueba el usuario (spec 028, R1): con todo hecho, medido y revisado, falta su sello. Sin
+  // evidencia no hay nada medido que aprobar, y sin interruptor en `flow` que lo salte (R7).
+  {
+    action: 'approve_feature',
+    when: (s) => s.gate.exists && !featureApproved(s),
+    facts: (s) => ({ dir: s.specs.dir, fingerprint: s.specs.fingerprint, total: s.tasks.total })
   },
   {
     action: 'done',
@@ -259,10 +287,10 @@ const roleFacts = (s, pending) => ({
 // `ask_human` es una GUARDA previa, no una fila de la tabla: si los hechos no se pueden leer, la
 // tabla de R9 no se puede aplicar en absoluto. Devolver el control es lo único honesto — adivinar
 // un estado sería peor, porque el asistente lo obedecería a ciegas (R11).
-export function decide(snapshot) {
+export function decide(observed) {
+  const snapshot = withoutSpecOnlyEvidence(observed);
   const problems = unreadable(snapshot);
   if (problems.length) return { action: 'ask_human', facts: { problems } };
-
   const rule = TABLE.find((candidate) => candidate.when(snapshot));
   return { action: rule.action, facts: rule.facts(snapshot) };
 }

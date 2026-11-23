@@ -117,6 +117,11 @@ const learnedOf = (line) => {
   return { concept: m[1].trim(), synonyms, text: m[3].trim() };
 };
 
+// La huella de la spec que revisó un rol de cadencia `spec` (spec 024, R10): `- Huella: <16 hex>` o
+// `- Fingerprint: <16 hex>`. Ata la entrada a un contenido exacto de HU+spec+plan+tareas.
+const FINGERPRINT = /^\s*[-*]\s*(?:huella|fingerprint)\s*:\s*([0-9a-f]{16})\s*$/i;
+const fingerprintOf = (body) => body.map((line) => FINGERPRINT.exec(line)).find(Boolean)?.[1].toLowerCase() || '';
+
 // Lo que dice el cuerpo de una entrada: su checklist, sus hallazgos numerados, las reglas que enseñó y
 // lo que responde a los hallazgos anteriores. Lo lee todo rol; quién DEBE traer qué lo decide su
 // contrato, no este lector.
@@ -135,7 +140,7 @@ function bodyFacts(body) {
       ? { status: 'reviewed', refs: rest.match(/[\w./\\-]+:\d+/g) || [] }
       : { status: 'na', reason: rest.trim() };
   }
-  return { checklist, numbered: items.length, items, learned, confirmations, followups, requirements };
+  return { checklist, numbered: items.length, items, learned, confirmations, followups, requirements, fingerprint: fingerprintOf(body) };
 }
 
 // Cada encabezado `##` con las líneas que tiene debajo, hasta el siguiente.

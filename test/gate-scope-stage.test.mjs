@@ -20,6 +20,7 @@ import { spawn } from 'node:child_process';
 import { runGate } from '../catalog/gate/gate.mjs';
 import { RULES } from '../catalog/gate/lib/rules.mjs';
 import { sealBaseline } from '../catalog/gate/lib/baseline.mjs';
+import { coherentSpec } from './helpers/coherentspec.mjs';
 
 const CONFIG = {
   stack: 'js',
@@ -43,7 +44,7 @@ async function project(files = {}) {
 
 const equipped = (extra = {}) => project({
   '.chalc/gate.json': CONFIG,
-  'specs/013-alcance/spec.md': '- **R1** — WHEN algo THE SYSTEM SHALL otra cosa.',
+  ...coherentSpec('specs/013-alcance', { ticked: true }),
   ...extra
 });
 

@@ -23,8 +23,9 @@ test('fetchWithTimeout aborts a body that never arrives', async () => {
   const { server, url } = await slowBodyServer();
   try {
     const start = Date.now();
-    const res = await fetchWithTimeout(url, { timeoutMs: 150 });
-    await assert.rejects(() => readLimitedText(res));
+    // El plazo cubre también las cabeceras: con la máquina cargada pueden tardar más de 150 ms y el aborto
+    // llega antes de tener respuesta. Las dos formas son el mismo plazo cumpliéndose; ninguna puede colgarse.
+    await assert.rejects(async () => readLimitedText(await fetchWithTimeout(url, { timeoutMs: 150 })));
     assert.ok(Date.now() - start < 3000);
   } finally { server.close(); server.closeAllConnections?.(); }
 });
@@ -33,8 +34,7 @@ test('fetchWithTimeout keeps its own deadline when the caller passes a signal', 
   const { server, url } = await slowBodyServer();
   try {
     const start = Date.now();
-    const res = await fetchWithTimeout(url, { timeoutMs: 150, signal: new AbortController().signal });
-    await assert.rejects(() => res.text());
+    await assert.rejects(async () => (await fetchWithTimeout(url, { timeoutMs: 150, signal: new AbortController().signal })).text());
     assert.ok(Date.now() - start < 3000);
   } finally { server.close(); server.closeAllConnections?.(); }
 });

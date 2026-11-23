@@ -11,7 +11,8 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { everySpec } from './spec.mjs';
-import { isTestFile } from './sources.mjs';
+import { isTestFile, isUserSource } from './sources.mjs';
+import { currentTask } from './tdd.mjs';
 import { RULES } from './rules.mjs';
 
 // Requisito declarado en la spec: `- **R1** — WHEN … THE SYSTEM SHALL …`.
@@ -65,4 +66,32 @@ export async function checkTraceability(files, { root, specDir = 'specs' } = {})
     }
   }
   return found;
+}
+
+// Los requisitos que cita el texto de una tarea, una vez cada uno. `PR1` o `R2x` no son requisitos.
+const requirementIds = (text) => [...new Set(String(text).match(/(?<!\w)R\d+(?!\w)/g) || [])];
+
+// Lo que citan los archivos de test de `files`; uno borrado en la tarea no cita nada.
+async function citedByTests(root, files) {
+  const cited = new Set();
+  for (const file of files.filter(isTestFile)) {
+    let text;
+    try { text = await readFile(join(root, file), 'utf8'); } catch { continue; }
+    requirementIds(text).forEach((id) => cited.add(id));
+  }
+  return cited;
+}
+
+/**
+ * El otro sentido de la trazabilidad (spec 030, R10): los requisitos de la tarea en curso que ningún test
+ * cambiado por ella cita. Solo si la tarea cambió código de producción: sin él no hay nada que deba estar probado.
+ */
+export async function untestedRequirements(files, { root, specDir = 'specs' } = {}) {
+  if (!files.some((file) => isUserSource(file) && !isTestFile(file))) return [];
+  const task = await currentTask(root, specDir);
+  const wanted = task.key ? requirementIds(task.text) : [];
+  if (!wanted.length) return [];
+  const cited = await citedByTests(root, files);
+  return wanted.filter((id) => !cited.has(id))
+    .map((id) => finding(task.tasksFile, task.line, RULES.requirementUntested, { id, task: task.key }));
 }

@@ -8,6 +8,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decide } from '../catalog/next/lib/decide.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
 
 const ROLES = [
   { id: 'seguridad', order: 5, cadence: 'task', required: true },
@@ -17,6 +18,8 @@ const ROLES = [
 const NO_EVIDENCE = { exists: false, date: 0, verdict: 'unknown', fast: true, branch: '', pending: [] };
 
 const snapshot = ({ tasks = {}, gate = NO_EVIDENCE } = {}) => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 0, total: 2, current: 'T1 — cobrar', mtime: 5, ...tasks },
   gate,
   review: { entries: [] },

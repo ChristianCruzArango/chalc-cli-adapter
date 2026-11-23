@@ -71,10 +71,12 @@ for (const target of WITH_PERMISSIONS) {
     });
   }
 
-  test(`R3 — ${target}: ningún rol recibe una herramienta de edición`, async () => {
+  // Un rol AUTOR (spec 024, R26: el especificador) sí edita, dentro de su alcance; los de revisión, nunca.
+  test(`R3 — ${target}: ningún rol de revisión recibe una herramienta de edición`, async () => {
     const dir = await equipWith(target);
 
-    for (const role of roles) {
+    // El desarrollador (spec 034, `worker`) escribe el código: tampoco es un rol de revisión.
+    for (const role of roles.filter((r) => r.kind !== 'author' && r.kind !== 'worker')) {
       const agent = await readFile(join(dir, '.claude', 'agents', `${role.id}.md`), 'utf8');
       const declared = /^tools:\s*([^\r\n]+)$/m.exec(agent)[1];
       for (const forbidden of ['Edit', 'NotebookEdit', 'MultiEdit']) {

@@ -1,0 +1,13 @@
+{
+  "id": "especificador",
+  "order": 0,
+  "cadence": "spec",
+  "kind": "author",
+  "summary": {
+    "es": "Especificador: redacta spec.md, plan.md y tasks.md de la carpeta activa a partir de la HU literal (hu.md), siguiendo las reglas del proyecto, la constitución y las plantillas. No inventa: lo ambiguo queda marcado como pregunta. Solo escribe dentro de specs/; no escribe tests ni código.",
+    "en": "Spec writer: drafts spec.md, plan.md and tasks.md of the active folder from the verbatim user story (hu.md), following the project rules, the constitution and the templates. It invents nothing: anything ambiguous is left as a question. Writes only inside specs/; writes no tests or code."
+  },
+  "writes": ["specs/**"],
+  "forbiddenWrites": [".chalc/**", "src/**", "test/**"],
+  "tools": ["Read", "Grep", "Glob", "Bash", "Write", "Edit"]
+}

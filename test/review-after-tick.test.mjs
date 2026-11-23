@@ -9,10 +9,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { allReviews } from '../catalog/next/lib/review.mjs';
 import { decide } from '../catalog/next/lib/decide.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
 
 const GATE = Date.parse('2026-10-13T23:10:00Z');
 const REVIEW = '## 2026-10-13T23:10:30Z · dc7e13bd88 · revisor · OK\n- R1: cumple — src/saludo.controller.ts:5';
 const snap = (tasksMtime, current = '**T2** (R1, R2) — HTTP') => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 1, total: 3, current, mtime: tasksMtime },
   gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', scopeFiles: ['src/saludo.controller.ts'], branch: 'b', pending: [] },
   review: { entries: allReviews(REVIEW) },

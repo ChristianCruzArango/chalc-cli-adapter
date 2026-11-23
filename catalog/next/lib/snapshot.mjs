@@ -20,7 +20,10 @@ import { scopeHash } from '../../gate/lib/fingerprint.mjs';
 import { CONFIG_REL, loadConfig } from '../../gate/lib/config.mjs';
 import { STATE_REL } from '../../gate/lib/evidence.mjs';
 import { textOf } from '../../gate/lib/data.mjs';
-import { newestSpec } from '../../gate/lib/spec.mjs';
+import { activeSpecFile } from '../../gate/lib/spec.mjs';
+import { specFacts } from '../../gate/lib/specfacts.mjs';
+import { readSeal } from '../../gate/lib/specseal.mjs';
+import { lastRed, readReds, taskKeyOf } from '../../gate/lib/tdd.mjs';
 import { allReviews, lastReview } from './review.mjs';
 import { contractDrift } from './contract.mjs';
 import { unreadMail } from './mail.mjs';
@@ -32,8 +35,9 @@ export const REVIEW_REL = '.chalc/review.md';
 
 // Puertas por defecto, iguales a las que el portón escribe en `gate.json`. Se repiten aquí porque un
 // repo equipado con una versión anterior de chalc no las tendrá, y el defecto seguro es el
-// comportamiento de siempre: revisor obligatorio y OK del usuario al cerrar cada tarea.
-const FLOW_DEFAULT = { approvals: { task: true, feature: true }, review: { required: true } };
+// comportamiento de siempre: revisor obligatorio. Las aprobaciones del usuario (la spec y el cierre) no son
+// puertas configurables (spec 024, R12; spec 028, R7): un `flow.approvals` antiguo se ignora.
+const FLOW_DEFAULT = { review: { required: true } };
 
 // Roles cuando `gate.json` no los declara — un repo equipado antes de la spec 009. Tratarlo como
 // "sin roles" desactivaría la revisión EN SILENCIO al actualizar chalc, que es lo peor que podría
@@ -48,6 +52,26 @@ const mtimeOf = async (path) => { try { return (await stat(path)).mtimeMs; } cat
 // Lo pedido, o el problema que impidió leerlo. Ninguna lectura puede tumbar al advisor.
 async function attempt(problems, label, read, fallback) {
   try { return await read(); } catch (err) { problems.push(`${label}: ${err.message}`); return fallback; }
+}
+
+// Las tareas salen SOLO de la carpeta activa (spec 024, R1, R2): una spec nueva sin `tasks.md` no hereda en
+// silencio las de la feature anterior. Por eso el lector por defecto es `activeSpecFile`.
+//
+// Lo que el advisor necesita saber de la carpeta ACTIVA (spec 024): sus problemas de coherencia, su huella y
+// si el usuario aprobó esa huella. Sale del mismo lector que usa el portón, para que no puedan discrepar.
+async function readSpecs(root, specDir, task) {
+  const facts = await specFacts(root, specDir);
+  // El sello de CIERRE de esa carpeta (spec 028): para qué huella y qué evidencia del portón se dio.
+  const closed = facts.dir ? await readSeal(root, facts.dir, 'feature') : null;
+  return {
+    specs: {
+      dir: facts.dir, problem: facts.problem, pinned: facts.pinned, problems: facts.problems,
+      fingerprint: facts.fingerprint, approved: facts.approved, sealDate: facts.seal ? Date.parse(facts.seal.date) : 0
+    },
+    closing: closed ? { fingerprint: closed.fingerprint, evidence: Date.parse(closed.evidence) } : null,
+    // ¿La tarea en curso ya registró su rojo, o declaró que no lleva tests? (spec 030, R11)
+    tdd: { red: Boolean(facts.dir && lastRed(await readReds(root), taskKeyOf(facts.dir, task))) }
+  };
 }
 
 // El tasks.md de la spec vigente, con su fecha — que es lo que distingue un verde sin reclamar de
@@ -138,7 +162,6 @@ const tasksOrProblem = (problems, root, specDir, findSpec) => attempt(
 function flowOf(gateConfig) {
   const review = { ...FLOW_DEFAULT.review, ...(gateConfig.flow?.review || {}) };
   return {
-    approvals: { ...FLOW_DEFAULT.approvals, ...(gateConfig.flow?.approvals || {}) },
     review,
     roles: rolesOr(gateConfig.flow?.roles, review),
     sides: gateConfig.flow?.sides
@@ -167,40 +190,41 @@ async function gateFacts(root, now) {
 // Los hechos del repo en `root`. Las lecturas del portón se inyectan para poder probar el manejo de
 // fallos sin romper la instalación. Devuelve el snapshot que consume `decide`.
 export async function snapshot(root, {
-  changed = taskScope, branch = currentBranch, config = loadConfig, findSpec = newestSpec, head = headCommit, now = Date.now()
+  changed = taskScope, branch = currentBranch, config = loadConfig, findSpec = activeSpecFile, head = headCommit, now = Date.now()
 } = {}) {
   const problems = [];
-
-  const loaded = await attempt(problems, CONFIG_REL, () => config(root), null);
-  const gateConfig = loaded?.config || {};
+  const gateConfig = (await attempt(problems, CONFIG_REL, () => config(root), null))?.config || {};
 
   const scope = await readScope(problems, () => changed(root));
   const files = scope.files;
   const currentRef = await attempt(problems, 'git', () => branch(root), '');
 
-  const tasks = await tasksOrProblem(problems, root, gateConfig.spec?.dir || 'specs', findSpec);
+  const specDir = gateConfig.spec?.dir || 'specs';
+  const tasks = await tasksOrProblem(problems, root, specDir, findSpec);
+  const { specs, closing, tdd } = await attempt(problems, 'specs', () => readSpecs(root, specDir, tasks.current), { specs: null, closing: null, tdd: { red: false } });
 
   const gate = await gateFacts(root, now);
   const currentHead = await attempt(problems, 'git', () => head(root), '');
   const reviewText = await textOf(join(root, REVIEW_REL));
   const flow = flowOf(gateConfig);
-  const sides = flow.sides;
 
   return {
     tasks,
+    specs,
+    closing,
+    tdd,
     gate: { ...gate, pending: Array.isArray(gateConfig.pending) ? gateConfig.pending : [] },
     review: { ...lastReview(reviewText), entries: allReviews(reviewText) },
     // `touched` (spec 020, R15): todo lo que la tarea cambió, config incluida; las citas de un rol valen contra eso.
     changed: { files, touched: scope.touched || [], newestMtime: await newestOf(root, files), source: scope.source, undetermined: scope.undetermined },
     flow,
-    ...await sidesFacts(problems, { root, sides, specDir: gateConfig.spec?.dir || 'specs', findSpec }),
+    ...await sidesFacts(problems, { root, sides: flow.sides, specDir, findSpec }),
     git: { isRepo: !!currentRef, branch: currentRef, head: currentHead || '' },
     now,
     platform: { mobile: isMobileRepo(root) },
     // Lo que la memoria del proyecto sabe de la tarea en curso (spec 015). Solo lectura.
-    memory: await readMemoryFacts(root, { specDir: gateConfig.spec?.dir || 'specs', task: tasks.current, findSpec }),
-    // El idioma del SPEC, no el del CLI: el advisor vive dentro del repo del usuario y habla como
-    // se escribió su spec. Solo afecta al motivo — la acción y el comando nunca se traducen.
+    memory: await readMemoryFacts(root, { specDir, task: tasks.current, findSpec }),
+    // El idioma del SPEC, no el del CLI. Solo afecta al motivo: la acción y el comando nunca se traducen.
     lang: gateConfig.language || 'en',
     problems
   };

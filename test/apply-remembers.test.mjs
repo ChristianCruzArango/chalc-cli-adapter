@@ -77,3 +77,20 @@ test('R8: without a manifest, or with an old or broken one, it behaves as before
   writeFileSync(join(dir, '.chalc.json'), '{ esto no es json');
   assert.equal(run(['--yes', '--target', 'claude'], dir).status, 0);
 });
+
+// Spec 026 (no-destruir), T3 — `--yes` tampoco pierde las skills que las reglas no aportan (R6, R7).
+test('026 R6: --yes keeps the remembered skills that the rules do not bring', () => {
+  const dir = project({ ...REMEMBERED, skills: ['interface-design'] });
+  const r = run(['--yes', '--target', 'claude'], dir);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(manifestOf(dir).skills.includes('interface-design'));
+  assert.ok(existsSync(join(dir, '.claude', 'skills', 'interface-design', 'SKILL.md')));
+});
+
+test('026 R7: --yes skips a remembered skill that is gone, naming it', () => {
+  const dir = project({ ...REMEMBERED, skills: ['skill-que-ya-no-existe'] });
+  const r = run(['--yes', '--target', 'claude'], dir);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(manifestOf(dir).skills.includes('skill-que-ya-no-existe'), false);
+  assert.match(r.stdout + r.stderr, /skill-que-ya-no-existe/);
+});

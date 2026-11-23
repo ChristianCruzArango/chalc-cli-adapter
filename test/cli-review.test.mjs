@@ -118,7 +118,7 @@ test('el revisor recibe el CONTRATO: spec aprobado + plan de ejecución (con [x]
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-// ---- reviewfile: bitácora persistida del ciclo revisor→junior→verificación (.chalc/review.md) ----
+// ---- reviewfile: bitácora persistida del ciclo revisor→junior→verificación (.chalc/cli-review.md) ----
 import { startReview, logRound, logFixOrder, logFixResult, logVerify, reviewPath } from '../cli/engine/reviewfile.mjs';
 import { existsSync as existsSync2, readFileSync as readFileSync2 } from 'node:fs';
 // La bitácora tal como queda en disco (null si no se abrió).

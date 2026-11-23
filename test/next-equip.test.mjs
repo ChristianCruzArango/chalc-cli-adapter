@@ -75,7 +75,8 @@ test('R17 — equipar deja las puertas del advisor visibles en gate.json', async
   await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
   const cfg = JSON.parse(await readFile(join(proj, '.chalc', 'gate.json'), 'utf8'));
-  assert.equal(cfg.flow.approvals.task, true);
+  // La del revisor; las aprobaciones del usuario ya no son un interruptor (spec 028, R9).
+  assert.equal('approvals' in cfg.flow, false);
   assert.equal(cfg.flow.review.required, true);
 });
 
@@ -85,12 +86,12 @@ test('R3 — re-equipar no rompe lo que el usuario ajustó en las puertas', asyn
 
   const path = join(proj, '.chalc', 'gate.json');
   const cfg = JSON.parse(await readFile(path, 'utf8'));
-  cfg.flow.approvals.task = false;
+  cfg.flow.review.required = false;
   await writeFile(path, JSON.stringify(cfg, null, 2), 'utf8');
 
   await equipForSpec(proj, 'lite', 'claude', { specLang: 'español' });
 
-  assert.equal(JSON.parse(await readFile(path, 'utf8')).flow.approvals.task, false);
+  assert.equal(JSON.parse(await readFile(path, 'utf8')).flow.review.required, false);
 });
 
 // ── R4: en modo worktree, el repo principal no se toca ────────────────────────────────────────

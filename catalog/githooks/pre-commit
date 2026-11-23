@@ -1,0 +1,4 @@
+#!/bin/sh
+# Generado por chalc — no edites este archivo: se regenera al equipar el repo.
+# Si el commit lleva código, corre el portón rápido. Saltarlo (--no-verify) es decisión de una persona.
+exec node .chalc/gate.mjs --hook pre-commit

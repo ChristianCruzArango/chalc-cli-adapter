@@ -1,0 +1,4 @@
+#!/bin/sh
+# Generado por chalc — no edites este archivo: se regenera al equipar el repo.
+# No se sube código sin medir: exige una corrida completa del portón que apruebe. No corre el portón.
+exec node .chalc/gate.mjs --hook pre-push

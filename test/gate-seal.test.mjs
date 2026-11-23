@@ -19,6 +19,7 @@ import { spawn } from 'node:child_process';
 import { runGate } from '../catalog/gate/gate.mjs';
 import { readBaseline } from '../catalog/gate/lib/baseline.mjs';
 import { readTouched, TOUCHED_REL } from '../catalog/gate/lib/touched.mjs';
+import { coherentSpec } from './helpers/coherentspec.mjs';
 
 // Sin herramienta de mutación y con `required: false`, la etapa se salta como "no aplica" y la
 // corrida puede aprobar — que es lo que hace falta para ejercitar el cierre de tarea.
@@ -52,7 +53,7 @@ const git = (dir, args) => new Promise((resolve) => {
 
 const equipped = (extra = {}) => project({
   '.chalc/gate.json': CONFIG,
-  'specs/013-alcance/spec.md': '- **R1** — WHEN algo THE SYSTEM SHALL otra cosa.',
+  ...coherentSpec('specs/013-alcance', { ticked: true }),
   ...extra
 });
 

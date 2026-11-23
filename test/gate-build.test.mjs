@@ -16,6 +16,7 @@ import { runGate } from '../catalog/gate/gate.mjs';
 import { RULES } from '../catalog/gate/lib/rules.mjs';
 import { messageOf, frameOf } from '../catalog/gate/lib/i18n.mjs';
 import { renderEvidence } from '../catalog/gate/lib/evidence.mjs';
+import { coherentSpec } from './helpers/coherentspec.mjs';
 
 async function project(files = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'chalc-gate-build-'));
@@ -110,7 +111,7 @@ const CONFIG = {
 };
 const equipped = (over = {}) => project({
   '.chalc/gate.json': { ...CONFIG, ...over },
-  'specs/001-x/spec.md': '- **R1** — WHEN algo THE SYSTEM SHALL otra cosa.',
+  ...coherentSpec('specs/001-x', { ticked: true }),
   'src/precio.ts': 'export const precio = () => 1;\n'
 });
 const gate = (root, opts = {}) => runGate({ root, changed: ['src/precio.ts'], ...opts });
@@ -130,7 +131,8 @@ test('R1: the build runs after the tests and before the mutation', async () => {
   const root = await equipped();
   const run = runner();
   const result = await gate(root, { run });
-  assert.deepEqual(result.stages.slice(0, 3).map((s) => s.stage), ['tests', 'build', 'mutation']);
+  // La coherencia de la spec va la primera desde la spec 024 (R17); el orden tests → build → mutación no cambia.
+  assert.deepEqual(result.stages.slice(0, 4).map((s) => s.stage), ['coherence', 'tests', 'build', 'mutation']);
   assert.deepEqual(run.calls.slice(0, 2), ['npm test', 'npm run build']);
 });
 

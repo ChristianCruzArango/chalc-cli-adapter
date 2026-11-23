@@ -38,7 +38,7 @@ test('S7a: the block is separated by one blank line, whether or not the file end
 // T10 (spec 022, R14, S7a)
 test('S7a: entries written with spaces or with a leading or trailing slash count as present', async (t) => {
   const initial = '  .chalc/live.json  \n/.chalc/activity.jsonl\n.chalc/usage.lock\n/.chalc/usage.json/\n';
-  assert.equal((await after(t, initial)).text, `${initial}\n${block(['.chalc/memory/state.json'])}`);
+  assert.equal((await after(t, initial)).text, `${initial}\n${block(['.chalc/memory/state.json', '.chalc/team/ledger.jsonl', '.chalc/team/status.json', '.chalc/team/orders/', '.chalc/design-out/', '.chalc/probe-out/', '.chalc/evals-out/'])}`);
 });
 
 // T10 (spec 022, R14, S7a)

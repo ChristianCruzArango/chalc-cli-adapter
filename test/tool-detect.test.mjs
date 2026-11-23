@@ -75,7 +75,9 @@ test('R2 — el detector conserva lo que no es de stack: umbrales, specs y puert
   const config = await detectGateConfig(await tempDir(tc, 'chalc-detect-'));
   assert.deepEqual(config.lint, LINT_DEFAULTS, 'los umbrales del linter no son conocimiento de stack');
   assert.equal(config.mutation.threshold, MUTATION_THRESHOLD, 'el umbral de mutación tampoco');
-  assert.ok(config.flow.approvals, 'las puertas del advisor tampoco');
+  assert.ok(config.flow.review, 'la puerta del revisor tampoco');
+  // Las aprobaciones del usuario dejaron de ser una puerta configurable (spec 028, R9).
+  assert.equal('approvals' in config.flow, false);
   assert.equal(config.spec.dir, 'specs');
 });
 

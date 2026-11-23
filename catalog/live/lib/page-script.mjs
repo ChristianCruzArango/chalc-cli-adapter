@@ -159,10 +159,22 @@ function specs(v) {
     el('div', 'mute small', count(s.requirements, L.words.requirementOne, L.words.requirementsN) + ' · ' + (s.plan ? L.words.plan + ' ✓' : L.words.noPlan) + ' · ' + s.tasks.done + '/' + s.tasks.total),
     bar(pct(s.tasks.done, s.tasks.total))])) : [el('div', 'mute small', L.words.noSpecs)])].filter(Boolean));
 }
+// El equipo (spec 032): lo que espera al usuario y, por feature, su líder y una fila por spec. Sin equipo, se oculta.
+function team(v) {
+  $('team').hidden = !v.team;
+  if (!v.team) return;
+  const row = (s) => el('div', 'spec' + (s.stalled ? ' current' : ''), undefined, [
+    el('div', 'spec-name', s.spec + ' · ' + (L.teamStates[s.state] || s.state)),
+    el('div', 'mute small', [s.developer, s.phase, s.task, L.team.attempt + ' ' + s.attempt, s.gate].filter(Boolean).join(' · ')),
+    s.note ? el('div', 'small', s.note) : null, s.stalled ? el('div', 'small', '⚠ ' + L.team.stalled) : null]);
+  const feature = (f) => el('div', '', undefined, [
+    el('div', 'label', f.feature + ' · ' + L.team.lead + ' ' + f.agent + (f.action ? ': ' + f.action : '') + (f.closed ? ' · ' + L.team.closed : '')), ...f.specs.map(row)]);
+  fill('team', L.sections.team, [...v.team.waiting.map((w) => el('div', 'small', '⏳ ' + L.team.waiting + ': ' + w.feature + ' — ' + w.reason + ' → ' + w.command)), ...v.team.features.map(feature)]);
+}
 function activity(v) {
   fill('activity', L.sections.activity, v.activity.length ? [el('div', 'rows', undefined, v.activity.map(activityRow))] : [el('div', 'mute', v.harness.live ? L.words.noActivity : noLive(v))]);
 }
-function render(v) { agentChip(v); specs(v); headline(v); flow(v); gate(v); charts(v); missing(v); tasks(v); notes(v); activity(v); }
+function render(v) { agentChip(v); specs(v); team(v); headline(v); flow(v); gate(v); charts(v); missing(v); tasks(v); notes(v); activity(v); }
 async function tick() {
   try {
     const text = await (await fetch('/state.json', { cache: 'no-store' })).text();

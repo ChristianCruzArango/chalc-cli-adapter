@@ -122,6 +122,13 @@ export async function changedLineInfo(root, ref) {
   return { lines: parseHunks(texto), removed: removedByFile(texto) };
 }
 
+// Los archivos que entran en el commit que se está haciendo (spec 029, R4): añadidos, copiados, modificados o
+// renombrados en el índice. Lo usa el hook `pre-commit` para no medir un commit que no lleva código.
+export async function stagedFiles(root) {
+  const out = await git(['diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z'], root);
+  return out ? entries(out).map((file) => file.replace(/\\/g, '/')) : [];
+}
+
 // El commit actual, o '' si no se puede saber. Es lo que el portón sella como línea base de la
 // tarea siguiente (spec 013, R1).
 export async function headCommit(root) {

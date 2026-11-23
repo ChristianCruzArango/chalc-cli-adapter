@@ -1,0 +1,13 @@
+{
+  "id": "desarrollador",
+  "order": 3,
+  "cadence": "team",
+  "kind": "worker",
+  "summary": {
+    "es": "Desarrollador de UNA spec: hace todas sus tareas en serie dentro del worktree de esa spec, con tests primero (rojo registrado), código mínimo y portón por tarea, sin salirse de lo que el plan declara en Toca:. Entrega con team.mjs deliver. No habla con el usuario ni llama a otros roles.",
+    "en": "Developer of ONE spec: does all its tasks in series inside that spec's worktree, tests first (registered red), minimal code and the gate per task, without leaving what the plan declares in Touches:. Delivers with team.mjs deliver. Does not talk to the user or call other roles."
+  },
+  "writes": ["**"],
+  "forbiddenWrites": [".chalc/gate/**", ".chalc/next/**", ".chalc/team/**", ".chalc/roles/**", ".chalc/hooks/**", ".chalc/seals/**", ".chalc/gate.json", ".chalc/team.json", ".chalc/integrity.json"],
+  "tools": ["Read", "Grep", "Glob", "Bash", "Write", "Edit"]
+}

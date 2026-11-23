@@ -17,6 +17,7 @@ import { decide } from '../catalog/next/lib/decide.mjs';
 import { isMobileRepo } from '../catalog/next/lib/snapshot.mjs';
 import { detectGateConfig } from '../lib/gatedetect.mjs';
 import { tempDir } from './helpers/tmpdir.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
 
 const OWASP = ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08', 'A09', 'A10'];
 const MASVS = ['STORAGE', 'CRYPTO', 'AUTH', 'NETWORK', 'PLATFORM', 'CODE', 'RESILIENCE', 'PRIVACY'].map((g) => `MASVS-${g}`);
@@ -96,6 +97,8 @@ const ROLES = [
   { id: 'revisor', order: 10, cadence: 'task', required: true }
 ];
 const snap = (log, { mobile = false } = {}) => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — pagar', mtime: GATE - 1 },
   gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: 'b', pending: [] },
   review: { entries: allReviews(log) },

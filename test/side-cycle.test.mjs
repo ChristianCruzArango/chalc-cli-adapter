@@ -12,6 +12,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decide } from '../catalog/next/lib/decide.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
 
 const GATE = 4000;
 const BRANCH = 'feature/010-buzon';
@@ -20,6 +21,8 @@ const ROLES = [{ id: 'revisor', order: 10, cadence: 'task', required: true }];
 
 // Un lado consumidor con su contrato al día y trabajo sin medir por delante.
 const snapshot = (over = {}) => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — el lector', mtime: GATE - 1, ...over.tasks },
   gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: BRANCH, pending: [], ...over.gate },
   review: { entries: [{ role: 'revisor', date: GATE + 500, ok: true, findings: 0 }], ...over.review },

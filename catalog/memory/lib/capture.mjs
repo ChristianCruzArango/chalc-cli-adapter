@@ -16,7 +16,7 @@ import { parseGateState } from '../../next/lib/state.mjs';
 import { currentTask } from '../../next/lib/tasks.mjs';
 import { headCommit } from '../../gate/lib/changed.mjs';
 import { loadConfig } from '../../gate/lib/config.mjs';
-import { newestSpec } from '../../gate/lib/spec.mjs';
+import { activeSpecFile } from '../../gate/lib/spec.mjs';
 import { STATE_REL as GATE_STATE_REL } from '../../gate/lib/evidence.mjs';
 import { textOf } from '../../gate/lib/data.mjs';
 import { compactIfNeeded, remember } from './store.mjs';
@@ -40,7 +40,8 @@ const slug = (text) => normalizePhrase(text).replace(/ /g, '-').slice(0, 80);
 // Dónde se aprendió: la spec vigente y la tarea que se está cerrando, con su marca `[bug]`.
 async function originOf(root) {
   const { config } = await loadConfig(root);
-  const spec = await newestSpec(root, config.spec?.dir || 'specs', 'tasks.md');
+  // La spec ACTIVA (spec 036): en el worktree de una spec, la suya, no la de número más alto.
+  const spec = await activeSpecFile(root, config.spec?.dir || 'specs', 'tasks.md');
   const task = currentTask(spec?.text || '');
   return {
     spec: spec?.dir ? basename(spec.dir) : '',

@@ -20,13 +20,13 @@ const planOf = async (mod) => (await mod.apply(args(await mkdtemp(join(tmpdir(),
 const method = kit.methodPlanLine(METHOD);
 
 test('R1, R9: Codex and Copilot announce skills, MCP, method, AGENTS.md, the command and the manifest', async () => {
-  assert.deepEqual(await planOf(codex), ['skill     .chalc/skills/demo', 'mcp       .codex/config.toml  ::  fs', method, 'rules     AGENTS.md', 'command   .agents/skills/chalc-live/SKILL.md', 'manifest  .chalc.json']);
-  assert.deepEqual(await planOf(copilot), ['skill     .chalc/skills/demo', 'mcp       .vscode/mcp.json  ::  fs', method, 'rules     AGENTS.md', 'command   .github/prompts/chalc-live.prompt.md', 'manifest  .chalc.json']);
+  assert.deepEqual(await planOf(codex), ['skill     .chalc/skills/demo', 'mcp       .codex/config.toml  ::  fs', method, 'rules     AGENTS.md', 'command   .agents/skills/chalc-live/SKILL.md', 'command   .agents/skills/chalc-spec/SKILL.md', 'command   .agents/skills/chalc-teams/SKILL.md', 'manifest  .chalc.json']);
+  assert.deepEqual(await planOf(copilot), ['skill     .chalc/skills/demo', 'mcp       .vscode/mcp.json  ::  fs', method, 'rules     AGENTS.md', 'command   .github/prompts/chalc-live.prompt.md', 'command   .github/prompts/chalc-spec.prompt.md', 'command   .github/prompts/chalc-teams.prompt.md', 'manifest  .chalc.json']);
 });
 
 test('R3, R4, R9: Antigravity and Cursor announce their own places', async () => {
-  assert.deepEqual(await planOf(antigravity), ['skill     .agents/skills/demo', 'mcp       .agents/mcp_config.json  ::  fs', method, 'rules     AGENTS.md', 'command   .agents/skills/chalc-live/SKILL.md', 'manifest  .chalc.json']);
-  assert.deepEqual(await planOf(cursor), ['skill     .cursor/rules/chalc-skill-demo.mdc  (+ .chalc/skills/demo)', method, 'mcp       .cursor/mcp.json  ::  fs', 'rules     AGENTS.md', 'command   .cursor/commands/chalc-live.md', 'manifest  .chalc.json']);
+  assert.deepEqual(await planOf(antigravity), ['skill     .agents/skills/demo', 'mcp       .agents/mcp_config.json  ::  fs', method, 'rules     AGENTS.md', 'command   .agents/skills/chalc-live/SKILL.md', 'command   .agents/skills/chalc-spec/SKILL.md', 'command   .agents/skills/chalc-teams/SKILL.md', 'manifest  .chalc.json']);
+  assert.deepEqual(await planOf(cursor), ['skill     .cursor/rules/chalc-skill-demo.mdc  (+ .chalc/skills/demo)', method, 'mcp       .cursor/mcp.json  ::  fs', 'rules     AGENTS.md', 'command   .cursor/commands/chalc-live.md', 'command   .cursor/commands/chalc-spec.md', 'command   .cursor/commands/chalc-teams.md', 'manifest  .chalc.json']);
 });
 
 test('R7: Copilot declares its MCP servers as stdio, keeping the rest of each server', async () => {

@@ -15,12 +15,12 @@ Concepts: <from `node .chalc/memory.mjs concepts`, comma-separated; a new one on
 - As a <role> I want <action> so that <benefit>.
 
 ## Requirements (acceptance criteria, EARS notation)
-Each requirement has an id and must be convertible into a test.
+Each requirement has an id, cites the fragment of `hu.md` it comes from (`HU-n`) and must be convertible into a test.
 
-- **R1** — WHEN <condition/event> THE SYSTEM SHALL <expected behavior>.
-- **R2** — IF <unwanted condition> THEN THE SYSTEM SHALL <response>.
-- **R3** — WHILE <state> THE SYSTEM SHALL <behavior>.
-- **R4** — WHERE <feature present> THE SYSTEM SHALL <behavior>.
+- **R1** (HU-1) — WHEN <condition/event> THE SYSTEM SHALL <expected behavior>.
+- **R2** (HU-1) — IF <unwanted condition> THEN THE SYSTEM SHALL <response>.
+- **R3** (HU-1) — WHILE <state> THE SYSTEM SHALL <behavior>.
+- **R4** (HU-1) — WHERE <feature present> THE SYSTEM SHALL <behavior>.
 
 _Example:_ **R1** — WHEN a user submits the form with invalid data THE SYSTEM SHALL show the validation error next to the relevant field.
 

@@ -15,12 +15,12 @@ Conceptos: <de `node .chalc/memory.mjs concepts`, separados por coma; uno nuevo 
 - Como <rol> quiero <acción> para <beneficio>.
 
 ## Requisitos (criterios de aceptación, notación EARS)
-Cada requisito tiene id y debe poder convertirse en un test.
+Cada requisito tiene id, cita el fragmento de `hu.md` del que sale (`HU-n`) y debe poder convertirse en un test.
 
-- **R1** — WHEN <condición/evento> THE SYSTEM SHALL <comportamiento esperado>.
-- **R2** — IF <condición no deseada> THEN THE SYSTEM SHALL <respuesta>.
-- **R3** — WHILE <estado> THE SYSTEM SHALL <comportamiento>.
-- **R4** — WHERE <feature presente> THE SYSTEM SHALL <comportamiento>.
+- **R1** (HU-1) — WHEN <condición/evento> THE SYSTEM SHALL <comportamiento esperado>.
+- **R2** (HU-1) — IF <condición no deseada> THEN THE SYSTEM SHALL <respuesta>.
+- **R3** (HU-1) — WHILE <estado> THE SYSTEM SHALL <comportamiento>.
+- **R4** (HU-1) — WHERE <feature presente> THE SYSTEM SHALL <comportamiento>.
 
 _Ejemplo:_ **R1** — WHEN un usuario envía el formulario con datos inválidos THE SYSTEM SHALL mostrar el error de validación junto al campo correspondiente.
 

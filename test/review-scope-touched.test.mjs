@@ -15,6 +15,7 @@ import { touchedFiles } from '../catalog/gate/lib/scope.mjs';
 import { allReviews } from '../catalog/next/lib/review.mjs';
 import { decide } from '../catalog/next/lib/decide.mjs';
 import { tempDir } from './helpers/tmpdir.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
 
 const git = (dir, args) => new Promise((done) => {
   const child = spawn('git', args, { cwd: dir, stdio: 'ignore' });
@@ -67,6 +68,8 @@ const OWASP = ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08', 'A09', 'A
 const entry = (a05) => ['## 2026-10-13T23:02:48Z · dc7e13bd88 · seguridad · OK',
   ...OWASP.map((id) => (id === 'A05' ? `- A05 Configuración: revisado — ${a05}` : `- ${id} Categoría: revisado — src/saludo.controller.ts:5`))].join('\n');
 const snap = (a05, touched = ['src/saludo.controller.ts', 'stryker.conf.json']) => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 0, total: 3, current: 'T1 — Controller', mtime: GATE - 1 },
   gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', scopeFiles: ['src/saludo.controller.ts'], branch: 'b', pending: [] },
   review: { entries: allReviews(entry(a05)) },

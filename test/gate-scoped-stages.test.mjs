@@ -19,6 +19,7 @@ import { spawn } from 'node:child_process';
 import { runGate } from '../catalog/gate/gate.mjs';
 import { RULES } from '../catalog/gate/lib/rules.mjs';
 import { sealBaseline } from '../catalog/gate/lib/baseline.mjs';
+import { coherentSpec } from './helpers/coherentspec.mjs';
 
 const CONFIG = {
   stack: 'js',
@@ -82,7 +83,7 @@ const BLOQUE = `export function total(items) {
 test('the debt of the previous task does not come back in this task report', async () => {
   const dir = await project({
     '.chalc/gate.json': CONFIG,
-    'specs/013-alcance/spec.md': '- **R1** — WHEN algo THE SYSTEM SHALL otra cosa.',
+    ...coherentSpec('specs/013-alcance', { ticked: true }),
     'src/viejo.ts': 'export const viejo = () => { console.log("de la tarea anterior"); };\n'
   });
   await previousTaskClosed(dir);
@@ -99,7 +100,7 @@ test('the debt of the previous task does not come back in this task report', asy
 test('duplication still reads the whole tree, but only reports what this task touched', async () => {
   const dir = await project({
     '.chalc/gate.json': CONFIG,
-    'specs/013-alcance/spec.md': '- **R1** — WHEN algo THE SYSTEM SHALL otra cosa.',
+    ...coherentSpec('specs/013-alcance', { ticked: true }),
     'src/viejo.ts': BLOQUE
   });
   await previousTaskClosed(dir);
@@ -114,7 +115,7 @@ test('duplication still reads the whole tree, but only reports what this task to
 test('duplication between two files of previous tasks stays out of this report', async () => {
   const dir = await project({
     '.chalc/gate.json': CONFIG,
-    'specs/013-alcance/spec.md': '- **R1** — WHEN algo THE SYSTEM SHALL otra cosa.',
+    ...coherentSpec('specs/013-alcance', { ticked: true }),
     'src/viejo-a.ts': BLOQUE,
     'src/viejo-b.ts': BLOQUE
   });
@@ -131,7 +132,7 @@ test('duplication between two files of previous tasks stays out of this report',
 test('the evidence the gate writes carries the real scope of the run', async () => {
   const dir = await project({
     '.chalc/gate.json': CONFIG,
-    'specs/013-alcance/spec.md': '- **R1** — WHEN algo THE SYSTEM SHALL otra cosa.',
+    ...coherentSpec('specs/013-alcance', { ticked: true }),
     'src/base.ts': 'export const base = () => 1;\n'
   });
   await previousTaskClosed(dir);
@@ -151,7 +152,7 @@ test('the evidence the gate writes carries the real scope of the run', async () 
 test('the evidence declares the work in progress it left out', async () => {
   const dir = await project({
     '.chalc/gate.json': CONFIG,
-    'specs/013-alcance/spec.md': '- **R1** — WHEN algo THE SYSTEM SHALL otra cosa.',
+    ...coherentSpec('specs/013-alcance', { ticked: true }),
     'src/base.ts': 'export const base = () => 1;\n'
   });
   await previousTaskClosed(dir);
@@ -172,7 +173,7 @@ test('the evidence declares the work in progress it left out', async () => {
 test('a changed file that is not in the registry is linted anyway', async () => {
   const dir = await project({
     '.chalc/gate.json': CONFIG,
-    'specs/013-alcance/spec.md': '- **R1** — WHEN algo THE SYSTEM SHALL otra cosa.',
+    ...coherentSpec('specs/013-alcance', { ticked: true }),
     'src/base.ts': 'export const base = () => 1;\n'
   });
   await previousTaskClosed(dir);

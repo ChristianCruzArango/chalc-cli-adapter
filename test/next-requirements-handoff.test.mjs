@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { allReviews } from '../catalog/next/lib/review.mjs';
 import { decide } from '../catalog/next/lib/decide.mjs';
 import { reasonOf } from '../catalog/next/lib/i18n.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
 
 const GATE = Date.parse('2026-10-13T15:00:00Z');
 const ROLES = [
@@ -17,6 +18,8 @@ const ROLES = [
 ];
 const OWASP = ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08', 'A09', 'A10'].map((id) => `- ${id} X: no aplica — la tarea no toca esto`).join('\n');
 const snap = (log, current = '**T2** (R1, R3) — Exponer por HTTP') => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 1, total: 3, current, mtime: GATE - 1 },
   gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: 'b', pending: [] },
   review: { entries: allReviews(log) },

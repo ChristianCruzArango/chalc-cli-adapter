@@ -10,6 +10,7 @@ import { allReviews } from '../catalog/next/lib/review.mjs';
 import { decide } from '../catalog/next/lib/decide.mjs';
 import { reasonOf } from '../catalog/next/lib/i18n.mjs';
 import { render } from '../catalog/next/next.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
 
 const GATE = Date.parse('2026-10-13T15:00:00Z');
 const ROLES = [{ id: 'revisor', order: 10, cadence: 'task', required: true }];
@@ -17,6 +18,8 @@ const PRIOR = '## 2026-10-13T14:50:00Z · a1b2c3d4e5 · revisor · FINDINGS: 2\n
 const ITEMS = [{ n: 1, text: 'src/tarifa.mjs:3 — redondeo a mano' }, { n: 2, text: 'src/viejo.mjs:9 — nombre engañoso' }];
 
 const snap = ({ log = '', baseline = 0 } = {}) => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 1, total: 3, current: '**T2** (R2) — Calcular tarifas', mtime: GATE - 1 },
   gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: 'b', pending: [] },
   review: { entries: allReviews(log) },

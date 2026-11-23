@@ -57,3 +57,14 @@ test('5.5: la base sale de CHALC_MUTATE_BASE y, sin ella, de git', async (t) => 
   g('switch', '-q', 'main');
   assert.equal(mutateBase({}, dir), 'HEAD~1', 'en main: el commit anterior');
 });
+
+// Specs 032–042: las tablas de texto de las herramientas nuevas son diccionarios, como `lib/i18n/`; su lógica, no.
+test('las tablas de texto de team, design, probe y evals quedan fuera; el resto de esos árboles se muta', () => {
+  for (const path of ['catalog/team/lib/i18n.mjs', 'catalog/team/lib/i18n-evals.mjs', 'catalog/design/lib/i18n.mjs', 'catalog/probe/lib/i18n.mjs', 'catalog/evals/lib/i18n.mjs', 'catalog\\team\\lib\\i18n.mjs']) {
+    assert.equal(isMutable(path), false, path);
+  }
+  assert.equal(isMutable('catalog/design/lib/probe.mjs'), false, 'corre en la página, no en Node');
+  for (const path of ['catalog/design/lib/measure.mjs', 'catalog/team/lib/reduce.mjs', 'catalog/team/team.mjs', 'catalog/design/lib/evaluate.mjs', 'catalog/gate/lib/i18n.mjs', 'catalog/next/lib/i18n.mjs', 'catalog/team/lib/i18nx.mjs', 'catalog/team/i18n.mjs']) {
+    assert.equal(isMutable(path), true, path);
+  }
+});

@@ -65,7 +65,7 @@ async function reviewTurn(shell, io, task, paths) {
   const r = await reviewerPass(shell, io, task, paths);
   if (!r) return;
   if (r.empty) { io.print(c.dim(t('cliNothingToReviewNoChanges'))); return; }
-  // Bitácora persistida del ciclo de calidad (.chalc/review.md): veredictos, órdenes de corrección
+  // Bitácora persistida del ciclo de calidad (.chalc/cli-review.md): veredictos, órdenes de corrección
   // literales y resultados — la contraparte del plan.md, para auditar CÓMO se corrigió, no solo qué.
   const projectPath = shell.session.project?.projectPath;
   startReview(projectPath, task, { reviewer: modelOf(shell, 'reviewer') });

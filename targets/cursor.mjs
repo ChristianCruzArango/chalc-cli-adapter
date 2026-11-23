@@ -43,7 +43,7 @@ const plan = ({ skills, mcps, methods }) => [
   ...methods.map((me) => kit.methodPlanLine(me)),
   ...mcps.map((m) => `mcp       .cursor/mcp.json  ::  ${m.id}`),
   'rules     AGENTS.md',
-  `command   ${kit.liveCommandFile('cursor')}`,
+  ...kit.commandPlanLines('cursor'),
   'manifest  .chalc.json'
 ];
 

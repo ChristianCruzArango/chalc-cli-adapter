@@ -18,6 +18,7 @@ import { killRunning, runCommand, shellArg } from '../catalog/gate/lib/run.mjs';
 import { redactSensitiveText, safeUrlForDisplay } from '../catalog/gate/lib/redact.mjs';
 import { TOUCHED_REL } from '../catalog/gate/lib/touched.mjs';
 import { emitGate } from '../lib/gateemit.mjs';
+import { coherentSpec } from './helpers/coherentspec.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG = {
@@ -33,7 +34,7 @@ const git = (dir, ...args) => spawnSync('git', ['-c', 'user.email=t@t', '-c', 'u
 
 async function sealedProject(t) {
   const dir = await tempDir(t, 'chalc-g7-seal-');
-  const files = { '.chalc/gate.json': JSON.stringify(CONFIG), 'specs/001-x/spec.md': '- **R1** — WHEN x THE SYSTEM SHALL y.', 'src/base.ts': 'export const base = () => 1;\n' };
+  const files = { '.chalc/gate.json': JSON.stringify(CONFIG), ...coherentSpec('specs/001-x', { ticked: true }), 'src/base.ts': 'export const base = () => 1;\n' };
   for (const [rel, content] of Object.entries(files)) {
     await mkdir(dirname(join(dir, rel)), { recursive: true });
     await writeFile(join(dir, rel), content);

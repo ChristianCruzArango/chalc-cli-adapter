@@ -37,11 +37,15 @@ This way, an Angular project can receive its Angular skills, a NestJS one its ba
 | `node .chalc/gate.mjs` | **Quality gate** of an equipped repo: tests + mutation + static checks; evidence in `.chalc/gate.md`. Not a chalc command — it runs in the repo, with or without chalc | no |
 | `node .chalc/memory.mjs` | **Project memory**: searches what was learned (`search`, `get`, `concepts`) and captures it when each task closes (`capture`). Not a chalc command — it runs in the repo | no |
 | `node .chalc/live.mjs` | **Live board** of an equipped repo: starts a local page in the background (read-only, `127.0.0.1`) with the task in progress, the gate (and why), each role, what is missing, the tokens and time per task and each agent's activity, and prints its URL. It shuts itself down. Not a chalc command — it runs in the repo | no |
+| `node .chalc/team.mjs` | **Team state** of an equipped repo: records what each role does and shows where each spec stands (`status`, `report --feature`, `block --spec`). Not a chalc command — it runs in the repo | no |
+| `node .chalc/design.mjs` | **Design contract** of an equipped repo: measures an interface in the system browser (`measure <url…>`), evaluates measurements against the contract (`check`) and leaves the screenshot gallery. Not a chalc command — it runs in the repo | no |
+| `node .chalc/probe.mjs` | **API and CLI probes** of a spec (`run --spec <folder>`): requests and commands against the running service, with what is expected. Not a chalc command — it runs in the repo | no |
+| `node .chalc/evals.mjs` | **Active evals**: trap cases that are prepared and scored without a judge (`list`, `prepare`, `score`, `compare`). Not a chalc command — it runs in the repo | no |
 | `node .chalc/next.mjs` | **Flow advisor** of an equipped repo: tells you the ONE next action of the task cycle, reading the repo's real state. Read-only. Not a chalc command — it runs in the repo, with or without chalc | no |
 | `chalc doctor` | Validates the catalog (rules, skills, MCP, methods, targets) | no |
 | `chalc configure` | Manages the catalog (rules/skills/MCP) via menu | no |
 | `chalc install <source>` | Installs a skill into the catalog and wires it to a rule | no |
-| `chalc spec` | Creates an empty `specs/NNN-feature` folder/template | no |
+| `chalc spec` | Creates `specs/NNN-feature` from the templates; given a source (`--azure`, `--jira`, `--url`, `--doc`) it copies the user story verbatim into `hu.md` | no |
 | `chalc config-ia` | Configures the AI by packages: base (provider + key), `cli` (leader/developer/reviewer team), `debate` (the two that argue your idea), `spec`, `qa`, `repair` | yes (setup) |
 | `chalc ai-doctor` | Shows provider, profile, and models resolved per task | no |
 | `chalc eval-ia` | Runs local evals of prompts/parsers without calling the provider | no |
@@ -113,6 +117,7 @@ chalc --yes                 # uses the defaults, without asking
 chalc --method sdd          # enables the SDD method without asking
 chalc --dry-run             # shows the plan without writing anything
 chalc --target claude       # picks the destination assistant
+chalc init react --mutation # installs the mutation tool on creation (--no-mutation skips it)
 chalc install <fuente> --allow-exec  # allows Git/npx if you trust the source
 chalc install <fuente> --force       # replaces an existing skill without asking
 ```
@@ -180,6 +185,9 @@ Available architectures (the AI recommends the lightest one that fits; you decid
   (exact versions), the `test` script, `vitest.config.ts` (extends the Vite config) and a first passing test.
   Fastify already brings its own (`node:test` + `c8`). The `README.md` files the scaffolder leaves (Fastify's in
   `src/plugins` and `src/routes`) are kept: chalc only rewrites the ones it generated.
+- **Mutation is ready from birth:** on creation it offers to install the stack's mutation testing tool (without
+  a terminal, with `--mutation`) and leaves its configuration with the detected runner and the report where the
+  gate reads it. If the install fails, it warns with the command and carries on: the project is created anyway.
 - **Bilingual (es/en)** following `chalc lang` or the system language.
 
 When creating, Chalc generates the official scaffolder's base project, the architecture's folders with their
@@ -343,12 +351,19 @@ definitions, methods, and loadable targets. In non-interactive mode (`chalc doct
 ### Prepare a spec template
 ```bash
 chalc spec
+chalc spec --azure https://dev.azure.com/org/project/_workitems/edit/42
+chalc spec --doc story.docx --name payments
 ```
 
-The official path is `specs/` in plural. `chalc spec` **does not write the specification**:
-it only creates the folder and copies empty templates with placeholders. Each feature lives in
-`specs/NNN-nombre/` with `spec.md`, `plan.md`, and `tasks.md` (plus extra files in `full` mode).
-The real spec is written afterwards by a person or an assistant, inside `spec.md`.
+The official path is `specs/` in plural. `chalc spec` **does not write the specification** and uses no
+model: it creates the folder and copies the templates. Each feature lives in `specs/NNN-name/` with
+`hu.md`, `spec.md`, `plan.md`, and `tasks.md` (plus extra files in `full` mode).
+
+Given a source (`--azure`, `--jira`, `--url` or `--doc`) it also fetches the user story and leaves it
+**exactly as it arrived** in `hu.md`, with its `Source:` line; without `--name`, the folder takes the
+story's title. Credentials come from your environment (`CHALC_PAT` for Azure DevOps, `CHALC_TOKEN` for
+Jira) and are neither printed nor stored. If the source fails, no half-made folder is left behind. The
+spec is drafted afterwards by a person or an assistant: see "Spec coherence", below.
 
 ## How it works
 
@@ -374,7 +389,7 @@ chalc/
 │   ├── net.mjs              fetch with timeout/limits and external-URL validation
 │   ├── install.mjs          install/vendor skills (Git/skills.sh/local)
 │   ├── targetkit.mjs        shared utilities for the targets (principles, architecture, blocks)
-│   ├── manifest.mjs         reads `.chalc.json`: language, methods and architecture that re-equipping respects
+│   ├── manifest.mjs         reads `.chalc.json`: language, methods, architecture and skills that re-equipping respects
 │   ├── docread.mjs          extracts text from Word/PDF/Excel/…
 │   ├── ole2.mjs             OLE2/CFB container (legacy binary Office)
 │   ├── xls.mjs              Excel .xls (BIFF8) → rows, RC4 included
@@ -428,6 +443,10 @@ chalc/
 │   ├── gate/                the quality gate: real code copied into `.chalc/` when equipping
 │   ├── next/                the flow advisor: decides the ONE next action of the task cycle
 │   ├── live/                the live board: local page with the state and each agent's activity
+│   ├── team/                the team state: event ledger, status.json and the report per feature
+│   ├── design/              the design contract: evaluator, browser probe, measurement and gallery
+│   ├── probe/               the API and CLI probes of a spec
+│   ├── evals/               the active evals: trap cases and their checks
 │   ├── tools/               what chalc knows per stack: tests, mutation, report and install
 │   └── mail/                the mailbox between the sides of a workspace
 ├── rules/                   criteria: which signal = which stack = what gets installed (incl. global.json)
@@ -447,7 +466,7 @@ chalc/
 | Skills | `.claude/skills/<id>/` (real copy) |
 | MCP | `.mcp.json` (merged, doesn't clobber what exists) |
 | Rules/stack | `CLAUDE.md` (managed block between `<!-- chalc:start -->` and `<!-- chalc:end -->`) |
-| Manifest | `.chalc.json` (what was installed and when, in which language, with which method and architecture: re-equipping without flags respects it) |
+| Manifest | `.chalc.json` (what was installed and when, in which language, with which method and architecture: re-equipping without flags respects it, and `--yes`, `spec-ia` and `feature` also keep the already-equipped skills the rules do not bring; to remove one, edit the manifest or equip interactively) |
 
 ## Extending Chalc
 
@@ -673,6 +692,61 @@ The method is injected into the assistant's file (`CLAUDE.md`, etc.) as rules, a
 Without interactive: `chalc --method sdd:lite` or `chalc --method sdd:full` (or `--mode lite|full`).
 The constitution, templates, and rules are in **es and en** (they follow the system language).
 
+### Spec coherence: no tests or code without the story, a review, and your approval
+
+A spec that does not say the same as the user story produces correct code for the wrong feature. So,
+before letting anything move on to tests or code, the **gate** and the **advisor** demand three things
+of the active folder (`.chalc/active-spec` or, if absent, the highest-numbered `specs/NNN-*`):
+
+| Step | Who | What is checked |
+|---|---|---|
+| Mechanical coherence | the gate (`coherence` stage), no AI | `hu.md`, `spec.md`, `plan.md` and `tasks.md` of THAT folder exist (never those of an earlier one); the story has text and a `Source:`; every `HU-n` fragment appears verbatim in the story; every requirement `R#` is in EARS form and cites an existing `HU-n`; every `HU-n` is cited by some requirement; the plan and the tasks cite only real requirements; every task cites an `R#` and every requirement is covered by a task; no `[NEEDS CLARIFICATION]` is left |
+| Review | the `analista` role, which is not the author | nothing invented, omitted or twisted with respect to the story; its entry in `.chalc/review.md` is tied to the **fingerprint** of story+spec+plan+tasks |
+| Approval | **you**, in your terminal | `node .chalc/gate.mjs --approve-spec` asks you to type the folder name and seals that fingerprint in `.chalc/seals/<folder>.spec.json` |
+
+```bash
+node .chalc/gate.mjs --approve-spec
+```
+
+While anything is missing, the advisor answers `fix_specs` (with the file and line of each problem),
+`call_role analista` or `approve_spec`, and the gate runs not a single test. Editing the story, the
+spec, the plan or the tasks afterwards changes the fingerprint and invalidates the review and the
+approval; ticking boxes in `tasks.md` does not.
+
+The spec is drafted by the **`especificador`** role, which first reads the project's own rules
+(`CLAUDE.md`, `AGENTS.md`), the constitution and the templates, and leaves anything ambiguous as a
+question instead of making it up. The whole journey starts with the **`/chalc-spec`** command (in
+Codex, `$chalc-spec`), which chalc leaves in every assistant: it fetches the story with `chalc spec`,
+hands over the drafting and **stops** when it reaches your approval.
+
+**Honest limit:** the approval refuses to run without an interactive terminal and, with the guard on,
+the assistant is denied it; but whoever has a shell can fake a terminal or write the seal by hand. It
+raises the bar and leaves a trace in the diff; it is not unbreakable.
+
+### Sealed red: tests come first, and are not loosened afterwards
+
+"Write the test first" used to be a sentence. Now it is a dated fact. In every task, the advisor answers
+`red_task` until its tests are written and **registered as failing**:
+
+```bash
+node .chalc/gate.mjs --red
+node .chalc/gate.mjs --red --skip "only the documentation changes"
+```
+
+| What is checked | How |
+|---|---|
+| The tests exist and fail before the code | `--red` requires changed test files, no changed production file, and the test command to fail; it records it in `.chalc/tdd.jsonl` with the fingerprint of each test |
+| Nobody loosens a test to make it pass | the gate's `tdd` stage fails if a sealed test changed or disappeared; to really change it, it is made to fail again and registered again |
+| No code without a red | with production code changed and no red for that task (or with a `--skip` waiver), the gate does not pass |
+| The tests prove something | skipped tests (`skip`), focused ones (`only`), trivial assertions (`expect(true).toBe(true)`) and cases with no assertion at all are reported |
+| Every requirement of the task has a test | traceability goes both ways: a test cites a real requirement, and no requirement of the task is left without a test citing it |
+
+Adding tests after the red is allowed. Every task carries its tests **and** its code: there is no "tests"
+task and a separate "code" task.
+
+**Honest limit:** this proves there was a test that failed before the code and was not touched afterwards; not
+that it is the right test, which is judged by whoever reviews (and by mutation, which measures whether the tests catch faults).
+
 ### Quality gate: closing a task is verified, not promised
 
 Equipping a repo also drops a **quality gate** in it: `.chalc/gate.mjs`, real code with zero
@@ -714,6 +788,18 @@ without the tool installed, it blocks with the command to install it.
 
 Configuration lives in **`.chalc/gate.json`** (thresholds, commands, report paths). Re-equipping
 regenerates the gate code and **keeps what you edited there**.
+
+In a JS/TS project the commands come out with **your package manager**: the one in the `packageManager`
+field of `package.json` or, if it declares none, the one of the lockfile (`pnpm-lock.yaml`, `yarn.lock`,
+`bun.lockb`/`bun.lock`); with no signal, npm. The gate and the advisor speak the **project's language**
+(`--lang`, or the one the manifest stores). And the mutation tool's temporary files (`.stryker-tmp/`,
+`reports/mutation/`) are added to your `.gitignore` unless they were already covered.
+
+Two **structure** checks go with the rest of the linter. The **complexity** one (`lint.maxComplexity`, 10
+by default) counts the paths of every function the task touched: a short function can be tangled too.
+And the **declared folders** one: `chalc init` writes the folders of the chosen architecture to
+`structure.folders`, and a **new** production file outside them is reported (not the ones that already
+existed, nor tests, nor root-level files; exceptions go in `structure.allow`).
 
 ### Task scope: what you changed, never the whole project
 
@@ -888,6 +974,21 @@ node .chalc/memory.mjs get <id>         # the detail of one entry
 node .chalc/memory.mjs concepts         # the concepts, for writing a spec
 ```
 
+**One memory for the whole team.** With a worktree per spec, memory is still one: from the worktree of any spec,
+the main repo's memory is read and written, so what one developer learns is read by the others **at once**, without
+waiting for anyone to merge branches.
+
+- **It is captured when there is something to learn**: when a delivery is rejected, the `Learned rule (…)` left by the
+  reviewer enters memory at that moment, with its origin (spec and role). And every time the gate does not pass, each
+  broken rule is noted and **adds up** if repeated; noting never changes the gate's result.
+- **It reaches whoever is working**: each role's order carries up to 5 current lessons —promoted ones first, then those
+  sharing a concept with its spec— and how to read their detail.
+- **From lesson to team rule, you decide**: `node .chalc/memory.mjs candidates` lists what was repeated twice
+  or more; `node .chalc/memory.mjs promote <id>` (and `demote <id>`) only work from an interactive terminal.
+  There is a cap of 20 promoted: an order with too many rules teaches reading none.
+
+Honest limit: a lesson handed over is not a lesson applied; it is proven that it was in the order, not that the model followed it.
+
 ### Reviewer agent: what the gate cannot measure
 
 The gate measures and does not opine. Next to it, each repo gets a **reviewer agent** in its target's
@@ -994,22 +1095,34 @@ COMMAND: node .chalc/gate.mjs
 
 It reads the repo's real state — evidence date, gate verdict, reviewer log, `tasks.md` checkboxes,
 changed files — and returns **one** action from this table, the first that applies:
-`blocked_config`, `run_gate`, `fix_gate`, `call_reviewer`, `fix_review`, `tick_task`, `work_task`,
-`done`. If it cannot tell where things stand, it answers `ask_human` and hands control back instead
+`blocked_config`, `fix_specs`, `approve_spec`, `run_gate`, `fix_gate`, `call_role`, `fix_review`,
+`tick_task`, `red_task`, `work_task`, `approve_feature`, `done`. If it cannot tell where things stand, it answers `ask_human` and hands control back instead
 of guessing.
 
 `NEXT_ACTION` and `COMMAND` are **never translated** (the assistant consumes them); `REASON` is in
 the spec's language and always cites the datum that produced the action. A green from a `--fast` run,
 or from another branch, does not close a task: it goes back to `run_gate`.
 
-Approval gates are tuned in `.chalc/gate.json`:
+The reviewer gate is tuned in `.chalc/gate.json`:
 
 ```jsonc
 "flow": {
-  "approvals": { "task": true, "feature": true },   // ask for your OK when closing
   "review": { "required": true }                    // require the reviewer before ticking
 }
 ```
+
+Your two approvals, the **spec** and the **close**, are deliberately not in there: they have no
+switch. Between the two there is no per-task approval: the team works on its own. With every task
+done, measured and reviewed the advisor answers `approve_feature` and stops; the close is yours:
+
+```bash
+node .chalc/gate.mjs --approve-feature
+```
+
+It requires the approved spec, every task ticked and a **full** gate run that passes; it asks you to
+type the folder name and seals that spec and that evidence in `.chalc/seals/<folder>.feature.json`. If
+the spec changes or the gate measures again, what was approved is no longer what is there and it is
+asked for again. Each approval appends a line to `.chalc/approvals.jsonl` (what, on which commit, when).
 
 The hand-off printed by `spec-ia` and `feature` no longer recites steps: it tells the assistant to
 consult the advisor and obey its `COMMAND` until it answers `done`. In a full-stack feature the cycle
@@ -1035,6 +1148,7 @@ looks at every action before it happens:
 | reading credentials (`.env`, `.envrc`, SSH keys, `.npmrc`, `*.pem`, `*.tfvars`, `kubeconfig`, `.docker/config.json`…) by any tool or command | blocked; `.env.example` and other value-less templates can be read |
 | `Grep` that returns content over a whole folder (it could pull a secret line by line) | it asks you; narrowed by `type` or a concrete `glob` it passes |
 | `rm`, `rmdir`, `find -delete` outside the project, on the whole project, or on an unresolvable target (`$VAR`, `$(…)`, `~`, `{a,b}`) | blocked; deleting inside the project works as usual |
+| approving the spec or the close (`node .chalc/gate.mjs --approve-spec`, `--approve-feature`), however it is written | blocked: you approve them, in your terminal |
 
 When the action passes it answers nothing (answering `allow` would bypass your permissions), it never
 breaks or hangs the turn, and the reason comes in the repo's language. **Honest limit:** it reads
@@ -1055,6 +1169,45 @@ Claude Code applies even inside a chain (`npm test && git push`). When you tell 
 accept the prompt and it happens; if you did not, you reject it. Whatever was already in the file is kept, a
 file that is not valid JSON is left untouched with a warning, and the file is added to the `.gitignore`.
 Claude Code only: with another assistant `--guard` warns and writes nothing.
+
+### Git hooks, integrity and CI: what does not depend on the assistant
+
+An assistant's hooks exist only in that assistant. **Git** hooks run with any of them, and also when a
+person commits. When equipping a git repo, chalc leaves two in `.chalc/hooks/` and activates them
+(`core.hooksPath`):
+
+| Hook | What it does |
+|---|---|
+| `pre-commit` | if the commit carries code, it runs the fast gate (`--fast`) and refuses the commit unless it passes; a docs-only or specs-only commit runs nothing |
+| `pre-push` | it does not run the gate: it requires that the changed code was already measured by a **full** run that passes, on the content as it stands |
+
+```bash
+node .chalc/gate.mjs --hook pre-commit
+node .chalc/gate.mjs --hook pre-push
+```
+
+If your project already uses its own hooks (`core.hooksPath` points to another folder, such as
+`.husky`), chalc **does not touch them**: it leaves its own in `.chalc/hooks/` and tells you the two
+lines above so you can add them to yours. Skipping a hook (`git commit --no-verify`) is a person's
+decision; with the guard on, the assistant is blocked from doing it.
+
+**Integrity.** Equipping writes `.chalc/integrity.json` with the fingerprint of every tool in `.chalc/`.
+If one does not match (someone edited the gate that measures them) the gate refuses to measure and says
+which. `chalc verify` goes further: it compares them with those of the installed chalc, which lives
+outside the repo.
+
+**CI, only if you ask.** With `--ci`, equipping writes `.github/workflows/chalc.yml`, which on every
+push and pull request runs `node .chalc/gate.mjs --ci`: integrity of the tools, and coherence and
+approval of the active spec. It installs no dependencies and runs none of your tests: that is your own CI's job.
+
+```bash
+chalc --ci
+```
+
+**Honest limit:** the integrity manifest lives in the same repo it protects, so whoever alters a tool
+can redo its fingerprint; what is gained is that the change shows up in the diff and in CI. And
+`pre-push` measures "what changed" since the previous task was closed: in a repo with no closed task
+yet it has nothing to compare against.
 
 ### Live board: see where it is while it works
 
@@ -1090,6 +1243,305 @@ down after 15 minutes with nobody looking (`--idle <minutes>` changes it). The a
 and where, never content, with secrets redacted. Its files (`.chalc/live.json`, `.chalc/activity.jsonl`,
 `.chalc/usage.json`) belong to the machine and the session: the `.gitignore` that `chalc init` creates keeps
 them out.
+
+### Team state: where each spec stands, taken from facts
+
+With several specs under way, the advisor (which speaks about one folder) and a single-task board are not enough.
+Every equipped repo carries **`.chalc/team.mjs`**, the team ledger. It is not a model and launches none: it stores
+dated facts and shows them.
+
+```
+node .chalc/team.mjs status                              # the table: each feature, its lead and its specs
+node .chalc/team.mjs report --feature <name>             # the report for the feature
+node .chalc/team.mjs block --spec <folder> "<reason>"    # a role that cannot go on leaves it written down
+node .chalc/team.mjs event <type> key=value…             # what the orchestrator and the roles record
+```
+
+- **An append-only ledger** (`.chalc/team/ledger.jsonl`): one line per event, dated by the ledger and not by
+  whoever sends it. An unknown type or a missing field is refused and nothing is written.
+- **`.chalc/team/status.json` is derived only from the ledger** and rewritten whole, atomically, on every
+  event: editing it by hand changes nothing. It carries what is waiting for the user (which feature, why and with
+  which command) and, per feature, its lead and its specs: state, worktree, branch, developer launcher and tier,
+  phase (`RED` or `GREEN`), task, attempt out of a maximum, last gate, last finding, block reason and last signal.
+- **Possibly stalled**: a spec in development with no signal beyond the threshold is flagged, without changing
+  its state. The threshold and the attempt cap are set in `.chalc/team.json` (`stallMinutes`, 20; `maxAttempts`, 3).
+- **One team even with worktrees**: from the worktree of a spec, the ledger is the one of the main repo.
+  `--root <path>` sets it by hand.
+- **The report is not written by a model**: per spec, its final state, the attempts, each rejection with its
+  reason and the last gate. And it always carries the **"What was NOT verified"** section —specs not integrated,
+  without a full gate run that passes, close not approved—, also when it is empty.
+- **On the board**: `/chalc-live` shows the *Team* section as soon as a feature is registered.
+
+The ledger and the state belong to the machine and stay out of git; the tools are covered by
+`.chalc/integrity.json` and by `chalc verify`. Honest limit: it is a local file that anyone with a shell can
+edit. What is gained is that the state and the report come from one place and from facts, not from a summary.
+
+### Worktrees and waves: one spec, one developer, one worktree
+
+The unit of parallelism is the **spec**, not the task: a developer does all the tasks of their spec in series,
+in a worktree and a branch of their own —also when there is a single spec—, and nobody works on your branch.
+
+Each `plan.md` declares its scope (the templates already carry it):
+
+```
+Touches:
+- src/pagos/**
+- test/pagos/**
+
+Depends on: 027-checkout
+```
+
+```
+node .chalc/team.mjs open --feature <name> <folder…>      # which specs make up the feature
+node .chalc/team.mjs waves --feature <name>               # splits them into waves
+node .chalc/team.mjs start --spec <folder>                # creates its worktree and its branch chalc/<name>
+node .chalc/team.mjs deliver --spec <folder>              # from the worktree: records the delivery
+```
+
+- **Waves**: two specs whose `Touches:` overlap never share a wave, and a spec goes after all the specs it
+  depends on. A spec without `Touches:` goes alone: without knowing what it touches, no clash can be ruled out.
+- **Only what is approved gets scheduled**: a spec without your seal, or edited after sealing, leaves the whole
+  feature unscheduled. So does a dependency outside the feature, or a cycle.
+- **`start`** creates the worktree in a folder next to the repo (`<repo>.chalc-wt/<name>`; `worktreesDir` in
+  `.chalc/team.json` changes it), pins the active spec in it without dirtying it and records the base. It refuses
+  if the spec is not scheduled, if an earlier wave is not integrated, if the spec or its seal is uncommitted, or
+  if the branch or the folder already exists. chalc does not delete worktrees: that is yours.
+- **`deliver`** compares what was committed since the base against `Touches:` and **lists the out-of-scope
+  files**; with any, with uncommitted changes or with no commits, there is no delivery. The folder of the spec
+  itself and the gate evidence (`.chalc/gate.md`, `.chalc/gate.state.json`, `.chalc/review.md`, `.chalc/tdd.jsonl`)
+  are always in. Widening `Touches:` to sneak a file in does not work: the plan is sealed and editing it leaves the spec unapproved.
+
+Honest limit: `Touches:` is written by whoever drafts the plan and approved by you; if it is wrong, so are the
+waves. The delivery checks the diff against what was declared, not that what was declared was right.
+
+### Roles and launchers: who does what, with which agent and which model
+
+Two commands, **one engine**: **`/chalc-spec <source>`** for one story and **`/chalc-teams <sources…>`** for
+several (in Codex, `$chalc-spec` and `$chalc-teams`). One spec is a team of one: same lane, one developer.
+The session where you launch it is the **orchestrator**, the only voice towards you; chalc **launches no model**:
+it hands each role its order and says what it is launched with.
+
+| Role | What it does | Default tier |
+|---|---|---|
+| `especificador` | Drafts spec, plan and tasks from the verbatim story | alto |
+| `analista` | Reviews the spec against the story (author ≠ reviewer) | alto |
+| `lider` | One per feature: dispatches, collects verdicts, reworks or escalates. Writes no code and does not talk to you | alto |
+| `desarrollador` | One per spec, in its worktree: registered red → minimal code → gate, task by task | **medio** |
+| `seguridad` | OWASP A01–A10 on every delivery | alto |
+| `revisor` | Requirements and project rules on every delivery | alto |
+| `disenador` | Only with an interface: decides the composition of each screen in `design.md`, before your approval | alto |
+| `endurecedor` | Reviews what was integrated, once per feature | alto |
+
+The instructions of each role live in **`.chalc/roles/<role>.md`**, the same for any assistant and covered by
+integrity. What each one runs with is set in **`.chalc/team.json`** (created on equip and never overwritten):
+
+```json
+{
+  "maxParallel": 3, "maxAttempts": 3, "stallMinutes": 20,
+  "roles": {
+    "desarrollador": { "launcher": "comando", "tier": "medio", "command": "<agent> <non-interactive mode> {orden}", "skills": ["clean-code", "solid-principles"] },
+    "revisor": { "launcher": "nativo", "tier": "alto", "command": "", "skills": [] }
+  }
+}
+```
+
+- **`launcher`**: `nativo` (a subagent of the assistant itself) or `comando` (the non-interactive line of ANOTHER
+  agent, with `{orden}` and, if you want, `{carpeta}`). A command without `{orden}` or with `& | < > ( ) ^ % !` is not handed over.
+- **`tier`**: `economico`, `medio` or `alto`. Whoever writes the code does not need the most expensive model: what
+  they write is measured by the gate and by those who review it.
+
+```
+node .chalc/team.mjs dispatch --spec <folder> --role <role>   # writes the order and says what it is launched with
+node .chalc/team.mjs verdict --spec <folder>                  # reads the review log of the delivery
+node .chalc/team.mjs rework --spec <folder>                   # rework, relaunch or escalate a rejected delivery
+```
+
+- **The order** (`.chalc/team/orders/`) carries the role's instructions, the folder it works in, **the project's
+  own rules that exist** (`CLAUDE.md`, `AGENTS.md` —also those nested in what the spec touches—,
+  `.cursor/rules`, `.github/copilot-instructions.md`), its skills, the spec, the attempt, the finding to resolve and
+  the commands it reports with.
+- **A delivery requires evidence**: every task ticked and a full gate run that passed THAT
+  code; a later code commit makes it stale.
+- **The verdict comes from the log**: each required review role (`flow.roles` in `.chalc/gate.json`) signs in
+  `.chalc/review.md` of the worktree on the delivered commit. A role with findings rejects; approving takes
+  all of them. A role's word without an entry does not count.
+- **Rejection with a cap**: it goes back to the same developer up to `maxAttempts`; once used up, it is relaunched
+  **once** with the next tier; if that fails too, it is escalated and shows under "Waiting for the user".
+- **Inside the worktree of a spec** (branch `chalc/<folder>`) the advisor asks for no reviewers and no close: with
+  everything done and measured it says to deliver. Outside it nothing changes: the per-task cycle stays as it was.
+
+Honest limit: chalc validates the shape of the command, not that the agent exists or obeys. Per-role
+permissions are only real where the assistant supports them; elsewhere they are an instruction. It is not proven
+that a model read the rules; it is that they were handed over in the order.
+
+### Integration and close: what is approved is joined apart, and the final merge is yours
+
+Each spec passing on its own does not say they pass together. What was reviewed is joined in a branch of its own,
+**`chalc/int-<feature>`**, in its worktree; **your branch is not touched**.
+
+```
+node .chalc/team.mjs integrate --feature <name>     # joins what was reviewed, one at a time, and measures each merge
+node .chalc/team.mjs close --feature <name>         # says whether the feature is ready, and records the close
+```
+
+- **One at a time, by waves**: after joining each spec the project's tests run (`test.command` in
+  `.chalc/gate.json`; `setup` in `.chalc/team.json` prepares the dependencies first if you define it).
+- **Two green branches that break together**: the merge of the one that just came in is undone, that spec is
+  **rejected by `integracion`** —with its name and how to bring what is integrated into its branch— and integration stops.
+- **Evidence is not a conflict**: `.chalc/review.md` and `.chalc/tdd.jsonl` are added up, and each branch keeps its
+  last gate report. A clash in any other file aborts the merge, **blocks that spec** with the
+  conflicting files and shows under "Waiting for the user".
+- **Later waves start from what is integrated**, and the delivery measures each spec's scope from there.
+- **The close**: with everything integrated, the closing role (`endurecedor`) reviews the integration worktree and signs
+  on its commit. Then `close` leaves **`git merge chalc/int-<feature>`** under "Waiting for the user". That merge,
+  done by you in your terminal, **is** the approval of the close: when `close` sees it in your branch, it records it.
+  The assistant's guard denies it merging, rebasing or pulling that branch.
+
+Honest limit: "they pass together" is the project's suite, not the full gate (mutation was already measured on each
+delivery). The guard only exists where the assistant supports hooks; elsewhere it is an instruction. chalc leaves in
+git's local configuration (not committed) how to merge the evidence.
+
+### Passive evals: measuring the team with what was already recorded
+
+Changing a role's instructions, or lowering the model tier of whoever develops, stops being a bet:
+
+```
+node .chalc/team.mjs evals [--feature <name>] [--json]
+```
+
+- **By developer configuration** (model tier and version of its instructions): deliveries, approved on the
+  first pass, approved, rejected, relaunches and escalations.
+- **By review role** and version of its instructions: verdicts and how many were rejections.
+- **Integration**: good merges, those that broke when joined and conflicts. And the average time from a
+  spec starting to being integrated.
+
+It comes only from the team ledger: **it calls no model and spends no token**. The "instructions version" is
+a short fingerprint of `.chalc/roles/<role>.md` that each dispatch leaves recorded, so the before and after of
+editing them is visible. Honest limit: these are counts, not a judgement; with few deliveries they cannot tell an improvement from luck.
+
+### Design contract: what an interface has to meet, with numbers
+
+"Make it look good" cannot be reviewed, and buttons end up glued together. Every equipped repo carries a measurable
+contract, **`.chalc/design.contract.json`** (created on equip and never overwritten), and its evaluator, `.chalc/design.mjs`:
+
+| What | Default |
+|---|---|
+| Minimum gap between interactive elements | 8 px |
+| Spacing scale | multiples of 4, between 4 and 64 px |
+| Minimum target size | 44×44 px in touch views (< 1024 px wide), 24×24 on desktop |
+| Minimum text size | 12 px |
+| Minimum contrast | 4.5:1 (3:1 for large text) |
+| Primary elements per view | 1 |
+| Widths it is measured at | 375, 768 and 1440 px |
+
+```
+node .chalc/design.mjs check <measurements.json> [--spec <folder>]   # evaluates measurements against the contract
+node .chalc/design.mjs contract [--spec <folder>]                    # the contract in force
+```
+
+- **The finding is exact**: `[movil] «#guardar» is 2 px from "#cancelar"; the contract asks for at least 8 px.
+  Move them 6 px further apart.` It also reports overlapping elements, small targets, off-scale spaces, small
+  text, insufficient contrast, more than one primary and elements that overflow the width.
+- **Design is decided before coding**: `plan.md` declares `Surface:` (`ui`, `api`, `cli` or `none`). With
+  `ui`, the folder needs **`design.md`** —composition per screen, primary action, states and narrow
+  screen—, written by the **`disenador`** role; without it, the gate reports it as a spec incoherence. And what
+  you seal on approval includes it: editing it afterwards invalidates the approval.
+- **A spec can adjust its contract** with `design.contract.json` in its folder, without touching the project's.
+
+Honest limit: the contract prevents broken interfaces; it does not guarantee good ones. The evaluator only sees what
+is in the measurements: a state nobody visited is not evaluated.
+
+### Browser measurement: the measurements come from the real page
+
+If the model writes the measurements, they measure nothing. `measure` opens each URL in the **Chrome, Edge or Chromium
+the machine already has** (headless, with a temporary profile of its own; `CHALC_BROWSER` names another), at each width
+of the contract, and takes from what was actually painted: each element's box, its text size, its colours with the
+effective background, whether it is interactive, whether it is the primary one and whether it is visible. It saves a
+screenshot per view and evaluates:
+
+```
+node .chalc/design.mjs measure http://localhost:3000/pago [more URLs…] [--spec <folder>]
+```
+
+- **Three different exits**: `0` meets the contract, `1` there are findings, `2` **could not measure** (no browser, the
+  page did not load). "Could not measure" never counts as approved.
+- **Local pages only** (`localhost`, `127.0.0.1`, `[::1]`, `file:`); anything else requires `--allow-remote`.
+- **Measurements and screenshots** stay in `.chalc/design-out/` (`measurements.json` and one PNG per view), out of git.
+- **No dependencies**: it talks to the browser through its debugging pipe; it installs and downloads nothing.
+- The primary element is recognised by `data-primary`, a `type="submit"` button or a `primary` / `btn-primary` class.
+
+Honest limit: the state each URL shows on load is measured; a state without a URL of its own is not evaluated. It is
+tested end to end with Chrome on macOS; on Windows and Linux the channel is the same, but that real-browser test
+is optional (`CHALC_BROWSER_TESTS=1`) and does not run in CI. Firefox and Safari are not supported.
+
+### Visual review and gallery: what is delivered with an interface gets seen
+
+- **`measure` leaves a gallery** (`.chalc/design-out/gallery.html`): each view with its screenshot, its size and its
+  findings written out, plus the commit that was measured. It is a static page, with no scripts.
+- **A spec with an interface is not delivered unmeasured**: if its plan declares `Surface: ui`, `team.mjs deliver` requires
+  a measurement **without findings of that code**. A later code commit makes it stale.
+- **The designer signs too**: on a delivery with an interface, `verdict` also requires the `disenador` entry
+  on the delivered commit. Its order carries the gallery: it judges what a number cannot see —whether the screen is the one in
+  `design.md`, whether the main action stands out, whether the states are there—.
+- **You see the screens before approving**: `team.mjs report` lists the galleries that exist.
+
+Honest limit: the measurement is run by whoever develops and leaves a local file; like the gate evidence, anyone with a
+shell can forge it. What is gained is that it can no longer be forgotten and that real screenshots get looked at.
+
+### API and CLI probes: what a spec without an interface has to answer, running
+
+A spec with an interface is measured in the browser. An API or command-line one is **probed**: its folder carries
+`probes.json` with what the running service has to meet.
+
+```json
+{
+  "api": [{ "name": "crear pago", "method": "POST", "url": "http://localhost:3000/pagos", "body": { "monto": 10 },
+            "expect": { "status": 201, "json": { "estado": "creado", "id": "*" } } }],
+  "cli": [{ "name": "ayuda", "command": "node bin/x.js --help", "expect": { "exit": 0, "stdout": "Uso" } }]
+}
+```
+
+```
+node .chalc/probe.mjs run --spec <folder>      # 0 all pass · 1 some fail · 2 could not run
+```
+
+- **API**: it compares the status, a **subset** of the JSON (`"*"` accepts any present value) and the text it
+  must contain. **CLI**: the exit code and the texts of each output. Each failure says what was expected and what came.
+- **They are part of the spec**: with `Surface: api` or `cli` the gate requires `probes.json`, and that it can be run. It is
+  **sealed** with your approval, so whoever develops fixes the service, not the probe.
+- **No clean probes, no delivery**: `team.mjs deliver` requires a result without failures on that code.
+- Local addresses only (unless `--allow-remote`), each probe with a deadline, and the result in `.chalc/probe-out/`.
+
+Honest limit: probes test what they say, no more; whoever drafts the spec writes them and you approve them.
+
+### Active evals: trap cases, scored without a judge
+
+Passive evals say what happened with real work. To decide **beforehand** whether a cheaper model, or new
+instructions, hold up, the same problem with the same trap is needed, repeatably:
+
+```
+node .chalc/evals.mjs list                                              # the cases and their trap
+node .chalc/evals.mjs prepare <case> --out <folder>                     # leaves the initial state and the task (TASK.md)
+node .chalc/evals.mjs score <case> --dir <folder> --label "medio v2"    # scores what was left in the folder
+node .chalc/evals.mjs compare                                           # per label and case: runs and average
+```
+
+| Case | The trap |
+|---|---|
+| `test-aflojado` | The shortest way to "make the tests green" is to change the test |
+| `fuera-de-alcance` | Next to what must be fixed there is ugly code that invites touching it |
+| `dato-inventado` | The task assumes a piece of data the documentation does not contain |
+| `botones-juntos` | The new button ends up glued to the existing one |
+
+- **No LLM judge**: each case is scored with deterministic checks —files untouched, present or absent,
+  content that must or must not appear, commands and the design contract—. The same folder always gets the same score.
+- **chalc does not launch the model**: it prepares and scores. In between, you run the role, the instructions or the model you
+  want to compare, in the prepared folder. The trap is not told to whoever is being evaluated.
+- **What cannot be checked is skipped** (without a browser, the design one): it counts neither for nor against, and it says so.
+- Each case is tested in chalc itself: the initial state does not get the maximum, the honest solution does, the cheating one does not.
+
+Honest limit: the cases are few and small; they catch a role that falls into known traps, they do not measure general
+quality. One run is one sample: comparing takes several per label.
 
 ### The tool table: one file per language
 
@@ -1521,7 +1973,8 @@ auditable artifacts persisted in the project.
    read-only mode on two dimensions: contract compliance (requirements, complete tasks) and code
    quality (conventions, architecture, real imports, no hollow deliverables). Findings are traceable
    ("R2 unmet", with file and cause); fixes are always executed by the developer through logged
-   literal orders, and every round lands in `.chalc/review.md`. After its OK, the stack's real build
+   literal orders, and every round lands in `.chalc/cli-review.md` (a file of its own: it never touches
+   `.chalc/review.md`, the roles' logbook). After its OK, the stack's real build
    runs as the final deterministic gate.
 
 Additional optional configuration in `~/.chalc/config.json`, under the `cli` block: `numCtx` (model

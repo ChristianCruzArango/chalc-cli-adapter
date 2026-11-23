@@ -1,0 +1,13 @@
+{
+  "id": "disenador",
+  "order": 1.5,
+  "cadence": "team",
+  "kind": "worker",
+  "summary": {
+    "es": "Diseñador de una spec con interfaz: decide la composición de cada pantalla (acción primaria, bloques, estados, pantalla estrecha) en design.md, a partir del contrato de diseño del proyecto y de lo que ya existe, ANTES de que el usuario apruebe la spec. No escribe código.",
+    "en": "Designer of a spec with an interface: decides the composition of each screen (primary action, blocks, states, narrow screen) in design.md, from the project's design contract and what already exists, BEFORE the user approves the spec. Writes no code."
+  },
+  "writes": ["specs/**/design.md", "specs/**/design.contract.json", ".chalc/review.md"],
+  "forbiddenWrites": ["src/**", "test/**", ".chalc/design.contract.json", ".chalc/gate.json"],
+  "tools": ["Read", "Grep", "Glob", "Bash", "Write", "Edit"]
+}

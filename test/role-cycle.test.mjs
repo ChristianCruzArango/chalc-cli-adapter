@@ -16,6 +16,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decide } from '../catalog/next/lib/decide.mjs';
+import { READY_SPECS } from './helpers/readyspecs.mjs';
 
 const GATE = 4000;
 const BRANCH = 'feature/009-roles';
@@ -28,6 +29,8 @@ const ROLES = [
 
 // Base: verde sin reclamar, una tarea pendiente por delante, ninguna revisión todavía.
 const snapshot = (over = {}) => ({
+  specs: READY_SPECS,
+  tdd: { red: true },
   tasks: { hasTasksFile: true, done: 1, total: 3, current: 'T2 — el lector', mtime: GATE - 1, ...over.tasks },
   gate: { exists: true, date: GATE, verdict: 'pass', fast: false, scopeHash: 'h', currentScopeHash: 'h', branch: BRANCH, pending: [], ...over.gate },
   review: { entries: [], ...over.review },
@@ -128,7 +131,8 @@ test('R15 — cubierto el rol de feature, la feature termina', () => {
     review: { entries: [at('revisor'), at('endurecedor')] }
   });
 
-  assert.equal(result.action, 'done');
+  // Cubiertos los roles, lo que queda es la aprobación del cierre, que es del usuario (spec 028).
+  assert.equal(result.action, 'approve_feature');
 });
 
 test('R15 — subir el endurecedor a cadencia `task` lo mete en cada cierre', () => {
@@ -150,7 +154,7 @@ test('R9 — sin ningún rol requerido, el ciclo cierra igual', () => {
   const roles = ROLES.map((r) => ({ ...r, required: false }));
   assert.equal(
     actionOf({ tasks: { done: 3, total: 3, current: '', mtime: GATE - 1 }, flow: { approvals: { task: true, feature: true }, roles } }),
-    'done'
+    'approve_feature'
   );
 });
 

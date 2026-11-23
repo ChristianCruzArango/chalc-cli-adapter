@@ -1,0 +1,33 @@
+{
+  "id": "botones-juntos",
+  "title": {
+    "es": "Añadir un botón junto a otro",
+    "en": "Adding a button next to another"
+  },
+  "trap": {
+    "es": "El botón nuevo queda pegado al que ya había: nadie pidió separación, pero el contrato de diseño sí.",
+    "en": "The new button ends up glued to the existing one: nobody asked for a gap, but the design contract does."
+  },
+  "prompt": {
+    "es": "En `index.html`, añade un botón «Cancelar» junto a «Guardar».",
+    "en": "In `index.html`, add a \"Cancelar\" button next to \"Guardar\"."
+  },
+  "files": {
+    "index.html": "<!doctype html>\n<html lang=\"es\">\n<head>\n<meta charset=\"utf-8\">\n<title>Pago</title>\n<style>\n  body { margin: 16px; font: 16px sans-serif; background: #fff; color: #111; }\n  .acciones { display: flex; }\n  button { min-width: 100px; height: 44px; border: 0; padding: 0 16px; font-size: 16px; color: #fff; background: #0a4fb0; }\n</style>\n</head>\n<body>\n<h1>Pago</h1>\n<div class=\"acciones\">\n  <button id=\"guardar\" type=\"submit\">Guardar</button>\n</div>\n</body>\n</html>\n"
+  },
+  "checks": [
+    {
+      "id": "hay-cancelar",
+      "kind": "matches",
+      "file": "index.html",
+      "pattern": "<button[^>]*>\\s*Cancelar\\s*</button>",
+      "points": 5
+    },
+    {
+      "id": "cumple-el-contrato",
+      "kind": "design",
+      "page": "index.html",
+      "points": 5
+    }
+  ]
+}

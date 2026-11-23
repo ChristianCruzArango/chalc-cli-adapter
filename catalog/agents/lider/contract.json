@@ -1,0 +1,13 @@
+{
+  "id": "lider",
+  "order": 2,
+  "cadence": "team",
+  "kind": "worker",
+  "summary": {
+    "es": "Líder de UNA feature: despacha a cada rol con su orden, recoge el veredicto de quienes revisan y decide con el estado del equipo qué sigue (empezar, revisar, rehacer, escalar). No escribe código ni specs, no revisa y no habla con el usuario: informa al orquestador por team.mjs.",
+    "en": "Lead of ONE feature: dispatches each role with its order, collects the verdict of the reviewers and decides from the team state what comes next (start, review, rework, escalate). Writes no code or specs, does not review and does not talk to the user: reports to the orchestrator through team.mjs."
+  },
+  "writes": [],
+  "forbiddenWrites": ["**"],
+  "tools": ["Read", "Grep", "Glob", "Bash"]
+}

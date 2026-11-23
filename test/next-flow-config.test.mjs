@@ -25,36 +25,34 @@ async function repoWith(gateJson) {
 
 // ── los defaults conservan el comportamiento actual ───────────────────────────────────────────
 
-test('R17 — sin sección flow, el defecto es revisor obligatorio y OK por tarea', async () => {
+// Desde la spec 028 las aprobaciones del usuario (la spec y el cierre) no son una puerta configurable: de
+// `flow` solo queda el revisor. Entre las dos aprobaciones, el equipo trabaja solo.
+test('R17 — sin sección flow, el defecto es revisor obligatorio, sin interruptor de aprobaciones', async () => {
   const { config } = await loadConfig(await repoWith({ test: { command: 'npm test' } }));
 
-  assert.equal(config.flow.approvals.task, true);
-  assert.equal(config.flow.approvals.feature, true);
+  assert.equal('approvals' in config.flow, false);
   assert.equal(config.flow.review.required, true);
 });
 
 test('R17 — un repo equipado con una versión anterior de chalc no cambia de comportamiento', async () => {
-  // Es el caso que más importa: `gate.json` viejo, sin `flow`. Si el defecto fuera "sin OK", una
-  // actualización de chalc dejaría al asistente encadenando tareas sin que nadie las apruebe.
+  // `gate.json` viejo, sin `flow`: el revisor sigue siendo obligatorio.
   const { config } = await loadConfig(await repoWith({ mutation: { threshold: 90 } }));
-  assert.equal(config.flow.approvals.task, true);
+  assert.equal(config.flow.review.required, true);
 });
 
 // ── lo que el usuario editó, manda ────────────────────────────────────────────────────────────
 
-test('R17 — apagar la puerta de tarea se respeta', async () => {
-  const { config } = await loadConfig(await repoWith({ flow: { approvals: { task: false } } }));
+test('spec 028, R8 — un flow.approvals de una versión anterior se lee sin error y no arrastra al revisor', async () => {
+  const { config, error } = await loadConfig(await repoWith({ flow: { approvals: { task: false } } }));
 
-  assert.equal(config.flow.approvals.task, false);
-  assert.equal(config.flow.approvals.feature, true, 'lo no tocado conserva su defecto');
+  assert.ok(!error);
   assert.equal(config.flow.review.required, true);
 });
 
-test('R17 — apagar la revisión se respeta y no arrastra a las aprobaciones', async () => {
+test('R17 — apagar la revisión se respeta', async () => {
   const { config } = await loadConfig(await repoWith({ flow: { review: { required: false } } }));
 
   assert.equal(config.flow.review.required, false);
-  assert.equal(config.flow.approvals.task, true);
 });
 
 // ── la detección escribe la sección para que el usuario la vea ────────────────────────────────
@@ -62,7 +60,7 @@ test('R17 — apagar la revisión se respeta y no arrastra a las aprobaciones', 
 test('R17 — la config detectada trae la sección flow, para que el knob sea visible', async () => {
   const config = await detectGateConfig(await repoWith(null), { role: 'back', language: 'es' });
 
-  assert.deepEqual(config.flow.approvals, { task: true, feature: true });
+  assert.equal('approvals' in config.flow, false);
   assert.deepEqual(config.flow.review, { required: true });
   // `flow.roles` lo añadió la spec 009 y tiene su propio test en `role-contract.test.mjs`: aquí
   // solo importa que la sección de puertas siga entera.

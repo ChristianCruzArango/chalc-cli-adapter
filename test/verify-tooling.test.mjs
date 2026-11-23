@@ -2,6 +2,7 @@
 // catálogo de chalc instalado (R9). El manifiesto vive en el repo y se puede alterar junto con la herramienta;
 // el catálogo está fuera del repo.
 import test from 'node:test';
+import { flipEol } from './helpers/eol.mjs';
 import assert from 'node:assert/strict';
 import { appendFile, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -44,7 +45,7 @@ test('R9: una herramienta que falta también se reporta; el fin de línea no cue
   const dir = await equipped(t);
   await rm(join(dir, '.chalc', 'next', 'lib', 'decide.mjs'));
   const rules = join(dir, '.chalc', 'gate', 'lib', 'rules.mjs');
-  await writeFile(rules, (await readFile(rules, 'utf8')).replace(/\n/g, '\r\n'));
+  await writeFile(rules, flipEol(await readFile(rules, 'utf8')));
   assert.deepEqual(await toolingDrift(dir), ['.chalc/next/lib/decide.mjs']);
 });
 

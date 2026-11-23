@@ -1,6 +1,7 @@
 // Spec 029 (hooks, integridad y CI), T1 — las herramientas de `.chalc/` llevan su huella (R7) y el portón se
 // niega a medir con herramientas alteradas (R8): quien se mide a sí mismo no puede cambiar la regla sin que se note.
 import test from 'node:test';
+import { flipEol } from './helpers/eol.mjs';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -68,7 +69,7 @@ test('R8: una herramienta alterada, borrada o sin manifiesto se reporta con su a
 test('R8: cambiar solo el fin de línea de una herramienta (checkout en Windows) no es una alteración', async (t) => {
   const dir = await equipped(t);
   const file = at(dir, '.chalc/gate/lib/rules.mjs');
-  await writeFile(file, (await readFile(file, 'utf8')).replace(/\n/g, '\r\n'));
+  await writeFile(file, flipEol(await readFile(file, 'utf8')));
   assert.deepEqual(await integrityProblems(dir), []);
 });
 
